@@ -10,6 +10,14 @@ license.workspace = true
 xr-core.workspace = true
 xr-macros.workspace = true
 xr-units.workspace = true
+xr-io.workspace = true
+xr-cf.workspace = true
+xr-io-c = { workspace = true, optional = true }
+thiserror.workspace = true
+
+[features]
+# netCDF-3/netCDF-4 I/O through the C libraries (built from source; needs cmake).
+netcdf-c = ["dep:xr-io-c"]
 
 [dev-dependencies]
 chrono.workspace = true

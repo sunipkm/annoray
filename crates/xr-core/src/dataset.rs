@@ -1,6 +1,7 @@
 //! [`DatasetBase`]: named variables sharing dimensions and coordinates.
 
 use std::borrow::Borrow;
+use std::sync::Arc;
 
 use indexmap::IndexMap;
 
@@ -8,8 +9,8 @@ use crate::dataarray::{Coords, DataArrayBase, DataArrayView, DataArrayViewMut};
 use crate::select::{isel_map, label_indexers, merge_sizes, named_indexers};
 use crate::variable::positional_to_named;
 use crate::{
-    AttrValue, Attrs, CoreError, DataArray, IntoIndexer, IntoLabelIndexer, Name, Owned, Repr,
-    ReprMut, Result, Variable, VariableBase, VariableViewMut, View, ViewMut,
+    AttrValue, Attrs, CoreError, DataArray, DatasetEncoding, IntoIndexer, IntoLabelIndexer, Name,
+    Owned, Repr, ReprMut, Result, Variable, VariableBase, VariableViewMut, View, ViewMut,
 };
 
 /// A collection of data variables and coordinates whose shared dimensions agree in length.
@@ -20,6 +21,7 @@ pub struct DatasetBase<S: Repr> {
     data_vars: IndexMap<Name, VariableBase<S>>,
     coords: Coords<S>,
     attrs: S::Attrs,
+    encoding: Arc<DatasetEncoding>,
 }
 
 /// A dataset that owns its variables.
@@ -43,6 +45,7 @@ impl Dataset {
             data_vars: IndexMap::new(),
             coords: IndexMap::new(),
             attrs: Attrs::new(),
+            encoding: Arc::default(),
         }
     }
 
@@ -129,6 +132,11 @@ impl Dataset {
         &mut self.attrs
     }
 
+    /// Mutable access to the dataset-level encoding.
+    pub fn encoding_mut(&mut self) -> &mut DatasetEncoding {
+        Arc::make_mut(&mut self.encoding)
+    }
+
     /// Remove a data variable or coordinate.
     ///
     /// # Errors
@@ -194,6 +202,12 @@ impl<S: Repr> DatasetBase<S> {
         &self.coords
     }
 
+    /// Dataset-level encoding (unlimited dimensions, file format hints).
+    #[must_use]
+    pub fn encoding(&self) -> &DatasetEncoding {
+        &self.encoding
+    }
+
     /// Global attributes.
     #[must_use]
     pub fn attrs(&self) -> &Attrs {
@@ -244,6 +258,7 @@ impl<S: Repr> DatasetBase<S> {
                 .map(|(k, v)| (k.clone(), v.view()))
                 .collect(),
             attrs: self.attrs.borrow(),
+            encoding: self.encoding.clone(),
         }
     }
 
@@ -262,6 +277,7 @@ impl<S: Repr> DatasetBase<S> {
                 .map(|(k, v)| (k.clone(), v.to_owned()))
                 .collect(),
             attrs: self.attrs().clone(),
+            encoding: self.encoding.clone(),
         }
     }
 
@@ -306,6 +322,7 @@ impl<S: Repr> DatasetBase<S> {
             data_vars: isel_map(self.data_vars, &ix)?,
             coords: isel_map(self.coords, &ix)?,
             attrs: self.attrs,
+            encoding: self.encoding.clone(),
         })
     }
 
@@ -375,6 +392,7 @@ impl<S: Repr> DatasetBase<S> {
                 })
                 .collect::<Result<_>>()?,
             attrs: self.attrs().clone(),
+            encoding: self.encoding.clone(),
         })
     }
 
@@ -412,6 +430,7 @@ impl<S: ReprMut> DatasetBase<S> {
                 .map(|(k, v)| (k.clone(), v.view()))
                 .collect(),
             attrs: self.attrs.borrow(),
+            encoding: self.encoding.clone(),
         }
     }
 
@@ -478,6 +497,7 @@ impl Clone for Dataset {
             data_vars: self.data_vars.clone(),
             coords: self.coords.clone(),
             attrs: self.attrs.clone(),
+            encoding: self.encoding.clone(),
         }
     }
 }
@@ -488,6 +508,7 @@ impl Clone for DatasetView<'_> {
             data_vars: self.data_vars.clone(),
             coords: self.coords.clone(),
             attrs: self.attrs,
+            encoding: self.encoding.clone(),
         }
     }
 }

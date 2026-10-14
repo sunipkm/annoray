@@ -13,6 +13,8 @@ pub type Attrs = IndexMap<Name, AttrValue>;
 #[allow(missing_docs)]
 pub enum AttrValue {
     Str(String),
+    /// A list of strings (netCDF-4 `NC_STRING` attributes).
+    Strs(Vec<String>),
     I8(Vec<i8>),
     I16(Vec<i16>),
     I32(Vec<i32>),

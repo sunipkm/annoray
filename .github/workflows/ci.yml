@@ -19,7 +19,7 @@ jobs:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --all --check
-      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
   test:
     strategy:
@@ -30,7 +30,17 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - run: cargo test --workspace
+      # `--all-features` builds netCDF-C and HDF5 from source (cmake is preinstalled on all runners).
+      - run: cargo test --workspace --all-features
+      - uses: actions/setup-python@v5
+        if: matrix.os == 'ubuntu-latest'
+        with:
+          python-version: "3.13"
+      - name: Python xarray reads our files
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          pip install xarray netCDF4 cftime
+          cargo test -p xarray-rs --features netcdf-c --test netcdf_io -- --ignored python
 
   msrv:
     runs-on: ubuntu-latest
@@ -38,6 +48,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.85
       - uses: Swatinem/rust-cache@v2
-      # trybuild's expected compiler output is pinned to stable, so MSRV only builds and runs unit tests.
-      - run: cargo check --workspace --all-targets
-      - run: cargo test --workspace --lib
+      # trybuild's expected compiler output is pinned to stable, so MSRV only builds and runs unit
+      # tests. The optional netcdf-c backend (MSRV 1.85.1) is not part of this job.
+      - run: cargo check --workspace --exclude xr-io-c --all-targets
+      - run: cargo test --workspace --exclude xr-io-c --lib

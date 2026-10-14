@@ -4,12 +4,14 @@ use std::borrow::Borrow;
 use std::fmt;
 
 use ndarray::{ArrayD, ArrayViewD, ArrayViewMutD};
+use std::sync::Arc;
+
 use xr_units::Unit;
 
 use crate::indexer::normalize_index;
 use crate::{
-    AttrValue, Attrs, CoreError, DType, Dims, Element, IndexError, Indexer, IntoIndexer, Name,
-    Owned, Repr, ReprMut, Result, TypedArray, View, ViewMut,
+    AttrValue, Attrs, CoreError, DType, Dims, Element, Encoding, IndexError, Indexer, IntoIndexer,
+    Name, Owned, Repr, ReprMut, Result, TypedArray, View, ViewMut,
 };
 
 /// An n-dimensional array with named dimensions and attributes, in storage representation `S`.
@@ -20,6 +22,8 @@ pub struct VariableBase<S: Repr> {
     dims: Dims,
     /// Physical unit, if known. Views carry a copy; it is read-only through a `ViewMut`.
     unit: Option<Unit>,
+    /// How the variable is (or will be) stored on disk. Shared cheaply by views.
+    encoding: Arc<Encoding>,
     attrs: S::Attrs,
 }
 
@@ -123,6 +127,7 @@ impl Variable {
             data,
             dims,
             unit: None,
+            encoding: Arc::default(),
             attrs: Attrs::new(),
         })
     }
@@ -154,6 +159,18 @@ impl Variable {
     /// Mutable access to the attributes.
     pub fn attrs_mut(&mut self) -> &mut Attrs {
         &mut self.attrs
+    }
+
+    /// Mutable access to the encoding.
+    pub fn encoding_mut(&mut self) -> &mut Encoding {
+        Arc::make_mut(&mut self.encoding)
+    }
+
+    /// Set the encoding.
+    #[must_use]
+    pub fn with_encoding(mut self, encoding: Encoding) -> Self {
+        self.encoding = Arc::new(encoding);
+        self
     }
 
     /// Take the data out of the variable.
@@ -211,6 +228,12 @@ impl<S: Repr> VariableBase<S> {
         self.unit.as_ref()
     }
 
+    /// How the variable is stored on disk (fill values, packing, time units, chunking, …).
+    #[must_use]
+    pub fn encoding(&self) -> &Encoding {
+        &self.encoding
+    }
+
     /// Attributes.
     #[must_use]
     pub fn attrs(&self) -> &Attrs {
@@ -266,6 +289,7 @@ impl<S: Repr> VariableBase<S> {
             data: self.data.view(),
             dims: self.dims.clone(),
             unit: self.unit.clone(),
+            encoding: self.encoding.clone(),
             attrs: self.attrs.borrow(),
         }
     }
@@ -277,6 +301,7 @@ impl<S: Repr> VariableBase<S> {
             data: self.data.to_owned(),
             dims: self.dims.clone(),
             unit: self.unit.clone(),
+            encoding: self.encoding.clone(),
             attrs: self.attrs().clone(),
         }
     }
@@ -372,6 +397,7 @@ impl<S: Repr> VariableBase<S> {
             mut data,
             dims,
             unit,
+            encoding,
             attrs,
         } = self;
         // Slices first: they keep axis numbering intact.
@@ -396,6 +422,7 @@ impl<S: Repr> VariableBase<S> {
             data,
             dims,
             unit,
+            encoding,
             attrs,
         }
     }
@@ -423,6 +450,7 @@ impl<S: Repr> VariableBase<S> {
             data: self.data.select_axis(axis, &idx),
             dims: self.dims.clone(),
             unit: self.unit.clone(),
+            encoding: self.encoding.clone(),
             attrs: self.attrs().clone(),
         })
     }
@@ -436,6 +464,7 @@ impl<S: ReprMut> VariableBase<S> {
             data: self.data.view_mut(),
             dims: self.dims.clone(),
             unit: self.unit.clone(),
+            encoding: self.encoding.clone(),
             attrs: self.attrs.borrow(),
         }
     }
@@ -486,6 +515,7 @@ impl Clone for Variable {
             data: self.data.clone(),
             dims: self.dims.clone(),
             unit: self.unit.clone(),
+            encoding: self.encoding.clone(),
             attrs: self.attrs.clone(),
         }
     }
@@ -497,6 +527,7 @@ impl Clone for VariableView<'_> {
             data: self.data.clone(),
             dims: self.dims.clone(),
             unit: self.unit.clone(),
+            encoding: self.encoding.clone(),
             attrs: self.attrs,
         }
     }

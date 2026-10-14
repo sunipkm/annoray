@@ -1,6 +1,14 @@
 [workspace]
 resolver = "3"
-members = ["crates/xr-core", "crates/xr-macros", "crates/xr-units", "xarray-rs"]
+members = [
+    "crates/xr-cf",
+    "crates/xr-core",
+    "crates/xr-io",
+    "crates/xr-io-c",
+    "crates/xr-macros",
+    "crates/xr-units",
+    "xarray-rs",
+]
 
 [workspace.package]
 version = "0.0.1"
@@ -12,6 +20,9 @@ license = "MIT OR Apache-2.0"
 xr-core = { path = "crates/xr-core", version = "0.0.1" }
 xr-macros = { path = "crates/xr-macros", version = "0.0.1" }
 xr-units = { path = "crates/xr-units", version = "0.0.1" }
+xr-io = { path = "crates/xr-io", version = "0.0.1" }
+xr-cf = { path = "crates/xr-cf", version = "0.0.1" }
+xr-io-c = { path = "crates/xr-io-c", version = "0.0.1" }
 
 chrono = { version = "0.4", default-features = false, features = ["std"] }
 indexmap = "2"

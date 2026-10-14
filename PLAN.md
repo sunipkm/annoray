@@ -339,6 +339,31 @@ The pipeline is `open_dataset` = backend.open, then `xr-cf` decode, then `Datase
     phony dims for plain HDF5 files, unlimited dims, groups and user-defined types.
   - Reference documents: the netCDF-4 format spec and the HDF5 File Format Specification v3.
 
+### Implementation notes (M3, as built)
+- **The C backend is the `netcdf-c` cargo feature** (`xr-io-c`, default off). The `netcdf` crate's
+  `static` feature builds netCDF-C 4.9 and HDF5 from source, which takes about 1.5 minutes and
+  needs cmake. Its dependency `hdf5-metno-sys` needs Rust **1.85.1**, so CI's MSRV job excludes
+  that crate. Writing `NC_CHAR` needs one `unsafe impl` (a `repr(transparent)` byte), allowed
+  locally with a SAFETY comment.
+- **Plain HDF5 files are not supported through the C backend.** The `hdf5-metno` bindings were
+  skipped: pure-Rust `xr-hdf5` (M5) covers plain HDF5, tested against h5py-written fixtures.
+- **Reads are eager:** whole variables are loaded. Lazy, chunked reads are still M7.
+- **`Encoding`** on each `Variable`, and `DatasetEncoding` (unlimited dims) on `Dataset`, record how
+  data was stored, as xarray's `.encoding` does. Encoding falls back to xarray's defaults when unset:
+  - times use the coarsest exact unit, the first date as reference, and int64;
+  - floats get `_FillValue = NaN`;
+  - classic files get `string{N}` char dimensions plus `_Encoding = "utf-8"`.
+- **We go beyond xarray in netCDF-3:** unsigned integers are stored signed with
+  `_Unsigned = "true"` (xarray refuses them), and int64 is narrowed to int32 when the values fit.
+- **Known gaps:**
+  - No NaT: time variables with missing values stay numeric, with a warning.
+  - `TimeDelta` data is written as integers with time units and reads back as a unit-carrying
+    quantity, by design.
+  - The netCDF crate has no deflate getter, so a file's compression level isn't read back.
+- **Verified against Python:** `fixtures/gen_netcdf.py` writes golden files with xarray and
+  netCDF4. The tests decode them identically, round-trip every format, and check (in CI) that
+  Python xarray reads our output identically too.
+
 ### CF layer (`xr-cf`)
 - On decode: apply `_FillValue`, `missing_value`, `scale_factor`, `add_offset` and `_Unsigned`. Parse `units` into `Unit`.
   Turn time variables into `NaiveDateTime` or `CfDate` depending on the calendar (§3 Time), and resolve `coordinates` and `bounds`.

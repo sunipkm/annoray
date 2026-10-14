@@ -27,6 +27,26 @@ pub use xr_macros::{isel, sel};
 pub use xr_units as units;
 pub use xr_units::{Calendar, CfDate, Unit, UnitError, UnitPolicy};
 
+pub mod io;
+
+/// Any error from xarray-rs.
+#[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
+pub enum Error {
+    /// Data-model errors (dimensions, indexing, arithmetic).
+    #[error(transparent)]
+    Core(#[from] CoreError),
+    /// Unit and calendar errors.
+    #[error(transparent)]
+    Unit(#[from] UnitError),
+    /// File I/O and format errors.
+    #[error(transparent)]
+    Io(#[from] xr_io::IoError),
+    /// CF decoding and encoding errors.
+    #[error(transparent)]
+    Cf(#[from] xr_cf::CfError),
+}
+
 #[doc(hidden)]
 pub mod __rt {
     pub use xr_core::macro_support::*;
