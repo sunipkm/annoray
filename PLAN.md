@@ -354,6 +354,31 @@ The pipeline is `open_dataset` = backend.open, then `xr-cf` decode, then `Datase
 - Later: `concat`, `merge`, `where_`, `groupby`, `resample`, `rolling`, `interp`, `open_mfdataset`,
   `DataTree` (netCDF-4 groups), and `rayon` parallel chunk reads.
 
+### Implementation notes (M2, as built)
+- **No separate index objects.** Label lookups run directly on the dimension coordinate (a 1-D
+  coordinate named after its dimension). Values map into one of three key spaces: numbers as
+  `f64`, strings, and times as `i128` ns. Sorted coordinates use binary search and unsorted ones a
+  linear scan. A view's coordinate is already sliced, so lookups can never go stale. Caching for
+  repeated `sel` on large coordinates can come in M7 if profiling asks for it.
+- **pandas semantics** were checked against xarray 2026.4.0 (`fixtures/xarray_examples.py`):
+  - Label slices include both ends.
+  - Descending coordinates take `start > stop`.
+  - `pad`/`backfill` are positional, so on a descending coordinate `pad` picks the larger
+    neighbour.
+  - Partial date strings (`"2020-01"`) select the whole period, in any CF calendar.
+  - Unsorted coordinates allow exact labels, and slices only between exact labels.
+- **Mutable views protect coordinates:** `Repr::Coord` makes a `ViewMut`'s coordinates
+  `View`s, so only data variables can be written through a mutable view.
+- **Arithmetic:**
+  - Broadcasting is by name: the left operand's dims come first, then the right's extras.
+  - Shared dimension coordinates must be equal, otherwise `NotAligned`; real alignment is M7.
+  - Attributes are dropped, as xarray's `keep_attrs=False` default does.
+  - A missing unit counts as dimensionless.
+  - Integer `+ - *` is checked; `/` is true division.
+  - Rust's orphan rules forbid `Result + Result` and `Result * f64`, so those need a `?` first.
+- **Fancy indexing** is `take(dim, &[i])` and `sel_take(dim, labels)`. Both return owned data
+  because they must copy, so they are methods rather than macro syntax.
+
 ## 5a. Indexing macros (`xr-macros`)
 
 Python-style indexing that never panics. Each macro expands to calls on the `Indexer` /
@@ -437,13 +462,14 @@ let v = isel!(da[time = i:i + n, lat = {cfg.lat_range()}])?;
 |---|---|---|
 | M0 | Workspace, CI (fmt, clippy `-D warnings` with the §2a lints, test, MSRV 1.85), error-type skeleton, `Repr` GAT, `TypedArray`, `Variable{,View,ViewMut}`, `Indexer`/`PySlice` + positional `isel!` | Mutations made through `isel` on a `ViewMut` show up in the owner. Borrow-check tests with `trybuild` |
 | M1 | `xr-units`: Dimension, Scale, Unit, parsers, conversion, arithmetic rules. CF epoch units with chrono and `CfDate` (all calendars). `StaticUnit` trait | All CF standard-name table units parse. Property tests: rescale round-trips exactly, `==` matches the converted value. Calendar tests checked against Python cftime output |
-| M2 | `DataArray`, `Dataset`, coords, indexes (including datetime), `isel`/`sel` + named `isel!`/`sel!` macros, unit-aware ops, xarray-style `Display`. **`uom` and `whippyunits` features**: `to_typed`, `view_typed`, `from_typed`, typed `sel` | Ported xarray selection and arithmetic examples. Feature-powerset CI. Typed round-trip tests for each feature |
+| M2 | `DataArray`, `Dataset`, coords, indexes (including datetime), `isel`/`sel` + named `isel!`/`sel!` macros, unit-aware ops, xarray-style `Display` | Ported xarray selection and arithmetic examples |
 | M3 | `xr-io` + `xr-cf` + **`xr-io-c`** (C-backed netCDF/HDF5 read and write) | Golden files from `fixtures/gen.py` open and round-trip. Units decode from attrs |
 | M4 | **xr-netcdf3**, pure Rust read and write | Round-trip tests. Differential tests against `xr-io-c`. `ncdump` output identical |
 | M5 | **xr-hdf5** read and write: layers 1–4, contiguous and chunked, deflate and shuffle | `h5dump` diff clean on our output. Reads files written by h5py and netCDF-C |
 | M6 | **xr-netcdf4** read and write | Files we write open in netCDF-C/`ncdump` and Python xarray with no warnings, and the reverse also holds. Real files (ERA5, CMIP6, GOES) open |
 | M7 | Alignment, reductions, concat/merge, lazy chunked reads, `rayon` | Ported subset of xarray's test suite |
 | M8 | groupby/resample/rolling (chrono-based time bins), DataTree, more filters | — |
+| M9 | **`uom` and `whippyunits` features** (last, once everything else is done): `StaticUnit` impls, `to_typed`, `view_typed`, `from_typed`, typed `sel` | Feature-powerset CI. Typed round-trip tests for each feature |
 
 At M6 the C backend becomes optional (`default-features = false` gives a fully pure-Rust build). It stays enabled in CI as the oracle.
 

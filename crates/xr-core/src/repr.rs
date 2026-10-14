@@ -22,6 +22,9 @@ pub trait Repr: sealed::Sealed + Sized {
     type Data<T: Element>: ndarray::Data<Elem = T>;
     /// How attributes are held: owned, or borrowed from the owner.
     type Attrs: Borrow<Attrs> + Debug;
+    /// How coordinates are held. Mutable views hold coordinates as shared views: only data
+    /// variables can be written through them.
+    type Coord: Repr<Attrs = Self::Attrs>;
 }
 
 /// A representation that allows mutating element data.
@@ -51,16 +54,19 @@ impl sealed::Sealed for ViewMut<'_> {}
 impl Repr for Owned {
     type Data<T: Element> = OwnedRepr<T>;
     type Attrs = Attrs;
+    type Coord = Self;
 }
 
 impl<'a> Repr for View<'a> {
     type Data<T: Element> = ViewRepr<&'a T>;
     type Attrs = &'a Attrs;
+    type Coord = Self;
 }
 
 impl<'a> Repr for ViewMut<'a> {
     type Data<T: Element> = ViewRepr<&'a mut T>;
     type Attrs = &'a Attrs;
+    type Coord = View<'a>;
 }
 
 impl ReprMut for Owned {

@@ -7,6 +7,8 @@ rust-version.workspace = true
 license.workspace = true
 
 [dependencies]
+chrono.workspace = true
+xr-units.workspace = true
 indexmap.workspace = true
 ndarray.workspace = true
 smallvec.workspace = true

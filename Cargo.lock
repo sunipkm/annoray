@@ -604,6 +604,7 @@ checksum = "f17a85883d4e6d00e8a97c586de764dabcc06133f7f1d55dce5cdc070ad7fe59"
 name = "xarray-rs"
 version = "0.0.1"
 dependencies = [
+ "chrono",
  "trybuild",
  "xr-core",
  "xr-macros",
@@ -614,10 +615,12 @@ dependencies = [
 name = "xr-core"
 version = "0.0.1"
 dependencies = [
+ "chrono",
  "indexmap",
  "ndarray",
  "smallvec",
  "thiserror",
+ "xr-units",
 ]
 
 [[package]]

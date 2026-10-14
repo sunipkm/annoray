@@ -12,6 +12,7 @@ xr-macros.workspace = true
 xr-units.workspace = true
 
 [dev-dependencies]
+chrono.workspace = true
 trybuild.workspace = true
 
 [lints]

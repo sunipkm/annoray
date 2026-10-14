@@ -26,6 +26,12 @@ pub enum DType {
     U64,
     Bool,
     Str,
+    /// `chrono::NaiveDateTime` (real-world calendars).
+    DateTime,
+    /// [`CfDate`](xr_units::CfDate) (any CF calendar).
+    CfDate,
+    /// `chrono::TimeDelta`.
+    TimeDelta,
 }
 
 impl fmt::Display for DType {
@@ -43,6 +49,9 @@ impl fmt::Display for DType {
             Self::U64 => "uint64",
             Self::Bool => "bool",
             Self::Str => "str",
+            Self::DateTime => "datetime",
+            Self::CfDate => "cftime",
+            Self::TimeDelta => "timedelta",
         })
     }
 }
@@ -52,7 +61,9 @@ mod sealed {
 }
 
 /// An element type that can be stored in a [`TypedArray`]. Sealed.
-pub trait Element: sealed::Sealed + Clone + fmt::Debug + Send + Sync + 'static {
+pub trait Element:
+    sealed::Sealed + Clone + PartialEq + fmt::Debug + fmt::Display + Send + Sync + 'static
+{
     /// The runtime tag for this type.
     const DTYPE: DType;
 
@@ -82,6 +93,9 @@ pub enum TypedArray<S: Repr> {
     U64(Arr<S, u64>),
     Bool(Arr<S, bool>),
     Str(Arr<S, String>),
+    DateTime(Arr<S, chrono::NaiveDateTime>),
+    CfDate(Arr<S, xr_units::CfDate>),
+    TimeDelta(Arr<S, chrono::TimeDelta>),
 }
 
 /// Run `$body` with `$a` bound to the inner array, whatever its element type.
@@ -100,6 +114,9 @@ macro_rules! typed_dispatch {
             $crate::TypedArray::U64($a) => $body,
             $crate::TypedArray::Bool($a) => $body,
             $crate::TypedArray::Str($a) => $body,
+            $crate::TypedArray::DateTime($a) => $body,
+            $crate::TypedArray::CfDate($a) => $body,
+            $crate::TypedArray::TimeDelta($a) => $body,
         }
     };
 }
@@ -120,9 +137,14 @@ macro_rules! typed_map {
             $crate::TypedArray::U64($a) => $crate::TypedArray::U64($body),
             $crate::TypedArray::Bool($a) => $crate::TypedArray::Bool($body),
             $crate::TypedArray::Str($a) => $crate::TypedArray::Str($body),
+            $crate::TypedArray::DateTime($a) => $crate::TypedArray::DateTime($body),
+            $crate::TypedArray::CfDate($a) => $crate::TypedArray::CfDate($body),
+            $crate::TypedArray::TimeDelta($a) => $crate::TypedArray::TimeDelta($body),
         }
     };
 }
+
+pub(crate) use typed_dispatch;
 
 macro_rules! impl_element {
     ($($var:ident $ty:ty),* $(,)?) => {$(
@@ -155,6 +177,7 @@ macro_rules! impl_element {
 impl_element!(
     F32 f32, F64 f64, I8 i8, I16 i16, I32 i32, I64 i64,
     U8 u8, U16 u16, U32 u32, U64 u64, Bool bool, Str String,
+    DateTime chrono::NaiveDateTime, CfDate xr_units::CfDate, TimeDelta chrono::TimeDelta,
 );
 
 impl<S: Repr> TypedArray<S> {
@@ -174,6 +197,9 @@ impl<S: Repr> TypedArray<S> {
             Self::U64(_) => DType::U64,
             Self::Bool(_) => DType::Bool,
             Self::Str(_) => DType::Str,
+            Self::DateTime(_) => DType::DateTime,
+            Self::CfDate(_) => DType::CfDate,
+            Self::TimeDelta(_) => DType::TimeDelta,
         }
     }
 
@@ -218,6 +244,13 @@ impl<S: Repr> TypedArray<S> {
     /// Callers must have validated `axis < ndim` and `index < shape[axis]`; ndarray panics otherwise.
     pub(crate) fn index_axis_move(self, axis: usize, index: usize) -> Self {
         typed_map!(self, a => a.index_axis_move(Axis(axis), index))
+    }
+
+    /// Copy the given positions along `axis` (fancy indexing).
+    ///
+    /// Callers must have validated every index against the axis length; ndarray panics otherwise.
+    pub(crate) fn select_axis(&self, axis: usize, indices: &[usize]) -> TypedArray<Owned> {
+        typed_map!(self, a => a.select(Axis(axis), indices))
     }
 
     /// Slice `axis` in place.

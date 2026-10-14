@@ -36,7 +36,8 @@ struct Item {
     term: Term,
 }
 
-fn expand_isel(input: TokenStream) -> syn::Result<TokenStream> {
+/// Parse `[mut] receiver[item, item, ...]`.
+fn parse_invocation(input: TokenStream) -> syn::Result<(bool, Expr, Vec<Item>)> {
     let mut tokens = input.into_iter().peekable();
     let mutable = matches!(tokens.peek(), Some(TokenTree::Ident(i)) if i == "mut");
     if mutable {
@@ -57,7 +58,6 @@ fn expand_isel(input: TokenStream) -> syn::Result<TokenStream> {
         return Err(Error::new(group.span(), "missing receiver before `[...]`"));
     }
     let receiver: Expr = syn::parse2(tokens.into_iter().collect())?;
-
     let mut parts = split_top(group.stream(), ',');
     // `recv[]` has no indexers, and a trailing comma leaves one empty part at the end.
     if parts.last().is_some_and(Vec::is_empty) {
@@ -67,25 +67,63 @@ fn expand_isel(input: TokenStream) -> syn::Result<TokenStream> {
         .into_iter()
         .map(parse_item)
         .collect::<syn::Result<Vec<_>>>()?;
+    Ok((mutable, receiver, items))
+}
 
-    let named = items.iter().filter(|it| it.name.is_some()).count();
-    let rt = quote!(::xarray_rs::__rt);
-    // Method-call syntax so the receiver auto-derefs (`&Variable`, `&mut Variable`, `Box<_>`, …).
-    let call = |collect: TokenStream, method: TokenStream| {
-        let tr = if mutable {
-            quote!(IselMut)
-        } else {
-            quote!(Isel)
+/// Named items, checked: no positional items, no repeats, no `..`.
+fn named_items(items: &[Item]) -> syn::Result<Vec<(&Ident, &Term)>> {
+    let mut out: Vec<(&Ident, &Term)> = Vec::new();
+    for it in items {
+        let Some(name) = &it.name else {
+            return Err(Error::new(
+                it.term.span(),
+                "cannot mix named (`dim = ...`) and positional indexers",
+            ));
         };
-        quote! {
-            match #rt::#collect(__xr_items) {
-                ::core::result::Result::Ok(__xr_items) => {
-                    use #rt::#tr as _;
-                    (#receiver).#method(__xr_items)
-                }
-                ::core::result::Result::Err(e) => ::core::result::Result::Err(e),
-            }
+        if out.iter().any(|(n, _)| *n == name) {
+            return Err(Error::new(
+                name.span(),
+                format!("dimension `{name}` is indexed more than once"),
+            ));
         }
+        if let Term::Ellipsis(span) = it.term {
+            return Err(Error::new(
+                span,
+                "`..` is only valid in positional indexing",
+            ));
+        }
+        out.push((name, &it.term));
+    }
+    Ok(out)
+}
+
+/// `match collect(items) { Ok(items) => receiver.method(items), Err(e) => Err(e) }`, using
+/// method-call syntax so the receiver auto-derefs (`&T`, `&mut T`, `Box<T>`, …).
+fn dispatch(
+    receiver: &Expr,
+    collect: TokenStream,
+    tr: TokenStream,
+    method: TokenStream,
+) -> TokenStream {
+    let rt = quote!(::xarray_rs::__rt);
+    quote! {
+        match #rt::#collect(__xr_items) {
+            ::core::result::Result::Ok(__xr_items) => {
+                use #rt::#tr as _;
+                (#receiver).#method(__xr_items)
+            }
+            ::core::result::Result::Err(e) => ::core::result::Result::Err(e),
+        }
+    }
+}
+
+fn expand_isel(input: TokenStream) -> syn::Result<TokenStream> {
+    let (mutable, receiver, items) = parse_invocation(input)?;
+    let rt = quote!(::xarray_rs::__rt);
+    let tr = if mutable {
+        quote!(IselMut)
+    } else {
+        quote!(Isel)
     };
     let (pos_method, named_method) = if mutable {
         (quote!(__xr_isel_pos_mut), quote!(__xr_isel_named_mut))
@@ -93,51 +131,142 @@ fn expand_isel(input: TokenStream) -> syn::Result<TokenStream> {
         (quote!(__xr_isel_pos), quote!(__xr_isel_named))
     };
 
-    if named == 0 {
+    if items.iter().all(|it| it.name.is_none()) {
         let terms = items.iter().map(|it| term_tokens(&it.term, &rt));
-        let pos_call = call(quote!(collect_pos), pos_method);
+        let call = dispatch(&receiver, quote!(collect_pos), tr, pos_method);
         return Ok(quote! {{
             #[allow(unused_braces)] let __xr_items = [#(#terms),*];
-            #pos_call
+            #call
         }});
     }
-    if named != items.len() {
-        let span = items
-            .iter()
-            .find(|it| it.name.is_none())
-            .map_or_else(Span::call_site, |it| it.term.span());
-        return Err(Error::new(
-            span,
-            "cannot mix named (`dim = ...`) and positional indexers",
-        ));
-    }
-
-    let mut seen: Vec<&Ident> = Vec::new();
-    let mut pairs = Vec::new();
-    for it in &items {
-        let Some(name) = &it.name else { continue };
-        if seen.contains(&name) {
-            return Err(Error::new(
-                name.span(),
-                format!("dimension `{name}` is indexed more than once"),
-            ));
-        }
-        seen.push(name);
-        if let Term::Ellipsis(span) = it.term {
-            return Err(Error::new(
-                span,
-                "`..` is only valid in positional indexing",
-            ));
-        }
+    let pairs = named_items(&items)?.into_iter().map(|(name, term)| {
         let key = name.to_string();
-        let term = term_tokens(&it.term, &rt);
-        pairs.push(quote!((#key, #term)));
-    }
-    let named_call = call(quote!(collect_named), named_method);
+        let term = term_tokens(term, &rt);
+        quote!((#key, #term))
+    });
+    let call = dispatch(&receiver, quote!(collect_named), tr, named_method);
     Ok(quote! {{
         #[allow(unused_braces)] let __xr_items = [#(#pairs),*];
-        #named_call
+        #call
     }})
+}
+
+/// Select by coordinate label, returning a view. Dimensions are always named.
+///
+/// ```ignore
+/// let v = sel!(ds[time = "2020-01-01":"2020-06-30", lat = 30.0:60.0])?;  // inclusive slices
+/// let v = sel!(ds[time = "2020-01"])?;                                     // partial date: all of January
+/// let v = sel!(da[lat = nearest(45.2), lon = nearest(10.0, tol = 0.5)])?;
+/// let v = sel!(da[time = pad(t), height = {Label::quantity(2.0, "km")?}])?;
+/// let v = sel!(mut ds[lat = 0.0:10.0])?;                                   // mutable view
+/// ```
+///
+/// Scalars drop the dimension; slices (`a:b`, `a:b:step`, or Rust's `a..=b`) keep it and are
+/// inclusive at both ends, as in xarray. Labels with units are converted into the
+/// coordinate's unit. Expands to a `Result` and never panics.
+#[proc_macro]
+pub fn sel(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    expand_sel(input.into())
+        .unwrap_or_else(Error::into_compile_error)
+        .into()
+}
+
+fn expand_sel(input: TokenStream) -> syn::Result<TokenStream> {
+    let (mutable, receiver, items) = parse_invocation(input)?;
+    let rt = quote!(::xarray_rs::__rt);
+    if let Some(it) = items.iter().find(|it| it.name.is_none()) {
+        return Err(Error::new(
+            it.term.span(),
+            "sel! needs named dimensions: `dim = label`",
+        ));
+    }
+    let pairs = named_items(&items)?
+        .into_iter()
+        .map(|(name, term)| {
+            let key = name.to_string();
+            let term = label_term_tokens(term, &rt)?;
+            Ok(quote!((#key, #term)))
+        })
+        .collect::<syn::Result<Vec<_>>>()?;
+    let (tr, method) = if mutable {
+        (quote!(SelMut), quote!(__xr_sel_mut))
+    } else {
+        (quote!(Sel), quote!(__xr_sel))
+    };
+    let call = dispatch(&receiver, quote!(collect_labels), tr, method);
+    Ok(quote! {{
+        #[allow(unused_braces)] let __xr_items = [#(#pairs),*];
+        #call
+    }})
+}
+
+fn label_term_tokens(term: &Term, rt: &TokenStream) -> syn::Result<TokenStream> {
+    Ok(match term {
+        Term::Ellipsis(span) => return Err(Error::new(*span, "`..` is not a label")),
+        Term::Expr(e) => match method_call(e)? {
+            Some((method, label, tol)) => {
+                let tol = match tol {
+                    Some(t) => {
+                        quote_spanned!(t.span()=> ::core::option::Option::Some(::core::convert::Into::<#rt::LabelType>::into(#t)))
+                    }
+                    None => quote!(::core::option::Option::None),
+                };
+                quote_spanned!(e.span()=> #rt::method(#rt::MethodType::#method, #label, #tol))
+            }
+            None => quote_spanned!(e.span()=> #rt::label(#e)),
+        },
+        Term::Slice(span, parts) => {
+            let mut parts = parts.iter();
+            let mut bound = || match parts.next() {
+                Some(Some(e)) => quote_spanned!(e.span()=> #rt::some_label(#e)),
+                _ => quote!(#rt::no_label()),
+            };
+            let (start, stop) = (bound(), bound());
+            let step = match parts.next() {
+                Some(Some(e)) => quote_spanned!(e.span()=> #rt::bound(#e)),
+                _ => quote!(#rt::omitted()),
+            };
+            quote_spanned!(*span=> #rt::label_slice(#start, #stop, #step))
+        }
+    })
+}
+
+/// Recognise `nearest(x)`, `nearest(x, tol = t)`, `nearest(x, t)`, `pad(x)`, `backfill(x)`.
+fn method_call(e: &Expr) -> syn::Result<Option<(Ident, &Expr, Option<&Expr>)>> {
+    let Expr::Call(call) = e else { return Ok(None) };
+    let Expr::Path(path) = &*call.func else {
+        return Ok(None);
+    };
+    let Some(func) = path.path.get_ident() else {
+        return Ok(None);
+    };
+    let method = match func.to_string().as_str() {
+        "nearest" => "Nearest",
+        "pad" | "ffill" => "Pad",
+        "backfill" | "bfill" => "Backfill",
+        _ => return Ok(None),
+    };
+    let mut args = call.args.iter();
+    let label = args
+        .next()
+        .ok_or_else(|| Error::new(call.span(), "missing label"))?;
+    let tol = match args.next() {
+        None => None,
+        Some(Expr::Assign(a)) => match &*a.left {
+            Expr::Path(p) if p.path.is_ident("tol") || p.path.is_ident("tolerance") => {
+                Some(&*a.right)
+            }
+            other => return Err(Error::new(other.span(), "expected `tol = ...`")),
+        },
+        Some(other) => Some(other),
+    };
+    if method != "Nearest" && tol.is_some() {
+        return Err(Error::new(call.span(), "only `nearest` takes a tolerance"));
+    }
+    if let Some(extra) = args.next() {
+        return Err(Error::new(extra.span(), "too many arguments"));
+    }
+    Ok(Some((Ident::new(method, func.span()), label, tol)))
 }
 
 impl Term {

@@ -22,7 +22,7 @@
 //! ```
 
 pub use xr_core::*;
-pub use xr_macros::isel;
+pub use xr_macros::{isel, sel};
 /// Runtime units, CF calendars and dates (the `xr-units` crate).
 pub use xr_units as units;
 pub use xr_units::{Calendar, CfDate, Unit, UnitError, UnitPolicy};

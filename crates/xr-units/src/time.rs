@@ -398,6 +398,54 @@ impl CfDate {
         )
     }
 
+    /// This date shifted by `ns` nanoseconds, within its calendar.
+    ///
+    /// # Errors
+    /// [`UnitError::Overflow`] if the result is out of range.
+    pub fn checked_add_nanos(&self, ns: i128) -> Result<Self, UnitError> {
+        Self::from_total_ns(self.calendar, (Ck::new(self.total_ns()?) + ns).get()?)
+    }
+
+    /// Nanoseconds from `earlier` to `self`.
+    ///
+    /// # Errors
+    /// [`UnitError::InvalidDate`] if the calendars differ; [`UnitError::Overflow`].
+    pub fn nanos_since(&self, earlier: &Self) -> Result<i128, UnitError> {
+        if self.calendar != earlier.calendar {
+            return Err(earlier.invalid_in(self.calendar));
+        }
+        (Ck::new(self.total_ns()?) - earlier.total_ns()?).get()
+    }
+
+    /// The first instant of the next month (rolling into the next year after December).
+    ///
+    /// # Errors
+    /// [`UnitError::Overflow`] at the end of the representable range.
+    pub fn start_of_next_month(&self) -> Result<Self, UnitError> {
+        let (y, m) = if self.month == 12 {
+            (self.year.checked_add(1).ok_or(UnitError::Overflow)?, 1)
+        } else {
+            (
+                self.year,
+                self.month.checked_add(1).ok_or(UnitError::Overflow)?,
+            )
+        };
+        // Skip year 0 in calendars without one.
+        let y = if y == 0 && !self.calendar.has_year_zero() {
+            1
+        } else {
+            y
+        };
+        Self::from_ymd(self.calendar, y, m, 1)
+    }
+
+    fn invalid_in(&self, calendar: Calendar) -> UnitError {
+        UnitError::InvalidDate {
+            date: self.to_string(),
+            calendar: calendar.name(),
+        }
+    }
+
     /// Convert a chrono datetime into `calendar`.
     ///
     /// Real-world calendars keep the instant (so a `julian` date may differ in its fields);

@@ -4,6 +4,7 @@ use std::borrow::Borrow;
 use std::fmt;
 
 use ndarray::{ArrayD, ArrayViewD, ArrayViewMutD};
+use xr_units::Unit;
 
 use crate::indexer::normalize_index;
 use crate::{
@@ -17,6 +18,8 @@ use crate::{
 pub struct VariableBase<S: Repr> {
     data: TypedArray<S>,
     dims: Dims,
+    /// Physical unit, if known. Views carry a copy; it is read-only through a `ViewMut`.
+    unit: Option<Unit>,
     attrs: S::Attrs,
 }
 
@@ -49,6 +52,47 @@ fn check_dims(dims: &Dims, ndim: usize) -> Result<()> {
     Ok(())
 }
 
+/// Assign positional indexers (with at most one `..`) to dimension names.
+///
+/// # Errors
+/// [`IndexError::MultipleEllipsis`], [`IndexError::TooManyIndexers`], or a conversion error.
+pub(crate) fn positional_to_named<I>(dims: &[Name], indexers: I) -> Result<Vec<(Name, Indexer)>>
+where
+    I: IntoIterator,
+    I::Item: IntoIndexer,
+{
+    let items = indexers
+        .into_iter()
+        .map(IntoIndexer::into_indexer)
+        .collect::<Result<Vec<_>, IndexError>>()?;
+    let ndim = dims.len();
+    let is_ellipsis = |ix: &Indexer| matches!(ix, Indexer::Ellipsis);
+    let n_ellipsis = items.iter().filter(|ix| is_ellipsis(ix)).count();
+    if n_ellipsis > 1 {
+        return Err(IndexError::MultipleEllipsis.into());
+    }
+    let given = items.len().saturating_sub(n_ellipsis);
+    if given > ndim {
+        return Err(IndexError::TooManyIndexers { given, ndim }.into());
+    }
+    let (head, tail) = match items.iter().position(is_ellipsis) {
+        Some(p) => {
+            let (head, rest) = items.split_at_checked(p).ok_or(IndexError::Overflow)?;
+            (head, rest.get(1..).unwrap_or_default())
+        }
+        None => (items.as_slice(), &[][..]),
+    };
+    let tail_dims = dims
+        .get(ndim.checked_sub(tail.len()).ok_or(IndexError::Overflow)?..)
+        .unwrap_or_default();
+    Ok(dims
+        .iter()
+        .zip(head)
+        .chain(tail_dims.iter().zip(tail))
+        .map(|(d, ix)| (d.clone(), *ix))
+        .collect())
+}
+
 impl Variable {
     /// Create a variable from dimension names and an array.
     ///
@@ -78,6 +122,7 @@ impl Variable {
         Ok(Self {
             data,
             dims,
+            unit: None,
             attrs: Attrs::new(),
         })
     }
@@ -92,6 +137,18 @@ impl Variable {
         self.attrs
             .extend(attrs.into_iter().map(|(k, v)| (k.into(), v.into())));
         self
+    }
+
+    /// Set the unit.
+    #[must_use]
+    pub fn with_unit(mut self, unit: Unit) -> Self {
+        self.unit = Some(unit);
+        self
+    }
+
+    /// Replace the unit, returning the old one.
+    pub fn set_unit(&mut self, unit: Option<Unit>) -> Option<Unit> {
+        std::mem::replace(&mut self.unit, unit)
     }
 
     /// Mutable access to the attributes.
@@ -148,6 +205,12 @@ impl<S: Repr> VariableBase<S> {
         self.data.dtype()
     }
 
+    /// The physical unit, if known.
+    #[must_use]
+    pub fn unit(&self) -> Option<&Unit> {
+        self.unit.as_ref()
+    }
+
     /// Attributes.
     #[must_use]
     pub fn attrs(&self) -> &Attrs {
@@ -202,6 +265,7 @@ impl<S: Repr> VariableBase<S> {
         VariableBase {
             data: self.data.view(),
             dims: self.dims.clone(),
+            unit: self.unit.clone(),
             attrs: self.attrs.borrow(),
         }
     }
@@ -212,6 +276,7 @@ impl<S: Repr> VariableBase<S> {
         VariableBase {
             data: self.data.to_owned(),
             dims: self.dims.clone(),
+            unit: self.unit.clone(),
             attrs: self.attrs().clone(),
         }
     }
@@ -277,36 +342,8 @@ impl<S: Repr> VariableBase<S> {
         I: IntoIterator,
         I::Item: IntoIndexer,
     {
-        let items = indexers
-            .into_iter()
-            .map(IntoIndexer::into_indexer)
-            .collect::<Result<Vec<_>, IndexError>>()?;
-        let ndim = self.ndim();
-        let is_ellipsis = |ix: &Indexer| matches!(ix, Indexer::Ellipsis);
-        let n_ellipsis = items.iter().filter(|ix| is_ellipsis(ix)).count();
-        if n_ellipsis > 1 {
-            return Err(IndexError::MultipleEllipsis.into());
-        }
-        let given = items.len().saturating_sub(n_ellipsis);
-        if given > ndim {
-            return Err(IndexError::TooManyIndexers { given, ndim }.into());
-        }
-
-        let (head, tail) = match items.iter().position(is_ellipsis) {
-            Some(p) => {
-                let (head, rest) = items.split_at_checked(p).ok_or(IndexError::Overflow)?;
-                (head, rest.get(1..).unwrap_or_default())
-            }
-            None => (items.as_slice(), &[][..]),
-        };
-        let tail_start = ndim.checked_sub(tail.len()).ok_or(IndexError::Overflow)?;
-
-        let mut ops = vec![None; ndim];
-        let axes = (0..head.len()).chain(tail_start..ndim);
-        for (axis, ix) in axes.zip(head.iter().chain(tail)) {
-            self.set_op(&mut ops, axis, *ix)?;
-        }
-        Ok(self.apply(&ops))
+        let named = positional_to_named(&self.dims, indexers)?;
+        self.isel_move(named)
     }
 
     /// Resolve `ix` against `axis` and record it in `ops`.
@@ -334,6 +371,7 @@ impl<S: Repr> VariableBase<S> {
         let Self {
             mut data,
             dims,
+            unit,
             attrs,
         } = self;
         // Slices first: they keep axis numbering intact.
@@ -354,7 +392,39 @@ impl<S: Repr> VariableBase<S> {
             .filter(|(_, op)| !matches!(op, Some(AxisOp::At(_))))
             .map(|(d, _)| d)
             .collect();
-        Self { data, dims, attrs }
+        Self {
+            data,
+            dims,
+            unit,
+            attrs,
+        }
+    }
+}
+
+impl<S: Repr> VariableBase<S> {
+    /// Copy the elements at `indices` along `dim` (fancy indexing). Negative indices count
+    /// from the end; repeats and any order are allowed. Returns owned data.
+    ///
+    /// # Errors
+    /// [`CoreError::NoSuchDim`] or [`IndexError::OutOfBounds`].
+    pub fn take(&self, dim: &str, indices: &[isize]) -> Result<Variable> {
+        let axis = self.axis(dim)?;
+        let len = self
+            .shape()
+            .get(axis)
+            .copied()
+            .ok_or_else(|| CoreError::NoSuchDim(dim.into()))?;
+        let name = Name::from(dim);
+        let idx = indices
+            .iter()
+            .map(|i| normalize_index(*i, len, &name))
+            .collect::<Result<Vec<_>, IndexError>>()?;
+        Ok(VariableBase {
+            data: self.data.select_axis(axis, &idx),
+            dims: self.dims.clone(),
+            unit: self.unit.clone(),
+            attrs: self.attrs().clone(),
+        })
     }
 }
 
@@ -365,6 +435,7 @@ impl<S: ReprMut> VariableBase<S> {
         VariableBase {
             data: self.data.view_mut(),
             dims: self.dims.clone(),
+            unit: self.unit.clone(),
             attrs: self.attrs.borrow(),
         }
     }
@@ -414,6 +485,7 @@ impl Clone for Variable {
         Self {
             data: self.data.clone(),
             dims: self.dims.clone(),
+            unit: self.unit.clone(),
             attrs: self.attrs.clone(),
         }
     }
@@ -424,6 +496,7 @@ impl Clone for VariableView<'_> {
         Self {
             data: self.data.clone(),
             dims: self.dims.clone(),
+            unit: self.unit.clone(),
             attrs: self.attrs,
         }
     }
@@ -434,6 +507,7 @@ impl<S: Repr> fmt::Debug for VariableBase<S> {
         f.debug_struct("Variable")
             .field("dims", &self.dims)
             .field("data", &self.data)
+            .field("unit", &self.unit)
             .field("attrs", self.attrs())
             .finish()
     }
