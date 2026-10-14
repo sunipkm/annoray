@@ -1,0 +1,21 @@
+[package]
+name = "xr-hdf5"
+description = "Pure-Rust HDF5 reader and writer for xarray-rs"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+indexmap.workspace = true
+miniz_oxide.workspace = true
+ndarray.workspace = true
+xr-core.workspace = true
+xr-io.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+xr-io-c.workspace = true
+
+[lints]
+workspace = true

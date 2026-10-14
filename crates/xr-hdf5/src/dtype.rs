@@ -1,0 +1,372 @@
+//! HDF5 datatypes and conversion of raw element bytes to typed arrays.
+
+use std::collections::HashMap;
+
+use ndarray::{ArrayD, IxDyn};
+use xr_core::{Owned, TypedArray};
+use xr_io::IoError;
+
+use crate::cursor::{Cursor, Sizes, align8};
+use crate::format::{kind, object_header};
+use crate::{File, bad};
+
+/// String padding.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StrPad {
+    /// Terminated by a NUL (anything after it is ignored).
+    NullTerm,
+    /// Padded with NULs.
+    NullPad,
+    /// Padded with spaces.
+    SpacePad,
+}
+
+/// An HDF5 datatype, as far as xarray-rs can represent it.
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub enum Datatype {
+    /// A two's-complement or unsigned integer.
+    Int {
+        /// Bytes per element (1, 2, 4 or 8).
+        size: u8,
+        /// Whether signed.
+        signed: bool,
+        /// Whether stored big-endian.
+        big_endian: bool,
+    },
+    /// An IEEE float.
+    Float {
+        /// Bytes per element (4 or 8).
+        size: u8,
+        /// Whether stored big-endian.
+        big_endian: bool,
+    },
+    /// A fixed-length string.
+    FixedString {
+        /// Bytes per element.
+        size: usize,
+        /// Padding.
+        pad: StrPad,
+    },
+    /// A variable-length string (stored in the global heap).
+    VarString {
+        /// Padding.
+        pad: StrPad,
+    },
+    /// An enumeration over an integer type; values are read as the base type.
+    Enum {
+        /// The base integer type.
+        base: Box<Datatype>,
+        /// `(name, value bytes)` pairs.
+        members: Vec<(String, Vec<u8>)>,
+    },
+    /// Anything else (compound, reference, opaque, array, bitfield, …): not converted.
+    Other {
+        /// The HDF5 type class.
+        class: u8,
+        /// Bytes per element.
+        size: usize,
+    },
+}
+
+fn pad_of(bits: u8) -> StrPad {
+    match bits & 0x0F {
+        0 => StrPad::NullTerm,
+        2 => StrPad::SpacePad,
+        _ => StrPad::NullPad,
+    }
+}
+
+impl Datatype {
+    /// Parse a datatype message.
+    pub(crate) fn parse(data: &[u8]) -> Result<Self, IoError> {
+        let mut c = Cursor::new(
+            data,
+            0,
+            Sizes {
+                offset: 8,
+                length: 8,
+            },
+        );
+        Self::parse_from(&mut c)
+    }
+
+    fn parse_from(c: &mut Cursor<'_>) -> Result<Self, IoError> {
+        let cv = c.u8()?;
+        let (class, version) = (cv & 0x0F, cv >> 4);
+        let bits = c.bytes(3)?;
+        let (b0, b1) = (
+            bits.first().copied().unwrap_or(0),
+            bits.get(1).copied().unwrap_or(0),
+        );
+        let size = usize::try_from(c.u32()?).map_err(|_| bad("datatype too large"))?;
+        Ok(match class {
+            0 => {
+                c.skip(4)?; // bit offset, precision
+                match u8::try_from(size) {
+                    Ok(s @ (1 | 2 | 4 | 8)) => Self::Int {
+                        size: s,
+                        signed: b0 & 0x08 != 0,
+                        big_endian: b0 & 1 != 0,
+                    },
+                    _ => Self::Other { class, size },
+                }
+            }
+            1 => {
+                c.skip(12)?;
+                match u8::try_from(size) {
+                    Ok(s @ (4 | 8)) => Self::Float {
+                        size: s,
+                        big_endian: b0 & 1 != 0,
+                    },
+                    _ => Self::Other { class, size },
+                }
+            }
+            3 => Self::FixedString {
+                size,
+                pad: pad_of(b0),
+            },
+            8 => {
+                let base = Self::parse_from(c)?;
+                let n = usize::from(u16::from_le_bytes([b0, b1]));
+                let mut names = Vec::with_capacity(n.min(65_536));
+                for _ in 0..n {
+                    let rest = c.rest();
+                    let len = rest
+                        .iter()
+                        .position(|b| *b == 0)
+                        .ok_or_else(|| bad("bad enum name"))?;
+                    let name =
+                        String::from_utf8_lossy(rest.get(..len).unwrap_or_default()).into_owned();
+                    let stored = if version >= 3 {
+                        len.saturating_add(1)
+                    } else {
+                        align8(len.saturating_add(1)).ok_or_else(|| bad("bad enum"))?
+                    };
+                    c.skip(stored)?;
+                    names.push(name);
+                }
+                let vsize = base.size();
+                let members = names
+                    .into_iter()
+                    .map(|nm| Ok((nm, c.bytes(vsize)?.to_vec())))
+                    .collect::<Result<Vec<_>, IoError>>()?;
+                Self::Enum {
+                    base: Box::new(base),
+                    members,
+                }
+            }
+            9 => {
+                let base = Self::parse_from(c)?;
+                if b0 & 0x0F == 1 {
+                    Self::VarString {
+                        pad: pad_of(b0 >> 4),
+                    }
+                } else {
+                    let _ = base;
+                    Self::Other { class, size }
+                }
+            }
+            2 | 4 | 5 | 6 | 7 | 10 => {
+                // Properties of unsupported classes are not needed: messages are length-delimited.
+                Self::Other { class, size }
+            }
+            other => return Err(bad(format!("unknown datatype class {other}"))),
+        })
+    }
+
+    /// Bytes per element as stored in a dataset or attribute.
+    #[must_use]
+    pub fn size(&self) -> usize {
+        match self {
+            Self::Int { size, .. } | Self::Float { size, .. } => usize::from(*size),
+            Self::FixedString { size, .. } | Self::Other { size, .. } => *size,
+            // Length (4) + global heap collection address + object index (4); sized at the
+            // file's offset width by `element_size`.
+            Self::VarString { .. } => 16,
+            Self::Enum { base, .. } => base.size(),
+        }
+    }
+
+    /// Bytes per element in a file with offset width `offset`.
+    pub(crate) fn element_size(&self, offset: u8) -> usize {
+        match self {
+            Self::VarString { .. } => 8usize.saturating_add(usize::from(offset)),
+            other => other.size(),
+        }
+    }
+}
+
+/// Resolve a shared (committed) datatype.
+pub(crate) fn shared_datatype(file: &File, data: &[u8]) -> Result<Datatype, IoError> {
+    let mut c = Cursor::new(data, 0, file.sizes);
+    let version = c.u8()?;
+    let kind_ = c.u8()?;
+    if version == 1 {
+        c.skip(6)?;
+    }
+    if version == 3 && kind_ == 1 {
+        return Err(bad(
+            "datatypes in the shared object header message heap are not supported",
+        ));
+    }
+    let addr = c
+        .addr()?
+        .ok_or_else(|| bad("undefined shared datatype address"))?;
+    let msgs = object_header(file, addr)?;
+    let m = msgs
+        .iter()
+        .find(|m| m.kind == kind::DATATYPE)
+        .ok_or_else(|| bad("committed datatype without a datatype message"))?;
+    Datatype::parse(&m.data)
+}
+
+fn strip(bytes: &[u8], pad: StrPad) -> String {
+    let end = match pad {
+        StrPad::NullTerm => bytes.iter().position(|b| *b == 0).unwrap_or(bytes.len()),
+        StrPad::NullPad => bytes
+            .iter()
+            .rposition(|b| *b != 0)
+            .map_or(0, |p| p.saturating_add(1)),
+        StrPad::SpacePad => bytes
+            .iter()
+            .rposition(|b| *b != b' ' && *b != 0)
+            .map_or(0, |p| p.saturating_add(1)),
+    };
+    String::from_utf8_lossy(bytes.get(..end).unwrap_or_default()).into_owned()
+}
+
+/// Objects of one global heap collection, by index.
+fn global_heap(file: &File, addr: u64) -> Result<HashMap<u16, Vec<u8>>, IoError> {
+    let mut c = file.cursor(addr)?;
+    let start = c.pos();
+    c.expect(b"GCOL")?;
+    c.skip(4)?; // version, reserved
+    let size = c.len_usize()?; // includes this header
+    let end = start
+        .checked_add(size)
+        .ok_or_else(|| bad("bad global heap size"))?;
+    let mut out = HashMap::new();
+    let header = 8usize.saturating_add(usize::from(file.sizes.length));
+    while c.pos().saturating_add(header) <= end {
+        let index = c.u16()?;
+        if index == 0 {
+            break; // free space
+        }
+        c.skip(6)?; // reference count, reserved
+        let n = c.len_usize()?;
+        let data = c.bytes(n)?.to_vec();
+        c.skip(
+            align8(n)
+                .ok_or_else(|| bad("bad global heap"))?
+                .saturating_sub(n),
+        )?;
+        out.insert(index, data);
+    }
+    Ok(out)
+}
+
+macro_rules! ints {
+    ($bytes:expr, $t:ty, $n:literal, $be:expr) => {
+        $bytes
+            .chunks_exact($n)
+            .map(|c| {
+                let a: [u8; $n] = c.try_into().unwrap_or([0; $n]);
+                if $be {
+                    <$t>::from_be_bytes(a)
+                } else {
+                    <$t>::from_le_bytes(a)
+                }
+            })
+            .collect::<Vec<$t>>()
+    };
+}
+
+/// Convert raw element bytes into an array of `shape`.
+pub(crate) fn decode(
+    file: &File,
+    dt: &Datatype,
+    bytes: &[u8],
+    shape: &[usize],
+) -> Result<TypedArray<Owned>, IoError> {
+    let sh = IxDyn(shape);
+    let err = |e: ndarray::ShapeError| bad(format!("data does not match its shape: {e}"));
+    Ok(match dt {
+        Datatype::Int {
+            size,
+            signed,
+            big_endian: be,
+        } => match (size, signed) {
+            (1, true) => {
+                TypedArray::I8(ArrayD::from_shape_vec(sh, ints!(bytes, i8, 1, *be)).map_err(err)?)
+            }
+            (1, false) => TypedArray::U8(ArrayD::from_shape_vec(sh, bytes.to_vec()).map_err(err)?),
+            (2, true) => {
+                TypedArray::I16(ArrayD::from_shape_vec(sh, ints!(bytes, i16, 2, *be)).map_err(err)?)
+            }
+            (2, false) => {
+                TypedArray::U16(ArrayD::from_shape_vec(sh, ints!(bytes, u16, 2, *be)).map_err(err)?)
+            }
+            (4, true) => {
+                TypedArray::I32(ArrayD::from_shape_vec(sh, ints!(bytes, i32, 4, *be)).map_err(err)?)
+            }
+            (4, false) => {
+                TypedArray::U32(ArrayD::from_shape_vec(sh, ints!(bytes, u32, 4, *be)).map_err(err)?)
+            }
+            (8, true) => {
+                TypedArray::I64(ArrayD::from_shape_vec(sh, ints!(bytes, i64, 8, *be)).map_err(err)?)
+            }
+            _ => {
+                TypedArray::U64(ArrayD::from_shape_vec(sh, ints!(bytes, u64, 8, *be)).map_err(err)?)
+            }
+        },
+        Datatype::Float {
+            size: 4,
+            big_endian: be,
+        } => TypedArray::F32(ArrayD::from_shape_vec(sh, ints!(bytes, f32, 4, *be)).map_err(err)?),
+        Datatype::Float { big_endian: be, .. } => {
+            TypedArray::F64(ArrayD::from_shape_vec(sh, ints!(bytes, f64, 8, *be)).map_err(err)?)
+        }
+        Datatype::FixedString { size, pad } => {
+            let strings: Vec<String> = if *size == 0 {
+                vec![String::new(); shape.iter().product()]
+            } else {
+                bytes.chunks_exact(*size).map(|c| strip(c, *pad)).collect()
+            };
+            TypedArray::Str(ArrayD::from_shape_vec(sh, strings).map_err(err)?)
+        }
+        Datatype::VarString { pad } => {
+            let esize = dt.element_size(file.sizes.offset);
+            let mut heaps: HashMap<u64, HashMap<u16, Vec<u8>>> = HashMap::new();
+            let mut strings = Vec::new();
+            for el in bytes.chunks_exact(esize) {
+                let mut c = Cursor::new(el, 0, file.sizes);
+                let len = usize::try_from(c.u32()?).map_err(|_| bad("string too long"))?;
+                let addr = c.addr()?;
+                let index = u16::try_from(c.u32()?).map_err(|_| bad("bad global heap index"))?;
+                let s = match addr {
+                    None => String::new(),
+                    Some(_) if len == 0 => String::new(),
+                    Some(a) => {
+                        let heap = match heaps.entry(a) {
+                            std::collections::hash_map::Entry::Occupied(e) => e.into_mut(),
+                            std::collections::hash_map::Entry::Vacant(e) => {
+                                e.insert(global_heap(file, a)?)
+                            }
+                        };
+                        let obj = heap
+                            .get(&index)
+                            .ok_or_else(|| bad("missing global heap object"))?;
+                        strip(obj.get(..len.min(obj.len())).unwrap_or_default(), *pad)
+                    }
+                };
+                strings.push(s);
+            }
+            TypedArray::Str(ArrayD::from_shape_vec(sh, strings).map_err(err)?)
+        }
+        Datatype::Enum { base, .. } => decode(file, base, bytes, shape)?,
+        Datatype::Other { class, .. } => {
+            return Err(IoError::Unsupported(format!("HDF5 datatype class {class}")));
+        }
+    })
+}
