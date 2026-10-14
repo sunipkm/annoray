@@ -19,14 +19,14 @@ const NS_PER_SEC: i128 = 1_000_000_000;
 const NS_PER_DAY: i128 = 86_400 * NS_PER_SEC;
 
 /// What a time key counts nanoseconds from.
-#[derive(Debug, Clone, Copy)]
-enum TimeKind {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum TimeKind {
     DateTime,
     Cf(Calendar),
     Delta,
 }
 
-enum Keys {
+pub(crate) enum Keys {
     Num(Vec<f64>),
     Str(Vec<String>),
     Ns(Vec<i128>, TimeKind),
@@ -195,6 +195,17 @@ fn keys_of<S: Repr>(coord: &VariableBase<S>, ctx: &Ctx<'_>) -> Result<Keys> {
             return Err(ctx.invalid("boolean coordinates cannot be indexed by label"));
         }
     })
+}
+
+/// The labels of a dimension coordinate as comparable keys.
+pub(crate) fn index_keys<S: Repr>(coord: &VariableBase<S>, dim: &Name) -> Result<Keys> {
+    keys_of(
+        coord,
+        &Ctx {
+            dim,
+            unit: coord.unit(),
+        },
+    )
 }
 
 // ----- label → key -----

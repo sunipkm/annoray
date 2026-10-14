@@ -19,6 +19,9 @@ thiserror.workspace = true
 xr-hdf5.workspace = true
 
 [features]
+default = ["rayon"]
+# Decompress HDF5/netCDF-4 chunks in parallel.
+rayon = ["xr-hdf5/rayon"]
 # The netCDF-C/HDF5 C libraries as an alternative backend (built from source; needs cmake).
 # Not needed for I/O: netCDF-3, netCDF-4 and HDF5 are read and written in pure Rust.
 netcdf-c = ["dep:xr-io-c"]

@@ -10,8 +10,13 @@ license.workspace = true
 indexmap.workspace = true
 miniz_oxide.workspace = true
 ndarray.workspace = true
+rayon = { workspace = true, optional = true }
 xr-core.workspace = true
 xr-io.workspace = true
+
+[features]
+# Decompress chunks in parallel.
+rayon = ["dep:rayon"]
 
 [dev-dependencies]
 proptest.workspace = true

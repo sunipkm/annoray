@@ -1,0 +1,61 @@
+concat_time|new
+  time|coord|time|float64|1.0 2.0 3.0
+  x|coord|x|float64|10.0 20.0 30.0
+  const|var|x|float64|1.0 2.0 3.0
+  temp|var|time,x|float64|1.0 2.0 3.0 4.0 5.0 6.0 7.0 8.0 9.0
+concat_const_differs|new
+  time|coord|time|float64|1.0 2.0 3.0
+  x|coord|x|float64|10.0 20.0 30.0
+  const|var|x|float64|1.0 2.0 3.0
+  temp|var|time,x|float64|1.0 2.0 3.0 4.0 5.0 6.0 7.0 8.0 9.0
+concat_misaligned|new|error
+concat_dtype|new
+  time|coord|time|float64|1.0 2.0 3.0
+  x|coord|x|float64|10.0 20.0 30.0
+  const|var|x|float64|1.0 2.0 3.0
+  temp|var|time,x|float64|1.0 2.0 3.0 4.0 5.0 6.0 7.0 8.0 9.0
+concat_new_dim|new
+  x|coord|x|float64|10.0 20.0 30.0
+  const|var|run,x|float64|1.0 2.0 3.0 1.0 2.0 3.0
+  temp|var|run,x|float64|1.0 2.0 3.0 4.0 5.0 6.0
+merge_fill|new
+  x|coord|x|float64|1.0 2.0 3.0
+  a|var|x|float64|1.0 nan 3.0
+  b|var|x|float64|4.0 5.0 6.0
+merge_conflict|new
+  x|coord|x|float64|1.0 2.0 3.0
+  a|var|x|float64|1.0 nan 3.0
+merge_misaligned|new|error
+concat_time|legacy
+  time|coord|time|float64|1.0 2.0 3.0
+  x|coord|x|float64|10.0 20.0 30.0
+  const|var|time,x|float64|1.0 2.0 3.0 1.0 2.0 3.0 1.0 2.0 3.0
+  temp|var|time,x|float64|1.0 2.0 3.0 4.0 5.0 6.0 7.0 8.0 9.0
+concat_const_differs|legacy
+  time|coord|time|float64|1.0 2.0 3.0
+  x|coord|x|float64|10.0 20.0 30.0
+  const|var|time,x|float64|1.0 2.0 3.0 1.0 2.0 3.0 9.0 9.0 9.0
+  temp|var|time,x|float64|1.0 2.0 3.0 4.0 5.0 6.0 7.0 8.0 9.0
+concat_misaligned|legacy
+  time|coord|time|float64|1.0 2.0 3.0
+  x|coord|x|float64|10.0 20.0 30.0 40.0
+  const|var|time,x|float64|1.0 2.0 3.0 nan 1.0 2.0 3.0 nan nan 1.0 2.0 3.0
+  temp|var|time,x|float64|1.0 2.0 3.0 nan 4.0 5.0 6.0 nan nan 7.0 8.0 9.0
+concat_dtype|legacy
+  time|coord|time|float64|1.0 2.0 3.0
+  x|coord|x|float64|10.0 20.0 30.0
+  const|var|time,x|float64|1.0 2.0 3.0 1.0 2.0 3.0 1.0 2.0 3.0
+  temp|var|time,x|float64|1.0 2.0 3.0 4.0 5.0 6.0 7.0 8.0 9.0
+concat_new_dim|legacy
+  x|coord|x|float64|10.0 20.0 30.0
+  const|var|run,x|float64|1.0 2.0 3.0 1.0 2.0 3.0
+  temp|var|run,x|float64|1.0 2.0 3.0 4.0 5.0 6.0
+merge_fill|legacy
+  x|coord|x|float64|1.0 2.0 3.0
+  a|var|x|float64|1.0 2.0 3.0
+  b|var|x|float64|4.0 5.0 6.0
+merge_conflict|legacy|error
+merge_misaligned|legacy
+  x|coord|x|float64|1.0 2.0 3.0 4.0
+  a|var|x|float64|1.0 nan 3.0 nan
+  c|var|x|float64|nan 7.0 nan 8.0

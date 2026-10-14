@@ -146,6 +146,14 @@ macro_rules! typed_map {
 
 pub(crate) use typed_dispatch;
 
+/// Carries an element type chosen by `typed_dispatch!` into generic code:
+/// `typed_dispatch!(a, x => f(..., marker(x)))` calls `f::<T>` for `a`'s element type.
+pub(crate) struct Marker<T>(std::marker::PhantomData<T>);
+
+pub(crate) fn marker<S: ndarray::Data, D>(_: &ndarray::ArrayBase<S, D>) -> Marker<S::Elem> {
+    Marker(std::marker::PhantomData)
+}
+
 macro_rules! impl_element {
     ($($var:ident $ty:ty),* $(,)?) => {$(
         impl sealed::Sealed for $ty {}

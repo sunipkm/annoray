@@ -12,8 +12,10 @@
 //!
 //! No function in this crate panics on bad input: all failures are returned as [`CoreError`].
 
+mod align;
 mod array;
 mod attrs;
+mod combine;
 mod dataarray;
 mod dataset;
 mod display;
@@ -25,12 +27,15 @@ mod lazy;
 mod lookup;
 mod name;
 mod ops;
+mod reduce;
 mod repr;
 mod select;
 mod variable;
 
+pub use align::{Join, align, align_datasets};
 pub use array::{Arr, DType, Element, TypedArray};
 pub use attrs::{AttrValue, Attrs};
+pub use combine::{Compat, Concat, ConcatOptions, MergeOptions, concat, concat_datasets, merge};
 pub use dataarray::{Coords, DataArray, DataArrayBase, DataArrayView, DataArrayViewMut};
 pub use dataset::{Dataset, DatasetBase, DatasetView, DatasetViewMut};
 pub use encoding::{DatasetEncoding, Encoding};
@@ -40,6 +45,7 @@ pub use label::{IntoLabelIndexer, Label, LabelIndexer, Method};
 pub use lazy::{LazyArray, LazySource};
 pub use name::{Dims, Name};
 pub use ops::{BinOp, variables_equal};
+pub use reduce::{ReduceDims, ReduceOptions, Reduction};
 pub use repr::{Owned, Repr, ReprMut, View, ViewMut};
 pub use variable::{Variable, VariableBase, VariableView, VariableViewMut};
 pub use xr_units;

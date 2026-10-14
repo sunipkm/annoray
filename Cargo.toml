@@ -34,6 +34,7 @@ chrono = { version = "0.4", default-features = false, features = ["std"] }
 indexmap = "2"
 memmap2 = "0.9"
 miniz_oxide = "0.8"
+rayon = "1.10"
 ndarray = "0.17"
 smallvec = "1"
 thiserror = "2"

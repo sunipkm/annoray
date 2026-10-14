@@ -189,12 +189,12 @@ fn arithmetic_matches_xarray() {
 #[test]
 fn arithmetic_errors() {
     let t = temp();
-    // Mismatched coordinates on a shared dimension.
+    // Disjoint coordinates on a shared dimension: the inner join is empty, as in xarray.
     let shifted = DataArray::from_array(["lat"], array![1.0, 2.0, 3.0].into_dyn())
         .unwrap()
         .with_dim_coord("lat", array![11.0, 21.0, 31.0])
         .unwrap();
-    assert!(matches!(&t + &shifted, Err(CoreError::NotAligned(_))));
+    assert_eq!((&t + &shifted).unwrap().len_of("lat").unwrap(), 0);
     // Mismatched lengths.
     let short = DataArray::from_array(["lat"], array![1.0, 2.0].into_dyn()).unwrap();
     assert!(matches!(

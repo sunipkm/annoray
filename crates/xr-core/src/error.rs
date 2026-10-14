@@ -133,6 +133,22 @@ pub enum CoreError {
     /// Two operands disagree on the coordinate labels of a shared dimension.
     #[error("coordinates along dimension {0:?} differ; align the operands first")]
     NotAligned(Name),
+    /// Objects cannot be aligned along a dimension.
+    #[error("cannot align along dimension {dim:?}: {reason}")]
+    CannotAlign {
+        /// The dimension.
+        dim: Name,
+        /// Why.
+        reason: String,
+    },
+    /// Variables cannot be combined (concatenated or merged).
+    #[error("cannot combine {name:?}: {reason}")]
+    CannotCombine {
+        /// The variable.
+        name: Name,
+        /// Why.
+        reason: String,
+    },
     /// An operation is not defined for this element type.
     #[error("{op} is not supported for dtype {dtype}")]
     UnsupportedDType {
@@ -147,6 +163,12 @@ pub enum CoreError {
     /// Mutation needs the data in memory: call `load()` first.
     #[error("variable data is not loaded; call load() before modifying it")]
     NotLoaded,
+    /// A reduction had no valid values (the minimum of nothing, `argmin` of all-NaN, …).
+    #[error("{0} of an empty or all-NaN slice")]
+    EmptyReduction(&'static str),
+    /// A reduction was asked for something it cannot do.
+    #[error("{0}")]
+    InvalidReduction(String),
     /// Integer arithmetic overflowed.
     #[error("integer overflow in {0}")]
     ArithmeticOverflow(&'static str),

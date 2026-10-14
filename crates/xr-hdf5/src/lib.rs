@@ -625,13 +625,7 @@ impl Dataset {
                 .get(..total)
                 .ok_or_else(|| bad(format!("{}: compact data truncated", self.path)))?
                 .into(),
-            Layout::Contiguous { addr: None, .. } => fill
-                .iter()
-                .copied()
-                .cycle()
-                .take(total)
-                .collect::<Vec<u8>>()
-                .into(),
+            Layout::Contiguous { addr: None, .. } => filled(&fill, n).into(),
             Layout::Contiguous {
                 addr: Some(a),
                 size,
@@ -650,13 +644,12 @@ impl Dataset {
                 }
             }
             Layout::Chunked { addr, chunk, index } => {
-                let mut out: Vec<u8> = fill.iter().copied().cycle().take(total).collect();
+                let mut out = filled(&fill, n);
                 if let Some(addr) = addr {
                     let cdims: Vec<u64> = chunk.iter().take(shape.len()).copied().collect();
                     let whole = vec![0usize; shape.len()];
-                    for c in self.chunk_list(*addr, &cdims, index, &shape, esize)? {
-                        self.place_chunk(&c, &cdims, &shape, esize, &whole, &shape, &mut out)?;
-                    }
+                    let chunks = self.chunk_list(*addr, &cdims, index, &shape, esize)?;
+                    self.place_chunks(&chunks, &cdims, &shape, esize, &whole, &shape, &mut out)?;
                 }
                 out.into()
             }
@@ -823,12 +816,13 @@ impl Dataset {
         })
     }
 
-    /// Decode one chunk and copy its part of the box `[lo, lo + count)` into `out` (which holds
-    /// exactly that box, row-major).
+    /// Decode `chunks` and copy their parts of the box `[lo, lo + count)` into `out` (which
+    /// holds exactly that box, row-major). With the `rayon` feature, filtered (compressed)
+    /// chunks are decoded in parallel, a few batches per thread at a time to bound memory.
     #[allow(clippy::too_many_arguments)]
-    fn place_chunk(
+    fn place_chunks(
         &self,
-        c: &ChunkRef,
+        chunks: &[ChunkRef],
         cdims: &[u64],
         shape: &[usize],
         esize: usize,
@@ -836,6 +830,39 @@ impl Dataset {
         count: &[usize],
         out: &mut [u8],
     ) -> Result<(), IoError> {
+        #[cfg(feature = "rayon")]
+        if !self.filters.is_empty() && chunks.len() > 1 {
+            use rayon::prelude::*;
+            let batch = rayon::current_num_threads().saturating_mul(4).max(1);
+            for group in chunks.chunks(batch) {
+                let decoded = group
+                    .par_iter()
+                    .map(|c| self.decode_chunk(c, cdims, shape, esize, lo, count))
+                    .collect::<Result<Vec<_>, IoError>>()?;
+                for p in decoded.into_iter().flatten() {
+                    p.copy_into(out, count, lo, esize)?;
+                }
+            }
+            return Ok(());
+        }
+        for c in chunks {
+            if let Some(p) = self.decode_chunk(c, cdims, shape, esize, lo, count)? {
+                p.copy_into(out, count, lo, esize)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Decode one chunk if it overlaps the box `[lo, lo + count)`.
+    fn decode_chunk(
+        &self,
+        c: &ChunkRef,
+        cdims: &[u64],
+        shape: &[usize],
+        esize: usize,
+        lo: &[usize],
+        count: &[usize],
+    ) -> Result<Option<Decoded<'_>>, IoError> {
         let cd: Vec<usize> = cdims
             .iter()
             .map(|d| usize::try_from(*d).unwrap_or(usize::MAX))
@@ -857,7 +884,7 @@ impl Dataset {
                 .min(shape.get(k).copied().unwrap_or(0))
                 .min(l.saturating_add(count.get(k).copied().unwrap_or(0)));
             if a >= b {
-                return Ok(());
+                return Ok(None);
             }
             from.push(a);
             to.push(b);
@@ -883,7 +910,13 @@ impl Dataset {
                 self.path, c.offset
             )));
         }
-        copy_box(&data, &cd, &off, out, count, lo, &from, &to, esize)
+        Ok(Some(Decoded {
+            data,
+            dims: cd,
+            origin: off,
+            from,
+            to,
+        }))
     }
 
     /// Read the hyperslab `[start, start + count)`. Only the chunks (or, for contiguous data,
@@ -921,15 +954,16 @@ impl Dataset {
             .try_fold(Ck::from(1usize), |a, d| Some(a * *d))
             .and_then(Ck::usize)
             .ok_or_else(|| bad("slice too large"))?;
-        let total = (Ck::from(n) * esize)
+        // Enforce the load limit before allocating.
+        (Ck::from(n) * esize)
             .usize()
             .filter(|t| *t <= self.file.load_limit)
             .ok_or_else(|| bad(format!("{}: slice too large to load", self.path)))?;
         let fill: Vec<u8> = match &self.fill {
             Some(f) if f.len() == esize => f.clone(),
-            _ => vec![0; esize.max(1)],
+            _ => vec![0; esize],
         };
-        let mut out: Vec<u8> = fill.iter().copied().cycle().take(total).collect();
+        let mut out = filled(&fill, n);
         let to: Vec<usize> = start
             .iter()
             .zip(count)
@@ -959,14 +993,53 @@ impl Dataset {
                     index,
                 } => {
                     let cdims: Vec<u64> = chunk.iter().take(shape.len()).copied().collect();
-                    for c in self.chunk_list(*addr, &cdims, index, &shape, esize)? {
-                        self.place_chunk(&c, &cdims, &shape, esize, start, count, &mut out)?;
-                    }
+                    let chunks = self.chunk_list(*addr, &cdims, index, &shape, esize)?;
+                    self.place_chunks(&chunks, &cdims, &shape, esize, start, count, &mut out)?;
                 }
                 Layout::Contiguous { addr: None, .. } | Layout::Chunked { addr: None, .. } => {}
             }
         }
         dtype::decode(&self.file, &self.dtype, &out, count)
+    }
+}
+
+/// `n` copies of the fill value (zeros straight from the allocator).
+fn filled(fill: &[u8], n: usize) -> Vec<u8> {
+    if fill.iter().all(|b| *b == 0) {
+        vec![0; fill.len().saturating_mul(n)]
+    } else {
+        fill.repeat(n)
+    }
+}
+
+/// A decoded chunk and the part of it to copy.
+struct Decoded<'a> {
+    data: std::borrow::Cow<'a, [u8]>,
+    dims: Vec<usize>,
+    origin: Vec<usize>,
+    from: Vec<usize>,
+    to: Vec<usize>,
+}
+
+impl Decoded<'_> {
+    fn copy_into(
+        &self,
+        out: &mut [u8],
+        count: &[usize],
+        lo: &[usize],
+        esize: usize,
+    ) -> Result<(), IoError> {
+        copy_box(
+            &self.data,
+            &self.dims,
+            &self.origin,
+            out,
+            count,
+            lo,
+            &self.from,
+            &self.to,
+            esize,
+        )
     }
 }
 

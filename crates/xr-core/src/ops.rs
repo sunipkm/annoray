@@ -2,8 +2,9 @@
 //!
 //! - **Broadcasting** is by name: the result has the left operand's dimensions followed by the
 //!   right operand's extra ones. Shared dimensions must have equal lengths.
-//! - **Coordinates** of shared dimensions must be equal (full alignment comes later); the
-//!   result keeps the union of both operands' coordinates.
+//! - **Coordinates**: operands are first aligned on shared dimensions with an inner join
+//!   (only labels present in both are kept, see [`align`](crate::align)); the result keeps
+//!   the union of both operands' coordinates.
 //! - **Units** follow `xr-units`: `+`/`-` need compatible units and, under the default strict
 //!   policy, equal scales; `*`/`/` combine units. A missing unit counts as dimensionless.
 //! - **Element types**: two `f32` operands stay `f32`; integers of the same type stay integers
@@ -107,7 +108,7 @@ fn zip_map<A, B, C>(
 }
 
 #[allow(clippy::cast_precision_loss)] // integer data is promoted to f64 deliberately
-fn to_f64(a: &TypedArray<View<'_>>, conv: Option<&Converter>) -> Result<ArrayD<f64>> {
+pub(crate) fn to_f64(a: &TypedArray<View<'_>>, conv: Option<&Converter>) -> Result<ArrayD<f64>> {
     let out = match a {
         TypedArray::F32(x) => x.mapv(f64::from),
         TypedArray::F64(x) => x.to_owned(),
@@ -171,13 +172,13 @@ fn out_dims(a: &[(Name, usize)], b: &[(Name, usize)]) -> Result<(Vec<Name>, Vec<
     Ok(sizes.into_iter().unzip())
 }
 
-fn td_from_ns(ns: i128) -> Option<TimeDelta> {
+pub(crate) fn td_from_ns(ns: i128) -> Option<TimeDelta> {
     let secs = i64::try_from(ns.div_euclid(1_000_000_000)).ok()?;
     let nanos = u32::try_from(ns.rem_euclid(1_000_000_000)).ok()?;
     TimeDelta::new(secs, nanos)
 }
 
-fn td_ns(td: &TimeDelta) -> Option<i128> {
+pub(crate) fn td_ns(td: &TimeDelta) -> Option<i128> {
     i128::from(td.num_seconds())
         .checked_mul(1_000_000_000)?
         .checked_add(i128::from(td.subsec_nanos()))
@@ -370,6 +371,19 @@ impl<S: Repr> DataArrayBase<S> {
         rhs: &DataArrayBase<R>,
         policy: UnitPolicy,
     ) -> Result<DataArray> {
+        // Align shared dimensions on their labels (an inner join, as xarray does).
+        let plan = crate::align::plan(
+            &[
+                crate::align::Obj::of_array(self),
+                crate::align::Obj::of_array(rhs),
+            ],
+            crate::Join::Inner,
+        )?;
+        if !plan.is_noop() {
+            let a = crate::align::apply_array(self, &plan, 0)?;
+            let b = crate::align::apply_array(rhs, &plan, 1)?;
+            return a.binary(op, &b, policy);
+        }
         // Coordinates of shared dimensions must agree.
         for d in self.dims().iter().filter(|d| rhs.dims().contains(d)) {
             if let (Some(a), Some(b)) = (self.coords.get(d), rhs.coords.get(d)) {

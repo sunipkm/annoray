@@ -347,7 +347,7 @@ The pipeline is `open_dataset` = backend.open, then `xr-cf` decode, then `Datase
   locally with a SAFETY comment.
 - **Plain HDF5 files are not supported through the C backend.** The `hdf5-metno` bindings were
   skipped: pure-Rust `xr-hdf5` (M5) covers plain HDF5, tested against h5py-written fixtures.
-- **Reads are eager:** whole variables are loaded. Lazy, chunked reads are still M7.
+- **Reads were eager here;** lazy, sliced reads came in M7.
 - **`Encoding`** on each `Variable`, and `DatasetEncoding` (unlimited dims) on `Dataset`, record how
   data was stored, as xarray's `.encoding` does. Encoding falls back to xarray's defaults when unset:
   - times use the coarsest exact unit, the first date as reference, and int64;
@@ -481,6 +481,43 @@ The pipeline is `open_dataset` = backend.open, then `xr-cf` decode, then `Datase
   `tests/lazy_open.rs` checks that lazy and eager opens agree on every fixture, whole and after
   selections.
 
+### Implementation notes (M7, operations, as built)
+- **Reductions** (`reduce.rs`): `sum prod mean median std var min max count argmin argmax any
+  all` on `Variable`, `DataArray` and `Dataset`. Dimensions are given as `..`, a name, or a
+  list. `ReduceOptions` holds `skipna` (default on), `ddof`, `min_count` and `keep_attrs`.
+  - Semantics follow numpy's `nan*` functions.
+  - Integer sums are exact: checked, and returned as `i64`/`u64`. `f32` stays `f32`.
+  - Dates support min, max, mean and median; durations also support sum. Time means are
+    rounded to the nearest nanosecond, as xarray does.
+  - Units: `var` squares the unit, `std` of °C becomes a kelvin-sized step, summing °C is an
+    error, and `count`/`arg*` drop the unit.
+  - Datasets drop non-numeric variables for numeric reductions (`numeric_only`).
+  - Tested against 378 xarray cases (`fixtures/gen_reductions.py`). Deliberate differences:
+    the median of dates is supported, and `any`/`all` of times are not.
+- **Alignment** (`align.rs`): `align` and `align_datasets` with the `Inner`, `Outer`, `Left`,
+  `Right` and `Exact` joins.
+  - Ordering follows pandas: an inner join keeps the left order, an outer join sorts.
+  - Missing labels become NaN, and integers are promoted to `f64`. Strings, booleans and dates
+    have no NaN, so filling them is an error.
+  - Objects that are already aligned are not copied, so lazy data stays unread.
+  - Arithmetic now aligns with an inner join, as xarray does; it used to require equal labels.
+  - Tested against 76 xarray cases (`fixtures/gen_align.py`).
+- **concat / merge** (`combine.rs`): `concat`, `concat_datasets` and `merge`.
+  - The defaults are xarray's *new* combine defaults: `join="exact"`, `compat="override"`,
+    data variables concatenated only along a new dimension or when they have it, coordinates
+    "minimal".
+  - `ConcatOptions::legacy()` and `MergeOptions::legacy()` give today's outer-join /
+    `equals` / `no_conflicts` behaviour.
+  - Compatible units are converted to the first object's unit. Mixed numeric types become
+    `f64`.
+  - Tested under both default sets against xarray (`fixtures/gen_combine.py`).
+- **Parallel chunk reads**: with the `rayon` feature (on by default in the facade), filtered
+  HDF5 chunks are decompressed in parallel, in batches that bound memory.
+  - Building fill buffers with `Vec::repeat` (zeros come from the allocator) removed most of
+    the serial time.
+  - A 4000×4000 gzip+shuffle `f64` dataset (128 MB, 256 chunks) now reads in ~50 ms on 8
+    cores, against ~335 ms before.
+
 ### CF layer (`xr-cf`)
 - On decode: apply `_FillValue`, `missing_value`, `scale_factor`, `add_offset` and `_Unsigned`. Parse `units` into `Unit`.
   Turn time variables into `NaiveDateTime` or `CfDate` depending on the calendar (§3 Time), and resolve `coordinates` and `bounds`.
@@ -513,7 +550,7 @@ The pipeline is `open_dataset` = backend.open, then `xr-cf` decode, then `Datase
   `View`s, so only data variables can be written through a mutable view.
 - **Arithmetic:**
   - Broadcasting is by name: the left operand's dims come first, then the right's extras.
-  - Shared dimension coordinates must be equal, otherwise `NotAligned`; real alignment is M7.
+  - Shared dimension coordinates had to be equal (`NotAligned`); since M7 operands are aligned with an inner join.
   - Attributes are dropped, as xarray's `keep_attrs=False` default does.
   - A missing unit counts as dimensionless.
   - Integer `+ - *` is checked; `/` is true division.

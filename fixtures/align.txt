@@ -1,0 +1,82 @@
+num|inner|0|3.0 4.0|float64|2|30.0 40.0
+num|inner|1|3.0 4.0|int32|2|1 2
+num|outer|0|1.0 2.0 3.0 4.0 5.0|float64|5|10.0 20.0 30.0 40.0 nan
+num|outer|1|1.0 2.0 3.0 4.0 5.0|float64|5|nan nan 1.0 2.0 3.0
+num|left|0|1.0 2.0 3.0 4.0|float64|4|10.0 20.0 30.0 40.0
+num|left|1|1.0 2.0 3.0 4.0|float64|4|nan nan 1.0 2.0
+num|right|0|3.0 4.0 5.0|float64|3|30.0 40.0 nan
+num|right|1|3.0 4.0 5.0|int32|3|1 2 3
+num|exact|error
+unsorted|inner|0|3.0 2.0|float64|2|1.0 3.0
+unsorted|inner|1|3.0 2.0|float64|2|5.0 4.0
+unsorted|outer|0|1.0 2.0 3.0 9.0|float64|4|2.0 3.0 1.0 nan
+unsorted|outer|1|1.0 2.0 3.0 9.0|float64|4|nan 4.0 5.0 6.0
+unsorted|left|0|3.0 1.0 2.0|float64|3|1.0 2.0 3.0
+unsorted|left|1|3.0 1.0 2.0|float64|3|5.0 nan 4.0
+unsorted|right|0|2.0 3.0 9.0|float64|3|3.0 1.0 nan
+unsorted|right|1|2.0 3.0 9.0|float64|3|4.0 5.0 6.0
+unsorted|exact|error
+desc|inner|0|20.0 10.0|float64|2|2.0 3.0
+desc|inner|1|20.0 10.0|float64|2|4.0 5.0
+desc|outer|0|10.0 20.0 30.0|float64|3|3.0 2.0 1.0
+desc|outer|1|10.0 20.0 30.0|float64|3|5.0 4.0 nan
+desc|left|0|30.0 20.0 10.0|float64|3|1.0 2.0 3.0
+desc|left|1|30.0 20.0 10.0|float64|3|nan 4.0 5.0
+desc|right|0|20.0 10.0|float64|2|2.0 3.0
+desc|right|1|20.0 10.0|float64|2|4.0 5.0
+desc|exact|error
+str|inner|0|b|float64|1|3.0
+str|inner|1|b|float64|1|4.0
+str|outer|0|a b c d|float64|4|2.0 3.0 1.0 nan
+str|outer|1|a b c d|float64|4|nan 4.0 nan 5.0
+str|left|0|c a b|float64|3|1.0 2.0 3.0
+str|left|1|c a b|float64|3|nan nan 4.0
+str|right|0|b d|float64|2|3.0 nan
+str|right|1|b d|float64|2|4.0 5.0
+str|exact|error
+time|inner|0|2020-01-03T00:00:00|float64|1|3.0
+time|inner|1|2020-01-03T00:00:00|float64|1|4.0
+time|outer|0|2020-01-01T00:00:00 2020-01-02T00:00:00 2020-01-03T00:00:00 2020-01-04T00:00:00|float64|4|1.0 2.0 3.0 nan
+time|outer|1|2020-01-01T00:00:00 2020-01-02T00:00:00 2020-01-03T00:00:00 2020-01-04T00:00:00|float64|4|nan nan 4.0 5.0
+time|left|0|2020-01-01T00:00:00 2020-01-02T00:00:00 2020-01-03T00:00:00|float64|3|1.0 2.0 3.0
+time|left|1|2020-01-01T00:00:00 2020-01-02T00:00:00 2020-01-03T00:00:00|float64|3|nan nan 4.0
+time|right|0|2020-01-03T00:00:00 2020-01-04T00:00:00|float64|2|3.0 nan
+time|right|1|2020-01-03T00:00:00 2020-01-04T00:00:00|float64|2|4.0 5.0
+time|exact|error
+equal|inner|0|1.0 2.0|float64|2|1.0 2.0
+equal|inner|1|1.0 2.0|float64|2|3.0 4.0
+equal|outer|0|1.0 2.0|float64|2|1.0 2.0
+equal|outer|1|1.0 2.0|float64|2|3.0 4.0
+equal|left|0|1.0 2.0|float64|2|1.0 2.0
+equal|left|1|1.0 2.0|float64|2|3.0 4.0
+equal|right|0|1.0 2.0|float64|2|1.0 2.0
+equal|right|1|1.0 2.0|float64|2|3.0 4.0
+equal|exact|0|1.0 2.0|float64|2|1.0 2.0
+equal|exact|1|1.0 2.0|float64|2|3.0 4.0
+three|inner|0|2.0 3.0|float64|2|2.0 3.0
+three|inner|1|2.0 3.0|float64|2|4.0 5.0
+three|inner|2|2.0 3.0|float64|2|8.0 7.0
+three|outer|0|1.0 2.0 3.0 4.0|float64|4|1.0 2.0 3.0 nan
+three|outer|1|1.0 2.0 3.0 4.0|float64|4|nan 4.0 5.0 6.0
+three|outer|2|1.0 2.0 3.0 4.0|float64|4|nan 8.0 7.0 nan
+three|left|0|1.0 2.0 3.0|float64|3|1.0 2.0 3.0
+three|left|1|1.0 2.0 3.0|float64|3|nan 4.0 5.0
+three|left|2|1.0 2.0 3.0|float64|3|nan 8.0 7.0
+three|right|0|3.0 2.0|float64|2|3.0 2.0
+three|right|1|3.0 2.0|float64|2|5.0 4.0
+three|right|2|3.0 2.0|float64|2|7.0 8.0
+three|exact|error
+nocoord|inner|0|1.0 3.0|float64|2,2|1.0 2.0 5.0 6.0
+nocoord|inner|1|-|float64|2|7.0 8.0
+nocoord|inner|2|1.0 3.0|float64|2|10.0 9.0
+nocoord|outer|0|1.0 2.0 3.0|float64|3,2|1.0 2.0 3.0 4.0 5.0 6.0
+nocoord|outer|1|-|float64|2|7.0 8.0
+nocoord|outer|2|1.0 2.0 3.0|float64|3|10.0 nan 9.0
+nocoord|left|0|1.0 2.0 3.0|float64|3,2|1.0 2.0 3.0 4.0 5.0 6.0
+nocoord|left|1|-|float64|2|7.0 8.0
+nocoord|left|2|1.0 2.0 3.0|float64|3|10.0 nan 9.0
+nocoord|right|0|3.0 1.0|float64|2,2|5.0 6.0 1.0 2.0
+nocoord|right|1|-|float64|2|7.0 8.0
+nocoord|right|2|3.0 1.0|float64|2|9.0 10.0
+nocoord|exact|error
+arith|+|0|3.0 4.0|float64|2|31.0 42.0

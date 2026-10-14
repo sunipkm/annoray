@@ -1,0 +1,398 @@
+f64|sum|all||||float64||16.5
+f64|sum|x||||float64|4|3.5 -1.0 3.0 11.0
+f64|sum|y||||float64|3|8.0 0.0 8.5
+f64|sum|y,x||||float64||16.5
+f64|sum|all|false|||float64||nan
+f64|sum|x|false|||float64|4|nan nan nan nan
+f64|sum|y|false|||float64|3|nan nan 8.5
+f64|sum|y,x|false|||float64||nan
+f64|sum|all|||2|float64||16.5
+f64|sum|x|||2|float64|4|3.5 nan 3.0 11.0
+f64|sum|y|||2|float64|3|8.0 nan 8.5
+f64|sum|y,x|||2|float64||16.5
+f64|prod|all||||float64||-0.0
+f64|prod|x||||float64|4|2.5 -1.0 0.0 28.0
+f64|prod|y||||float64|3|12.0 1.0 -0.0
+f64|prod|y,x||||float64||-0.0
+f64|prod|all|false|||float64||nan
+f64|prod|x|false|||float64|4|nan nan nan nan
+f64|prod|y|false|||float64|3|nan nan -0.0
+f64|prod|y,x|false|||float64||nan
+f64|prod|all|||2|float64||-0.0
+f64|prod|x|||2|float64|4|2.5 nan 0.0 28.0
+f64|prod|y|||2|float64|3|12.0 nan -0.0
+f64|prod|y,x|||2|float64||-0.0
+f64|mean|all||||float64||2.357142857142857
+f64|mean|x||||float64|4|1.75 -1.0 1.5 5.5
+f64|mean|y||||float64|3|2.6666666666666665 nan 2.125
+f64|mean|y,x||||float64||2.357142857142857
+f64|mean|all|false|||float64||nan
+f64|mean|x|false|||float64|4|nan nan nan nan
+f64|mean|y|false|||float64|3|nan nan 2.125
+f64|mean|y,x|false|||float64||nan
+f64|median|all||||float64||2.5
+f64|median|x||||float64|4|1.75 -1.0 1.5 5.5
+f64|median|y||||float64|3|3.0 nan 1.25
+f64|median|y,x||||float64||2.5
+f64|median|all|false|||float64||nan
+f64|median|x|false|||float64|4|nan nan nan nan
+f64|median|y|false|||float64|3|nan nan 1.25
+f64|median|y,x|false|||float64||nan
+f64|std|all||||float64||2.4887501985977636
+f64|std|x||||float64|4|0.75 0.0 1.5 1.5
+f64|std|y||||float64|3|1.247219128924647 nan 3.0898017735770686
+f64|std|y,x||||float64||2.4887501985977636
+f64|std|all|false|||float64||nan
+f64|std|x|false|||float64|4|nan nan nan nan
+f64|std|y|false|||float64|3|nan nan 3.0898017735770686
+f64|std|y,x|false|||float64||nan
+f64|std|all||1||float64||2.688157450037195
+f64|std|x||1||float64|4|1.0606601717798212 nan 2.1213203435596424 2.1213203435596424
+f64|std|y||1||float64|3|1.5275252316519465 nan 3.5677957714346076
+f64|std|y,x||1||float64||2.688157450037195
+f64|var|all||||float64||6.193877551020408
+f64|var|x||||float64|4|0.5625 0.0 2.25 2.25
+f64|var|y||||float64|3|1.5555555555555554 nan 9.546875
+f64|var|y,x||||float64||6.193877551020408
+f64|var|all|false|||float64||nan
+f64|var|x|false|||float64|4|nan nan nan nan
+f64|var|y|false|||float64|3|nan nan 9.546875
+f64|var|y,x|false|||float64||nan
+f64|var|all||1||float64||7.226190476190475
+f64|var|x||1||float64|4|1.125 nan 4.5 4.5
+f64|var|y||1||float64|3|2.333333333333333 nan 12.729166666666666
+f64|var|y,x||1||float64||7.226190476190475
+f64|min|all||||float64||-1.0
+f64|min|x||||float64|4|1.0 -1.0 0.0 4.0
+f64|min|y||||float64|3|1.0 nan -1.0
+f64|min|y,x||||float64||-1.0
+f64|min|all|false|||float64||nan
+f64|min|x|false|||float64|4|nan nan nan nan
+f64|min|y|false|||float64|3|nan nan -1.0
+f64|min|y,x|false|||float64||nan
+f64|max|all||||float64||7.0
+f64|max|x||||float64|4|2.5 -1.0 3.0 7.0
+f64|max|y||||float64|3|4.0 nan 7.0
+f64|max|y,x||||float64||7.0
+f64|max|all|false|||float64||nan
+f64|max|x|false|||float64|4|nan nan nan nan
+f64|max|y|false|||float64|3|nan nan 7.0
+f64|max|y,x|false|||float64||nan
+f64|count|all||||int64||7
+f64|count|x||||int64|4|2 1 2 2
+f64|count|y||||int64|3|3 0 4
+f64|count|y,x||||int64||7
+f64|argmin|x||||int64|4|0 2 2 0
+f64|argmin|y||||error
+f64|argmin|x|false|||int64|4|1 0 1 1
+f64|argmin|y|false|||int64|3|1 0 1
+f64|argmax|x||||int64|4|2 2 0 2
+f64|argmax|y||||error
+f64|argmax|x|false|||int64|4|1 0 1 1
+f64|argmax|y|false|||int64|3|1 0 3
+f64|any|all||||bool||true
+f64|any|x||||bool|4|true true true true
+f64|any|y||||bool|3|true true true
+f64|any|y,x||||bool||true
+f64|all|all||||bool||false
+f64|all|x||||bool|4|true true false true
+f64|all|y||||bool|3|true true false
+f64|all|y,x||||bool||false
+f32|sum|all||||float32||16.5
+f32|sum|x||||float32|4|3.5 -1.0 3.0 11.0
+f32|sum|y||||float32|3|8.0 0.0 8.5
+f32|sum|y,x||||float32||16.5
+f32|sum|all|false|||float32||nan
+f32|sum|x|false|||float32|4|nan nan nan nan
+f32|sum|y|false|||float32|3|nan nan 8.5
+f32|sum|y,x|false|||float32||nan
+f32|sum|all|||2|float32||16.5
+f32|sum|x|||2|float32|4|3.5 nan 3.0 11.0
+f32|sum|y|||2|float32|3|8.0 nan 8.5
+f32|sum|y,x|||2|float32||16.5
+f32|prod|all||||float32||-0.0
+f32|prod|x||||float32|4|2.5 -1.0 0.0 28.0
+f32|prod|y||||float32|3|12.0 1.0 -0.0
+f32|prod|y,x||||float32||-0.0
+f32|prod|all|false|||float32||nan
+f32|prod|x|false|||float32|4|nan nan nan nan
+f32|prod|y|false|||float32|3|nan nan -0.0
+f32|prod|y,x|false|||float32||nan
+f32|prod|all|||2|float32||-0.0
+f32|prod|x|||2|float32|4|2.5 nan 0.0 28.0
+f32|prod|y|||2|float32|3|12.0 nan -0.0
+f32|prod|y,x|||2|float32||-0.0
+f32|mean|all||||float32||2.357142925262451
+f32|mean|x||||float32|4|1.75 -1.0 1.5 5.5
+f32|mean|y||||float32|3|2.6666667461395264 nan 2.125
+f32|mean|y,x||||float32||2.357142925262451
+f32|mean|all|false|||float32||nan
+f32|mean|x|false|||float32|4|nan nan nan nan
+f32|mean|y|false|||float32|3|nan nan 2.125
+f32|mean|y,x|false|||float32||nan
+f32|median|all||||float32||2.5
+f32|median|x||||float32|4|1.75 -1.0 1.5 5.5
+f32|median|y||||float32|3|3.0 nan 1.25
+f32|median|y,x||||float32||2.5
+f32|median|all|false|||float32||nan
+f32|median|x|false|||float32|4|nan nan nan nan
+f32|median|y|false|||float32|3|nan nan 1.25
+f32|median|y,x|false|||float32||nan
+f32|std|all||||float32||2.4887502193450928
+f32|std|x||||float32|4|0.75 0.0 1.5 1.5
+f32|std|y||||float32|3|1.247219204902649 nan 3.089801788330078
+f32|std|y,x||||float32||2.4887502193450928
+f32|std|all|false|||float32||nan
+f32|std|x|false|||float32|4|nan nan nan nan
+f32|std|y|false|||float32|3|nan nan 3.089801788330078
+f32|std|y,x|false|||float32||nan
+f32|std|all||1||float32||2.688157558441162
+f32|std|x||1||float32|4|1.0606601238250732 nan 2.1213202476501465 2.1213202476501465
+f32|std|y||1||float32|3|1.5275253057479858 nan 3.567795753479004
+f32|std|y,x||1||float32||2.688157558441162
+f32|var|all||||float32||6.193877696990967
+f32|var|x||||float32|4|0.5625 0.0 2.25 2.25
+f32|var|y||||float32|3|1.5555557012557983 nan 9.546875
+f32|var|y,x||||float32||6.193877696990967
+f32|var|all|false|||float32||nan
+f32|var|x|false|||float32|4|nan nan nan nan
+f32|var|y|false|||float32|3|nan nan 9.546875
+f32|var|y,x|false|||float32||nan
+f32|var|all||1||float32||7.226190567016602
+f32|var|x||1||float32|4|1.125 nan 4.5 4.5
+f32|var|y||1||float32|3|2.3333334922790527 nan 12.729166984558105
+f32|var|y,x||1||float32||7.226190567016602
+f32|min|all||||float32||-1.0
+f32|min|x||||float32|4|1.0 -1.0 0.0 4.0
+f32|min|y||||float32|3|1.0 nan -1.0
+f32|min|y,x||||float32||-1.0
+f32|min|all|false|||float32||nan
+f32|min|x|false|||float32|4|nan nan nan nan
+f32|min|y|false|||float32|3|nan nan -1.0
+f32|min|y,x|false|||float32||nan
+f32|max|all||||float32||7.0
+f32|max|x||||float32|4|2.5 -1.0 3.0 7.0
+f32|max|y||||float32|3|4.0 nan 7.0
+f32|max|y,x||||float32||7.0
+f32|max|all|false|||float32||nan
+f32|max|x|false|||float32|4|nan nan nan nan
+f32|max|y|false|||float32|3|nan nan 7.0
+f32|max|y,x|false|||float32||nan
+f32|count|all||||int64||7
+f32|count|x||||int64|4|2 1 2 2
+f32|count|y||||int64|3|3 0 4
+f32|count|y,x||||int64||7
+f32|argmin|x||||int64|4|0 2 2 0
+f32|argmin|y||||error
+f32|argmin|x|false|||int64|4|1 0 1 1
+f32|argmin|y|false|||int64|3|1 0 1
+f32|argmax|x||||int64|4|2 2 0 2
+f32|argmax|y||||error
+f32|argmax|x|false|||int64|4|1 0 1 1
+f32|argmax|y|false|||int64|3|1 0 3
+f32|any|all||||bool||true
+f32|any|x||||bool|4|true true true true
+f32|any|y||||bool|3|true true true
+f32|any|y,x||||bool||true
+f32|all|all||||bool||false
+f32|all|x||||bool|4|true true false true
+f32|all|y||||bool|3|true true false
+f32|all|y,x||||bool||false
+i32|sum|all||||int64||36
+i32|sum|x||||int64|4|15 14 7 0
+i32|sum|y||||int64|3|6 12 18
+i32|sum|y,x||||int64||36
+i32|prod|all||||int64||-479001600
+i32|prod|x||||int64|4|45 -120 -231 -384
+i32|prod|y||||int64|3|-24 -1680 -11880
+i32|prod|y,x||||int64||-479001600
+i32|mean|all||||float64||3.0
+i32|mean|x||||float64|4|5.0 4.666666666666667 2.3333333333333335 0.0
+i32|mean|y||||float64|3|1.5 3.0 4.5
+i32|mean|y,x||||float64||3.0
+i32|median|all||||float64||4.5
+i32|median|x||||float64|4|5.0 6.0 3.0 4.0
+i32|median|y||||float64|3|2.0 5.5 9.5
+i32|median|y,x||||float64||4.5
+i32|std|all||||float64||6.72061505121865
+i32|std|x||||float64|4|3.265986323710904 4.988876515698588 7.363574011458175 8.640987597877148
+i32|std|y||||float64|3|2.29128784747792 5.873670062235365 9.5524865872714
+i32|std|y,x||||float64||6.72061505121865
+i32|std|y||1||float64|3|2.6457513110645907 6.782329983125268 11.030261405182864
+i32|var|all||||float64||45.166666666666664
+i32|var|x||||float64|4|10.666666666666666 24.88888888888889 54.22222222222223 74.66666666666667
+i32|var|y||||float64|3|5.25 34.5 91.25
+i32|var|y,x||||float64||45.166666666666664
+i32|var|y||1||float64|3|7.0 46.0 121.66666666666667
+i32|min|all||||int32||-12
+i32|min|x||||int32|4|1 -2 -7 -12
+i32|min|y||||int32|3|-2 -7 -12
+i32|min|y,x||||int32||-12
+i32|max|all||||int32||11
+i32|max|x||||int32|4|9 10 11 8
+i32|max|y||||int32|3|4 8 11
+i32|max|y,x||||int32||11
+i32|count|all||||int64||12
+i32|count|x||||int64|4|3 3 3 3
+i32|count|y||||int64|3|4 4 4
+i32|count|y,x||||int64||12
+i32|argmin|x||||int64|4|0 0 1 2
+i32|argmin|y||||int64|3|1 2 3
+i32|argmax|x||||int64|4|2 2 2 1
+i32|argmax|y||||int64|3|3 3 2
+i32|any|all||||bool||true
+i32|any|x||||bool|4|true true true true
+i32|any|y||||bool|3|true true true
+i32|any|y,x||||bool||true
+i32|all|all||||bool||true
+i32|all|x||||bool|4|true true true true
+i32|all|y||||bool|3|true true true
+i32|all|y,x||||bool||true
+u8|sum|all||||uint64||282
+u8|sum|x||||uint64|4|251 8 10 13
+u8|sum|y||||uint64|3|10 271 1
+u8|sum|y,x||||uint64||282
+u8|prod|all||||uint64||0
+u8|prod|x||||uint64|4|0 0 0 32
+u8|prod|y||||uint64|3|24 84000 0
+u8|prod|y,x||||uint64||0
+u8|mean|all||||float64||23.5
+u8|mean|x||||float64|4|83.66666666666667 2.6666666666666665 3.3333333333333335 4.333333333333333
+u8|mean|y||||float64|3|2.5 67.75 0.25
+u8|mean|y,x||||float64||23.5
+u8|median|all||||float64||2.5
+u8|median|x||||float64|4|1.0 2.0 3.0 4.0
+u8|median|y||||float64|3|2.5 7.5 0.0
+u8|median|y,x||||float64||2.5
+u8|std|all||||float64||68.34532415120535
+u8|std|x||||float64|4|117.61613645905715 2.494438257849294 2.8674417556808756 2.8674417556808756
+u8|std|y||||float64|3|1.118033988749895 105.22446246001925 0.4330127018922193
+u8|std|y,x||||float64||68.34532415120535
+u8|var|all||||float64||4671.083333333333
+u8|var|x||||float64|4|13833.555555555553 6.222222222222222 8.222222222222221 8.222222222222221
+u8|var|y||||float64|3|1.25 11072.1875 0.1875
+u8|var|y,x||||float64||4671.083333333333
+u8|min|all||||uint8||0
+u8|min|x||||uint8|4|0 0 0 1
+u8|min|y||||uint8|3|1 6 0
+u8|min|y,x||||uint8||0
+u8|max|all||||uint8||250
+u8|max|x||||uint8|4|250 6 7 8
+u8|max|y||||uint8|3|4 250 1
+u8|max|y,x||||uint8||250
+u8|count|all||||int64||12
+u8|count|x||||int64|4|3 3 3 3
+u8|count|y||||int64|3|4 4 4
+u8|count|y,x||||int64||12
+u8|argmin|x||||int64|4|2 2 2 2
+u8|argmin|y||||int64|3|0 1 0
+u8|argmax|x||||int64|4|1 1 1 1
+u8|argmax|y||||int64|3|3 0 3
+u8|any|all||||bool||true
+u8|any|x||||bool|4|true true true true
+u8|any|y||||bool|3|true true true
+u8|any|y,x||||bool||true
+u8|all|all||||bool||false
+u8|all|x||||bool|4|false false false true
+u8|all|y||||bool|3|true true false
+u8|all|y,x||||bool||false
+bool|sum|all||||int64||7
+bool|sum|x||||int64|4|2 1 2 2
+bool|sum|y||||int64|3|3 0 4
+bool|sum|y,x||||int64||7
+bool|prod|all||||int64||0
+bool|prod|x||||int64|4|0 0 0 0
+bool|prod|y||||int64|3|0 0 1
+bool|prod|y,x||||int64||0
+bool|mean|all||||float64||0.5833333333333334
+bool|mean|x||||float64|4|0.6666666666666666 0.3333333333333333 0.6666666666666666 0.6666666666666666
+bool|mean|y||||float64|3|0.75 0.0 1.0
+bool|mean|y,x||||float64||0.5833333333333334
+bool|median|all||||float64||1.0
+bool|median|x||||float64|4|1.0 0.0 1.0 1.0
+bool|median|y||||float64|3|1.0 0.0 1.0
+bool|median|y,x||||float64||1.0
+bool|std|all||||float64||0.4930066485916347
+bool|std|x||||float64|4|0.4714045207910317 0.4714045207910317 0.4714045207910317 0.4714045207910317
+bool|std|y||||float64|3|0.4330127018922193 0.0 0.0
+bool|std|y,x||||float64||0.4930066485916347
+bool|var|all||||float64||0.24305555555555558
+bool|var|x||||float64|4|0.22222222222222224 0.22222222222222224 0.22222222222222224 0.22222222222222224
+bool|var|y||||float64|3|0.1875 0.0 0.0
+bool|var|y,x||||float64||0.24305555555555558
+bool|min|all||||bool||false
+bool|min|x||||bool|4|false false false false
+bool|min|y||||bool|3|false false true
+bool|min|y,x||||bool||false
+bool|max|all||||bool||true
+bool|max|x||||bool|4|true true true true
+bool|max|y||||bool|3|true false true
+bool|max|y,x||||bool||true
+bool|count|all||||int64||12
+bool|count|x||||int64|4|3 3 3 3
+bool|count|y||||int64|3|4 4 4
+bool|count|y,x||||int64||12
+bool|argmin|x||||int64|4|1 0 1 1
+bool|argmin|y||||int64|3|1 0 0
+bool|argmax|x||||int64|4|0 2 0 0
+bool|argmax|y||||int64|3|0 0 0
+bool|any|all||||bool||true
+bool|any|x||||bool|4|true true true true
+bool|any|y||||bool|3|true false true
+bool|any|y,x||||bool||true
+bool|all|all||||bool||false
+bool|all|x||||bool|4|false false false false
+bool|all|y||||bool|3|false false true
+bool|all|y,x||||bool||false
+time|sum|all||||error
+time|sum|t||||error
+time|prod|all||||error
+time|prod|t||||error
+time|mean|all||||datetime64[ns]||2015-05-13T20:59:59.875000000
+time|mean|t||||datetime64[ns]||2015-05-13T20:59:59.875000000
+time|median|all||||error
+time|median|t||||error
+time|std|all||||error
+time|std|t||||error
+time|var|all||||error
+time|var|t||||error
+time|min|all||||datetime64[ns]||1999-12-31T23:59:59.500000000
+time|min|t||||datetime64[ns]||1999-12-31T23:59:59.500000000
+time|max|all||||datetime64[ns]||2021-06-15T12:00:00.000000000
+time|max|t||||datetime64[ns]||2021-06-15T12:00:00.000000000
+time|count|all||||int64||4
+time|count|t||||int64||4
+time|argmin|all||||int64||2
+time|argmin|t||||int64||2
+time|argmax|all||||int64||1
+time|argmax|t||||int64||1
+time|any|all||||bool||true
+time|any|t||||bool||true
+time|all|all||||bool||true
+time|all|t||||bool||true
+delta|sum|all||||timedelta64[ns]||3601000000002
+delta|sum|t||||timedelta64[ns]||3601000000002
+delta|prod|all||||error
+delta|prod|t||||error
+delta|mean|all||||timedelta64[ns]||900250000001
+delta|mean|t||||timedelta64[ns]||900250000001
+delta|median|all||||timedelta64[ns]||500000003
+delta|median|t||||timedelta64[ns]||500000003
+delta|std|all||||error
+delta|std|t||||error
+delta|var|all||||error
+delta|var|t||||error
+delta|min|all||||timedelta64[ns]||-5
+delta|min|t||||timedelta64[ns]||-5
+delta|max|all||||timedelta64[ns]||3600000000000
+delta|max|t||||timedelta64[ns]||3600000000000
+delta|count|all||||int64||4
+delta|count|t||||int64||4
+delta|argmin|all||||int64||1
+delta|argmin|t||||int64||1
+delta|argmax|all||||int64||2
+delta|argmax|t||||int64||2
+delta|any|all||||bool||true
+delta|any|t||||bool||true
+delta|all|all||||bool||true
+delta|all|t||||bool||true
