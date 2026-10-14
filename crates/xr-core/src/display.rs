@@ -9,14 +9,31 @@ use crate::{Attrs, DType, Element, Name, Repr, TypedArray, VariableBase};
 
 const PREVIEW: usize = 6;
 
-fn elem_size<T: Element, D: ndarray::Data<Elem = T>>(
-    _: &ndarray::ArrayBase<D, ndarray::IxDyn>,
-) -> usize {
-    size_of::<T>()
+/// In-memory bytes per element of a dtype.
+fn dtype_size(d: DType) -> usize {
+    match d {
+        DType::I8 | DType::U8 | DType::Bool => 1,
+        DType::I16 | DType::U16 => 2,
+        DType::I32 | DType::U32 | DType::F32 => 4,
+        DType::I64 | DType::U64 | DType::F64 => 8,
+        DType::Str => size_of::<String>(),
+        DType::DateTime => size_of::<chrono::NaiveDateTime>(),
+        DType::CfDate => size_of::<xr_units::CfDate>(),
+        DType::TimeDelta => size_of::<chrono::TimeDelta>(),
+    }
 }
 
-fn nbytes<S: Repr>(a: &TypedArray<S>) -> usize {
-    typed_dispatch!(a, x => elem_size(x)).saturating_mul(a.len())
+/// Bytes the variable occupies (or will, once loaded) — never forces a read.
+fn nbytes<S: Repr>(v: &VariableBase<S>) -> usize {
+    dtype_size(v.dtype()).saturating_mul(v.len())
+}
+
+/// The values, or xarray's placeholder for data not read yet.
+fn body<S: Repr>(v: &VariableBase<S>) -> String {
+    match v.typed() {
+        Ok(t) if !v.is_lazy() => typed_dispatch!(&t, x => format!("{x}")),
+        _ => format!("[{} values with dtype={}]", v.len(), v.dtype()),
+    }
 }
 
 fn human_bytes(n: usize) -> String {
@@ -93,7 +110,13 @@ fn var_line<S: Repr>(
     if let Some(u) = v.unit() {
         write!(f, " [{u}]")?;
     }
-    writeln!(f, " {}", preview(v.typed()))
+    if v.is_lazy() {
+        return writeln!(f, " ...");
+    }
+    match v.typed() {
+        Ok(t) => writeln!(f, " {}", preview(&t)),
+        Err(e) => writeln!(f, " <{e}>"),
+    }
 }
 
 fn attrs_block(f: &mut fmt::Formatter<'_>, attrs: &Attrs) -> fmt::Result {
@@ -124,9 +147,9 @@ impl<S: Repr> Display for VariableBase<S> {
             f,
             "<xarray.Variable {}> Size: {}",
             sizes_tuple(self.sizes()),
-            human_bytes(nbytes(self.typed()))
+            human_bytes(nbytes(self))
         )?;
-        typed_dispatch!(self.typed(), x => writeln!(f, "{x}"))?;
+        writeln!(f, "{}", body(self))?;
         if let Some(u) = self.unit() {
             writeln!(f, "Units: {u}")?;
         }
@@ -144,9 +167,9 @@ impl<S: Repr> Display for DataArrayBase<S> {
             f,
             "<xarray.DataArray{name} {}> Size: {}",
             sizes_tuple(self.sizes()),
-            human_bytes(nbytes(self.variable().typed()))
+            human_bytes(nbytes(self.variable()))
         )?;
-        typed_dispatch!(self.variable().typed(), x => writeln!(f, "{x}"))?;
+        writeln!(f, "{}", body(self.variable()))?;
         if let Some(u) = self.unit() {
             writeln!(f, "Units: {u}")?;
         }
@@ -167,8 +190,8 @@ impl<S: Repr> Display for DatasetBase<S> {
         let total = self
             .coords()
             .values()
-            .map(|v| nbytes(v.typed()))
-            .chain(self.data_vars().values().map(|v| nbytes(v.typed())))
+            .map(nbytes)
+            .chain(self.data_vars().values().map(nbytes))
             .fold(0usize, usize::saturating_add);
         writeln!(f, "<xarray.Dataset> Size: {}", human_bytes(total))?;
         let sizes = self.sizes();

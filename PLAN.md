@@ -454,8 +454,32 @@ The pipeline is `open_dataset` = backend.open, then `xr-cf` decode, then `Datase
 - **Hyperslab reads:** `xr_hdf5::Dataset::read_slice` and `xr_netcdf3::Netcdf3File::read_slice`
   touch only the chunks, records and rows a slice spans. Property tests check them against full
   reads for every layout, chunk index, record layout and format version.
-- **Still eager:** `open_dataset` loads every variable. Lazy variables in `Dataset`, backed by
-  these slice readers, are the first item of M7 and what large files really need.
+- **Lazy since M7** (see below).
+
+### Implementation notes (M7, lazy loading, as built)
+- **`xr_core::LazySource`** (`dtype`, `shape`, `read_slice(start, count)`) is what a backend
+  provides for each variable. **`LazyArray`** pairs a source with a per-axis selection (an index,
+  or `start`/`step`/`len`). `isel` composes selections and reads nothing. The first access reads
+  the covering box once, applies the steps, drops the indexed axes, and caches the result in an
+  `Arc<OnceLock>`.
+- **A `Variable`'s data is either loaded or lazy.** Views, `to_owned` and `isel` keep it lazy.
+  `data()`, `typed()`, arithmetic and lookups load it. `data_mut` on lazy data is
+  `CoreError::NotLoaded`, so call `Variable::load` or `Dataset::load` first. Display never
+  reads: it shows `[N values with dtype=X]`.
+- **`xr_io::RawData`** is `Loaded | Lazy`. `Backend::read_lazy` defaults to `read`. netCDF-3
+  (`Nc3Source` over an `Arc<Netcdf3File>`) and netCDF-4/HDF5 (`H5Source` over
+  `xr_hdf5::Dataset::read_slice`) implement it. Unreadable HDF5 types fall back to an eager read,
+  so they are still reported as skipped.
+- **CF decoding is split into a plan and its application.** The plan (chars, `_Unsigned`, bool,
+  mask/scale, times) comes from attributes and dtype alone. Lazy variables wrap their source in a
+  `CfSource` that applies the plan to each slice; character slices always span the string axis.
+  Decoded times have a fixed type: chrono for real-world calendars, `CfDate` otherwise. NaT and
+  out-of-range dates are read-time errors for lazy data, but undecoded-with-a-warning for eager
+  data.
+- **`open_dataset` is lazy by default** (`OpenOptions::lazy(false)` turns it off). Dimension
+  coordinates are always read eagerly, because label selection needs them, as in xarray.
+  `tests/lazy_open.rs` checks that lazy and eager opens agree on every fixture, whole and after
+  selections.
 
 ### CF layer (`xr-cf`)
 - On decode: apply `_FillValue`, `missing_value`, `scale_factor`, `add_offset` and `_Unsigned`. Parse `units` into `Unit`.

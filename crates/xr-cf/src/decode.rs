@@ -1,12 +1,15 @@
 //! Raw netCDF → `Dataset` (xarray's `decode_cf`).
 
 use std::collections::HashSet;
+use std::sync::Arc;
 
 use chrono::NaiveDateTime;
 use ndarray::{ArrayD, Axis, IxDyn};
 use xr_core::xr_units::{Calendar, CfDate, Unit, UnitKind};
-use xr_core::{AttrValue, DType, Dataset, Encoding, Name, Owned, TypedArray, Variable};
-use xr_io::{RawDataset, RawVariable};
+use xr_core::{
+    AttrValue, DType, Dataset, Encoding, LazyArray, LazySource, Name, Owned, TypedArray, Variable,
+};
+use xr_io::{RawData, RawDataset, RawVariable};
 
 use crate::num::{
     attr_dtype, attr_f64, attr_f64s, f64_to_float, flip_sign, flip_sign_attr, is_float, is_int,
@@ -29,6 +32,9 @@ pub struct DecodeOptions {
     pub decode_coords: bool,
     /// Join `NC_CHAR` arrays into strings along their last dimension.
     pub concat_characters: bool,
+    /// Keep data variables lazy when the backend provides lazy data (read on first access,
+    /// only the selected part).
+    pub lazy: bool,
 }
 
 impl Default for DecodeOptions {
@@ -39,6 +45,7 @@ impl Default for DecodeOptions {
             decode_units: true,
             decode_coords: true,
             concat_characters: true,
+            lazy: true,
         }
     }
 }
@@ -53,6 +60,7 @@ impl DecodeOptions {
             decode_units: false,
             decode_coords: false,
             concat_characters: false,
+            lazy: true,
         }
     }
 }
@@ -195,39 +203,72 @@ fn float_dtype(data: DType, scale: Option<&AttrValue>, offset: Option<&AttrValue
     }
 }
 
-fn decode_var(
-    name: &str,
-    raw: &RawVariable,
-    opts: &DecodeOptions,
-    warnings: &mut Vec<String>,
-) -> Result<Variable> {
-    let mut data = raw.data.clone();
+/// One decoding step, applied to raw values in order. Every step works on any slice of the
+/// variable (character joining needs the whole string-length axis, which slices always span).
+#[derive(Debug, Clone)]
+enum Step {
+    Chars,
+    FlipSign,
+    Bool,
+    MaskScale {
+        masks: Vec<f64>,
+        scale: f64,
+        offset: f64,
+        target: DType,
+    },
+}
+
+/// How to decode a variable, worked out from its attributes and on-disk dtype alone.
+struct Plan {
+    steps: Vec<Step>,
+    times: Option<(Unit, Calendar, String, Option<String>)>,
+    dims: Vec<Name>,
+    attrs: xr_core::Attrs,
+    enc: Encoding,
+    unit: Option<Unit>,
+    dtype: DType,
+}
+
+fn flipped(d: DType) -> DType {
+    match d {
+        DType::I8 => DType::U8,
+        DType::I16 => DType::U16,
+        DType::I32 => DType::U32,
+        DType::I64 => DType::U64,
+        DType::U8 => DType::I8,
+        DType::U16 => DType::I16,
+        DType::U32 => DType::I32,
+        DType::U64 => DType::I64,
+        other => other,
+    }
+}
+
+fn plan(name: &str, raw: &RawVariable, opts: &DecodeOptions, warnings: &mut Vec<String>) -> Plan {
+    let mut dtype = raw.data.dtype();
     let mut dims = raw.dims.clone();
     let mut attrs = raw.attrs.clone();
     let mut enc = Encoding::default();
-    enc.dtype = Some(data.dtype());
+    enc.dtype = Some(dtype);
     enc.chunks.clone_from(&raw.storage.chunks);
     enc.deflate = raw.storage.deflate;
     enc.shuffle = raw.storage.shuffle;
+    let mut steps = Vec::new();
 
     // Text stored as characters.
-    if raw.is_char && opts.concat_characters {
-        if let TypedArray::U8(a) = &data {
-            data = TypedArray::Str(chars_to_strings(a, name)?);
-            enc.char_dim = dims.pop();
-            enc.dtype = Some(DType::Str);
-            attrs.shift_remove("_Encoding");
-        }
+    if raw.is_char && opts.concat_characters && dtype == DType::U8 {
+        steps.push(Step::Chars);
+        enc.char_dim = dims.pop();
+        enc.dtype = Some(DType::Str);
+        dtype = DType::Str;
+        attrs.shift_remove("_Encoding");
     }
 
     // `_Unsigned`: signed storage of unsigned values (netCDF-3 has no unsigned types).
     if let Some(flag) = str_attr(attrs.get("_Unsigned")).map(str::to_ascii_lowercase) {
-        let signed = matches!(
-            data.dtype(),
-            DType::I8 | DType::I16 | DType::I32 | DType::I64
-        );
-        if (flag == "true" && signed) || (flag == "false" && is_int(data.dtype()) && !signed) {
-            data = flip_sign(data);
+        let signed = matches!(dtype, DType::I8 | DType::I16 | DType::I32 | DType::I64);
+        if (flag == "true" && signed) || (flag == "false" && is_int(dtype) && !signed) {
+            steps.push(Step::FlipSign);
+            dtype = flipped(dtype);
             for key in ["_FillValue", "missing_value", "valid_min", "valid_max"] {
                 if let Some(v) = attrs.shift_remove(key) {
                     attrs.insert(key.into(), flip_sign_attr(v));
@@ -239,15 +280,14 @@ fn decode_var(
     }
 
     // Booleans stored as integers (xarray writes `dtype = "bool"`).
-    if str_attr(attrs.get("dtype")) == Some("bool") {
-        if let Some(f) = to_f64(&data) {
-            data = TypedArray::Bool(f.mapv(|v| v != 0.0));
-            attrs.shift_remove("dtype");
-        }
+    if str_attr(attrs.get("dtype")) == Some("bool") && (is_int(dtype) || is_float(dtype)) {
+        steps.push(Step::Bool);
+        dtype = DType::Bool;
+        attrs.shift_remove("dtype");
     }
 
     // Masking and packing.
-    if opts.mask_and_scale && (is_int(data.dtype()) || is_float(data.dtype())) {
+    if opts.mask_and_scale && (is_int(dtype) || is_float(dtype)) {
         let fill = attrs.shift_remove("_FillValue");
         let missing = attrs.shift_remove("missing_value");
         let scale = attrs.shift_remove("scale_factor");
@@ -257,23 +297,15 @@ fn decode_var(
             .chain(missing.iter())
             .flat_map(attr_f64s)
             .collect();
-        let do_mask = !masks.is_empty();
-        let do_scale = scale.is_some() || offset.is_some();
-        if do_mask || do_scale {
-            let target = float_dtype(data.dtype(), scale.as_ref(), offset.as_ref());
-            let s = scale.as_ref().and_then(attr_f64).unwrap_or(1.0);
-            let o = offset.as_ref().and_then(attr_f64).unwrap_or(0.0);
-            let fill_is_nan = masks.iter().any(|m| m.is_nan());
-            let values = to_f64(&data)
-                .ok_or_else(|| invalid(name, "not numeric"))?
-                .mapv(|v| {
-                    if masks.contains(&v) || (fill_is_nan && v.is_nan()) {
-                        f64::NAN
-                    } else {
-                        v.mul_add(s, o)
-                    }
-                });
-            data = f64_to_float(values, target);
+        if !masks.is_empty() || scale.is_some() || offset.is_some() {
+            let target = float_dtype(dtype, scale.as_ref(), offset.as_ref());
+            steps.push(Step::MaskScale {
+                masks,
+                scale: scale.as_ref().and_then(attr_f64).unwrap_or(1.0),
+                offset: offset.as_ref().and_then(attr_f64).unwrap_or(0.0),
+                target,
+            });
+            dtype = target;
         }
         enc.fill_value = fill;
         enc.missing_value = missing;
@@ -282,31 +314,17 @@ fn decode_var(
     }
 
     let mut unit = None;
-    let units_str = str_attr(attrs.get("units")).map(str::to_owned);
-    if let Some(units) = units_str {
+    let mut times = None;
+    if let Some(units) = str_attr(attrs.get("units")).map(str::to_owned) {
         match units.parse::<Unit>() {
             Ok(u) if matches!(u.kind(), UnitKind::Epoch(_)) && opts.decode_times => {
                 let cal_name = str_attr(attrs.get("calendar")).map(str::to_owned);
-                let calendar = match &cal_name {
-                    Some(c) => c.parse::<Calendar>(),
-                    None => Ok(Calendar::Standard),
-                };
-                let has_nan = to_f64(&data).is_some_and(|a| a.iter().any(|v| v.is_nan()));
-                match (calendar, has_nan) {
-                    (Ok(cal), false) => match decode_times(&data, &u, cal, name) {
-                        Ok(t) => {
-                            data = t;
-                            enc.time_units = Some(units.clone());
-                            enc.calendar = cal_name;
-                            attrs.shift_remove("units");
-                            attrs.shift_remove("calendar");
-                        }
-                        Err(e) => warnings.push(format!("{name}: times left undecoded: {e}")),
-                    },
-                    (Err(e), _) => warnings.push(format!("{name}: times left undecoded: {e}")),
-                    (_, true) => warnings.push(format!(
-                        "{name}: times left undecoded: missing values (NaT) are not supported yet"
-                    )),
+                match cal_name
+                    .as_deref()
+                    .map_or(Ok(Calendar::Standard), str::parse::<Calendar>)
+                {
+                    Ok(cal) => times = Some((u, cal, units, cal_name)),
+                    Err(e) => warnings.push(format!("{name}: times left undecoded: {e}")),
                 }
             }
             Ok(u) if opts.decode_units && !matches!(u.kind(), UnitKind::Epoch(_)) => {
@@ -320,12 +338,178 @@ fn decode_var(
             Err(_) => {}
         }
     }
+    Plan {
+        steps,
+        times,
+        dims,
+        attrs,
+        enc,
+        unit,
+        dtype,
+    }
+}
 
-    let mut var = Variable::from_typed(dims, data)?.with_encoding(enc);
-    if let Some(u) = unit {
+fn apply(steps: &[Step], mut data: TypedArray<Owned>, name: &str) -> Result<TypedArray<Owned>> {
+    for step in steps {
+        data = match step {
+            Step::Chars => match &data {
+                TypedArray::U8(a) => TypedArray::Str(chars_to_strings(a, name)?),
+                _ => data,
+            },
+            Step::FlipSign => flip_sign(data),
+            Step::Bool => TypedArray::Bool(
+                to_f64(&data)
+                    .ok_or_else(|| invalid(name, "not numeric"))?
+                    .mapv(|v| v != 0.0),
+            ),
+            Step::MaskScale {
+                masks,
+                scale,
+                offset,
+                target,
+            } => {
+                let fill_is_nan = masks.iter().any(|m| m.is_nan());
+                let values = to_f64(&data)
+                    .ok_or_else(|| invalid(name, "not numeric"))?
+                    .mapv(|v| {
+                        if masks.contains(&v) || (fill_is_nan && v.is_nan()) {
+                            f64::NAN
+                        } else {
+                            v.mul_add(*scale, *offset)
+                        }
+                    });
+                f64_to_float(values, *target)
+            }
+        };
+    }
+    Ok(data)
+}
+
+/// Time decoding with a fixed output type (needed for lazy data): chrono datetimes for
+/// real-world calendars, `CfDate` otherwise. Missing values (NaN) are an error.
+fn decode_times_strict(
+    data: &TypedArray<Owned>,
+    unit: &Unit,
+    cal: Calendar,
+    name: &str,
+) -> Result<TypedArray<Owned>> {
+    if to_f64(data).is_some_and(|a| a.iter().any(|v| v.is_nan())) {
+        return Err(invalid(name, "missing times (NaT) are not supported yet"));
+    }
+    let decoded = decode_times(data, unit, cal, name)?;
+    match (cal.is_real_world(), decoded) {
+        (true, TypedArray::CfDate(_)) => Err(invalid(name, "dates outside chrono's range")),
+        (_, d) => Ok(d),
+    }
+}
+
+/// A lazily decoded variable: reads raw slices and decodes them.
+#[derive(Debug)]
+struct CfSource {
+    inner: Arc<dyn LazySource>,
+    steps: Vec<Step>,
+    times: Option<(Unit, Calendar)>,
+    chars: bool,
+    dtype: DType,
+    shape: Vec<usize>,
+    name: String,
+}
+
+impl LazySource for CfSource {
+    fn dtype(&self) -> DType {
+        self.dtype
+    }
+
+    fn shape(&self) -> &[usize] {
+        &self.shape
+    }
+
+    fn read_slice(&self, start: &[usize], count: &[usize]) -> xr_core::Result<TypedArray<Owned>> {
+        let err = |e: CfError| xr_core::CoreError::Read(e.to_string());
+        let (mut start, mut count) = (start.to_vec(), count.to_vec());
+        if self.chars {
+            // Strings need their whole string-length axis.
+            start.push(0);
+            count.push(self.inner.shape().last().copied().unwrap_or(0));
+        }
+        let raw = self.inner.read_slice(&start, &count)?;
+        let data = apply(&self.steps, raw, &self.name).map_err(err)?;
+        match &self.times {
+            Some((u, cal)) => decode_times_strict(&data, u, *cal, &self.name).map_err(err),
+            None => Ok(data),
+        }
+    }
+}
+
+fn decode_var(
+    name: &str,
+    raw: &RawVariable,
+    opts: &DecodeOptions,
+    warnings: &mut Vec<String>,
+) -> Result<Variable> {
+    let mut p = plan(name, raw, opts, warnings);
+    // Dimension coordinates are read eagerly (selection needs them); the rest may stay lazy.
+    let index = p.dims.len() == 1 && p.dims.first().is_some_and(|d| d.as_str() == name);
+    let var = match (&raw.data, opts.lazy && !index) {
+        (RawData::Lazy(src), true) => {
+            let mut times = None;
+            let mut dtype = p.dtype;
+            if let Some((u, cal, units, cal_name)) = p.times.take() {
+                dtype = if cal.is_real_world() {
+                    DType::DateTime
+                } else {
+                    DType::CfDate
+                };
+                times = Some((u, cal));
+                p.enc.time_units = Some(units);
+                p.enc.calendar = cal_name;
+                p.attrs.shift_remove("units");
+                p.attrs.shift_remove("calendar");
+            }
+            let lazy = if p.steps.is_empty() && times.is_none() {
+                LazyArray::new(src.clone())
+            } else {
+                LazyArray::new(Arc::new(CfSource {
+                    inner: src.clone(),
+                    chars: p.steps.iter().any(|s| matches!(s, Step::Chars)),
+                    steps: p.steps.clone(),
+                    times,
+                    dtype,
+                    shape: src.shape().iter().take(p.dims.len()).copied().collect(),
+                    name: name.to_owned(),
+                }))
+            };
+            Variable::from_lazy(p.dims.clone(), lazy)?
+        }
+        _ => {
+            let mut data = apply(&p.steps, raw.data.values()?.into_owned(), name)?;
+            if let Some((u, cal, units, cal_name)) = p.times.take() {
+                let has_nan = to_f64(&data).is_some_and(|a| a.iter().any(|v| v.is_nan()));
+                if has_nan {
+                    warnings.push(format!(
+                        "{name}: times left undecoded: missing values (NaT) are not supported yet"
+                    ));
+                } else {
+                    match decode_times(&data, &u, cal, name) {
+                        Ok(t) => {
+                            data = t;
+                            p.enc.time_units = Some(units);
+                            p.enc.calendar = cal_name;
+                            p.attrs.shift_remove("units");
+                            p.attrs.shift_remove("calendar");
+                        }
+                        Err(e) => warnings.push(format!("{name}: times left undecoded: {e}")),
+                    }
+                }
+            }
+            Variable::from_typed(p.dims.clone(), data)?
+        }
+    };
+    let mut var = var.with_encoding(p.enc);
+    if let Some(u) = p.unit {
         var = var.with_unit(u);
     }
-    var.attrs_mut().extend(attrs);
+    var.attrs_mut().extend(p.attrs);
     Ok(var)
 }
 

@@ -164,7 +164,7 @@ fn read_var(v: &netcdf::Variable<'_>) -> Result<std::result::Result<RawVariable,
     storage.chunks = v.chunking().map_err(nc_err)?;
     Ok(Ok(RawVariable {
         dims,
-        data,
+        data: data.into(),
         is_char,
         attrs: read_attrs(v.attributes())?,
         storage,
@@ -365,7 +365,8 @@ fn put_data(var: &mut netcdf::VariableMut<'_>, v: &RawVariable) -> Result<()> {
                 .map_err(nc_err)?
         };
     }
-    match &v.data {
+    let values = v.data.values()?;
+    match &*values {
         TypedArray::U8(a) if v.is_char => {
             var.put_values(&a.iter().map(|b| NcChar(*b)).collect::<Vec<_>>(), ext)
                 .map_err(nc_err)?;

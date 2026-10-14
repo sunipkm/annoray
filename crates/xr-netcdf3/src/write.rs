@@ -217,7 +217,8 @@ pub(crate) fn serialize(ds: &RawDataset, format: Format) -> Result<Vec<u8>, IoEr
         let vsize = (Ck::from(slab) + pad4(slab))
             .to()
             .ok_or_else(|| too_big("variable"))?;
-        let bytes = encode_array(&var.data)
+        let values = var.data.values()?;
+        let bytes = encode_array(&values)
             .ok_or_else(|| bad(format!("{name:?}: element type must be CF-encoded first")))?;
         let fill = fill_element(ty, var.attrs.get("_FillValue"));
         plans.push(Plan {

@@ -62,7 +62,10 @@ pub fn variables_equal<S: Repr, R: Repr>(a: &VariableBase<S>, b: &VariableBase<R
     }
     a.dims() == b.dims()
         && a.unit() == b.unit()
-        && typed_dispatch!(a.typed(), x => same(x, b.typed()))
+        && match (a.typed(), b.typed()) {
+            (Ok(x), Ok(y)) => typed_dispatch!(&x, v => same(v, &y)),
+            _ => false,
+        }
 }
 
 // ----- broadcasting -----
@@ -416,8 +419,8 @@ impl<S: Repr> DataArrayBase<S> {
         )?;
         let data = compute(
             op,
-            (&self.variable().typed().view(), self.dims(), lconv.as_ref()),
-            (&rhs.variable().typed().view(), rhs.dims(), rconv.as_ref()),
+            (&self.variable().typed()?, self.dims(), lconv.as_ref()),
+            (&rhs.variable().typed()?, rhs.dims(), rconv.as_ref()),
             &od,
             &shape,
         )?;
@@ -495,7 +498,7 @@ impl<S: Repr> DataArrayBase<S> {
     pub fn to_unit(&self, unit: &Unit) -> Result<DataArray> {
         let from = self.unit().cloned().unwrap_or_else(Unit::one);
         let conv = from.converter_to(unit)?;
-        let data = to_f64(&self.variable().typed().view(), Some(&conv))?;
+        let data = to_f64(&self.variable().typed()?, Some(&conv))?;
         let var = Variable::from_typed(self.dims().iter().cloned(), TypedArray::F64(data))?
             .with_unit(unit.clone());
         let coords = self

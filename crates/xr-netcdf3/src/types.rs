@@ -27,6 +27,22 @@ pub(crate) enum NcType {
 }
 
 impl NcType {
+    /// The element type values are read as (characters are bytes).
+    pub(crate) const fn dtype(self) -> DType {
+        match self {
+            Self::Byte => DType::I8,
+            Self::Char | Self::UByte => DType::U8,
+            Self::Short => DType::I16,
+            Self::UShort => DType::U16,
+            Self::Int => DType::I32,
+            Self::UInt => DType::U32,
+            Self::Int64 => DType::I64,
+            Self::UInt64 => DType::U64,
+            Self::Float => DType::F32,
+            Self::Double => DType::F64,
+        }
+    }
+
     pub(crate) fn from_code(code: i32, v: Version) -> Option<Self> {
         let t = match code {
             1 => Self::Byte,

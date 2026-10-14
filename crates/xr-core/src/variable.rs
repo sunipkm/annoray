@@ -8,7 +8,8 @@ use std::sync::Arc;
 
 use xr_units::Unit;
 
-use crate::indexer::normalize_index;
+use crate::indexer::{SliceIndices, normalize_index};
+use crate::lazy::{LazyArray, LazyOp};
 use crate::{
     AttrValue, Attrs, CoreError, DType, Dims, Element, Encoding, IndexError, Indexer, IntoIndexer,
     Name, Owned, Repr, ReprMut, Result, TypedArray, View, ViewMut,
@@ -18,7 +19,7 @@ use crate::{
 ///
 /// Use the aliases [`Variable`], [`VariableView`] and [`VariableViewMut`].
 pub struct VariableBase<S: Repr> {
-    data: TypedArray<S>,
+    data: Data<S>,
     dims: Dims,
     /// Physical unit, if known. Views carry a copy; it is read-only through a `ViewMut`.
     unit: Option<Unit>,
@@ -34,11 +35,44 @@ pub type VariableView<'a> = VariableBase<View<'a>>;
 /// A view of a variable whose element data can be modified. Dimensions and attributes are read-only.
 pub type VariableViewMut<'a> = VariableBase<ViewMut<'a>>;
 
+/// A variable's values: in memory (in representation `S`) or read lazily from a file.
+pub(crate) enum Data<S: Repr> {
+    Loaded(TypedArray<S>),
+    Lazy(LazyArray),
+}
+
+impl<S: Repr> fmt::Debug for Data<S> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Loaded(a) => fmt::Debug::fmt(a, f),
+            Self::Lazy(l) => fmt::Debug::fmt(l, f),
+        }
+    }
+}
+
+impl Clone for Data<Owned> {
+    fn clone(&self) -> Self {
+        match self {
+            Self::Loaded(a) => Self::Loaded(a.clone()),
+            Self::Lazy(l) => Self::Lazy(l.clone()),
+        }
+    }
+}
+
+impl Clone for Data<View<'_>> {
+    fn clone(&self) -> Self {
+        match self {
+            Self::Loaded(a) => Self::Loaded(a.clone()),
+            Self::Lazy(l) => Self::Lazy(l.clone()),
+        }
+    }
+}
+
 /// What an indexing operation does to one axis.
 #[derive(Debug, Clone, Copy)]
 enum AxisOp {
     At(usize),
-    Slice(ndarray::Slice),
+    Slice(ndarray::Slice, SliceIndices),
 }
 
 fn check_dims(dims: &Dims, ndim: usize) -> Result<()> {
@@ -124,7 +158,7 @@ impl Variable {
         let dims: Dims = dims.into_iter().map(Into::into).collect();
         check_dims(&dims, data.ndim())?;
         Ok(Self {
-            data,
+            data: Data::Loaded(data),
             dims,
             unit: None,
             encoding: Arc::default(),
@@ -173,10 +207,47 @@ impl Variable {
         self
     }
 
-    /// Take the data out of the variable.
-    #[must_use]
-    pub fn into_typed(self) -> TypedArray<Owned> {
-        self.data
+    /// A variable whose data is read lazily from `data` (only the selected part, on first
+    /// access).
+    ///
+    /// # Errors
+    /// As for [`Variable::new`].
+    pub fn from_lazy<D>(dims: D, data: LazyArray) -> Result<Self>
+    where
+        D: IntoIterator,
+        D::Item: Into<Name>,
+    {
+        let dims: Dims = dims.into_iter().map(Into::into).collect();
+        check_dims(&dims, data.shape().len())?;
+        Ok(Self {
+            data: Data::Lazy(data),
+            dims,
+            unit: None,
+            encoding: Arc::default(),
+            attrs: Attrs::new(),
+        })
+    }
+
+    /// Read lazily loaded data into memory (a no-op for data already in memory).
+    ///
+    /// # Errors
+    /// [`CoreError::Read`] if the source cannot be read.
+    pub fn load(&mut self) -> Result<()> {
+        if let Data::Lazy(l) = &self.data {
+            self.data = Data::Loaded(l.load()?.clone());
+        }
+        Ok(())
+    }
+
+    /// Take the data out of the variable (reading it if it is lazy).
+    ///
+    /// # Errors
+    /// [`CoreError::Read`] if lazily loaded data cannot be read.
+    pub fn into_typed(self) -> Result<TypedArray<Owned>> {
+        match self.data {
+            Data::Loaded(a) => Ok(a),
+            Data::Lazy(l) => Ok(l.load()?.clone()),
+        }
     }
 }
 
@@ -196,7 +267,10 @@ impl<S: Repr> VariableBase<S> {
     /// Length of each axis, in axis order.
     #[must_use]
     pub fn shape(&self) -> &[usize] {
-        self.data.shape()
+        match &self.data {
+            Data::Loaded(a) => a.shape(),
+            Data::Lazy(l) => l.shape(),
+        }
     }
 
     /// `(name, length)` for each dimension, in axis order.
@@ -207,19 +281,28 @@ impl<S: Repr> VariableBase<S> {
     /// Total number of elements.
     #[must_use]
     pub fn len(&self) -> usize {
-        self.data.len()
+        self.shape().iter().product()
     }
 
     /// Whether the variable has no elements.
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.data.is_empty()
+        self.len() == 0
     }
 
     /// Element type.
     #[must_use]
     pub fn dtype(&self) -> DType {
-        self.data.dtype()
+        match &self.data {
+            Data::Loaded(a) => a.dtype(),
+            Data::Lazy(l) => l.dtype(),
+        }
+    }
+
+    /// Whether the data is read lazily (and not yet read).
+    #[must_use]
+    pub fn is_lazy(&self) -> bool {
+        matches!(&self.data, Data::Lazy(l) if !l.is_loaded())
     }
 
     /// The physical unit, if known.
@@ -240,10 +323,15 @@ impl<S: Repr> VariableBase<S> {
         self.attrs.borrow()
     }
 
-    /// The dtype-erased data.
-    #[must_use]
-    pub fn typed(&self) -> &TypedArray<S> {
-        &self.data
+    /// The dtype-erased data, as a view (lazily loaded data is read on first access).
+    ///
+    /// # Errors
+    /// [`CoreError::Read`] if lazily loaded data cannot be read.
+    pub fn typed(&self) -> Result<TypedArray<View<'_>>> {
+        match &self.data {
+            Data::Loaded(a) => Ok(a.view()),
+            Data::Lazy(l) => Ok(l.load()?.view()),
+        }
     }
 
     /// Axis number of dimension `dim`.
@@ -274,19 +362,24 @@ impl<S: Repr> VariableBase<S> {
     /// # Errors
     /// [`CoreError::DTypeMismatch`] if the data is not of element type `T`.
     pub fn data<T: Element>(&self) -> Result<ArrayViewD<'_, T>> {
-        T::peek(&self.data)
-            .map(|a| a.view())
-            .ok_or(CoreError::DTypeMismatch {
-                expected: T::DTYPE,
-                found: self.dtype(),
-            })
+        let mismatch = CoreError::DTypeMismatch {
+            expected: T::DTYPE,
+            found: self.dtype(),
+        };
+        match &self.data {
+            Data::Loaded(a) => T::peek(a).map(|a| a.view()).ok_or(mismatch),
+            Data::Lazy(l) => T::peek(l.load()?).map(|a| a.view()).ok_or(mismatch),
+        }
     }
 
     /// A shared view of the whole variable.
     #[must_use]
     pub fn view(&self) -> VariableView<'_> {
         VariableBase {
-            data: self.data.view(),
+            data: match &self.data {
+                Data::Loaded(a) => Data::Loaded(a.view()),
+                Data::Lazy(l) => Data::Lazy(l.clone()),
+            },
             dims: self.dims.clone(),
             unit: self.unit.clone(),
             encoding: self.encoding.clone(),
@@ -298,7 +391,10 @@ impl<S: Repr> VariableBase<S> {
     #[must_use]
     pub fn to_owned(&self) -> Variable {
         VariableBase {
-            data: self.data.to_owned(),
+            data: match &self.data {
+                Data::Loaded(a) => Data::Loaded(a.to_owned()),
+                Data::Lazy(l) => Data::Lazy(l.clone()),
+            },
             dims: self.dims.clone(),
             unit: self.unit.clone(),
             encoding: self.encoding.clone(),
@@ -355,7 +451,7 @@ impl<S: Repr> VariableBase<S> {
                 ix => self.set_op(&mut ops, axis, ix)?,
             }
         }
-        Ok(self.apply(&ops))
+        self.apply(&ops)
     }
 
     /// [`isel_pos`](Self::isel_pos), consuming `self` and keeping its representation.
@@ -374,7 +470,7 @@ impl<S: Repr> VariableBase<S> {
     /// Resolve `ix` against `axis` and record it in `ops`.
     fn set_op(&self, ops: &mut [Option<AxisOp>], axis: usize, ix: Indexer) -> Result<()> {
         let missing = || CoreError::DimCountMismatch {
-            ndim: self.data.ndim(),
+            ndim: self.shape().len(),
             names: self.dims.len(),
         };
         let dim = self.dims.get(axis).ok_or_else(missing)?;
@@ -385,46 +481,65 @@ impl<S: Repr> VariableBase<S> {
         }
         *slot = Some(match ix {
             Indexer::Int(i) => AxisOp::At(normalize_index(i, len, dim)?),
-            Indexer::Slice(s) => AxisOp::Slice(s.indices(len)?.to_ndarray()?),
+            Indexer::Slice(s) => {
+                let si = s.indices(len)?;
+                AxisOp::Slice(si.to_ndarray()?, si)
+            }
             Indexer::Ellipsis => return Err(IndexError::EllipsisInNamed.into()),
         });
         Ok(())
     }
 
-    /// Apply validated per-axis operations.
-    fn apply(self, ops: &[Option<AxisOp>]) -> Self {
+    /// Apply validated per-axis operations (composing the selection for lazy data).
+    fn apply(self, ops: &[Option<AxisOp>]) -> Result<Self> {
         let Self {
-            mut data,
+            data,
             dims,
             unit,
             encoding,
             attrs,
         } = self;
-        // Slices first: they keep axis numbering intact.
-        for (axis, op) in ops.iter().enumerate() {
-            if let Some(AxisOp::Slice(s)) = op {
-                data.slice_axis_inplace(axis, *s);
+        let data = match data {
+            Data::Loaded(mut data) => {
+                // Slices first: they keep axis numbering intact.
+                for (axis, op) in ops.iter().enumerate() {
+                    if let Some(AxisOp::Slice(s, _)) = op {
+                        data.slice_axis_inplace(axis, *s);
+                    }
+                }
+                // Then drop integer-indexed axes from the highest down, so lower axis numbers stay valid.
+                for (axis, op) in ops.iter().enumerate().rev() {
+                    if let Some(AxisOp::At(i)) = op {
+                        data = data.index_axis_move(axis, *i);
+                    }
+                }
+                Data::Loaded(data)
             }
-        }
-        // Then drop integer-indexed axes from the highest down, so lower axis numbers stay valid.
-        for (axis, op) in ops.iter().enumerate().rev() {
-            if let Some(AxisOp::At(i)) = op {
-                data = data.index_axis_move(axis, *i);
+            Data::Lazy(l) => {
+                let lops: Vec<Option<LazyOp>> = ops
+                    .iter()
+                    .map(|op| match op {
+                        Some(AxisOp::At(i)) => Some(LazyOp::At(*i)),
+                        Some(AxisOp::Slice(_, si)) => Some(LazyOp::Slice(*si)),
+                        None => None,
+                    })
+                    .collect();
+                Data::Lazy(l.isel(&lops)?)
             }
-        }
+        };
         let dims = dims
             .into_iter()
             .zip(ops)
             .filter(|(_, op)| !matches!(op, Some(AxisOp::At(_))))
             .map(|(d, _)| d)
             .collect();
-        Self {
+        Ok(Self {
             data,
             dims,
             unit,
             encoding,
             attrs,
-        }
+        })
     }
 }
 
@@ -447,7 +562,7 @@ impl<S: Repr> VariableBase<S> {
             .map(|i| normalize_index(*i, len, &name))
             .collect::<Result<Vec<_>, IndexError>>()?;
         Ok(VariableBase {
-            data: self.data.select_axis(axis, &idx),
+            data: Data::Loaded(self.typed()?.select_axis(axis, &idx)),
             dims: self.dims.clone(),
             unit: self.unit.clone(),
             encoding: self.encoding.clone(),
@@ -461,7 +576,10 @@ impl<S: ReprMut> VariableBase<S> {
     #[must_use]
     pub fn view_mut(&mut self) -> VariableViewMut<'_> {
         VariableBase {
-            data: self.data.view_mut(),
+            data: match &mut self.data {
+                Data::Loaded(a) => Data::Loaded(a.view_mut()),
+                Data::Lazy(l) => Data::Lazy(l.clone()),
+            },
             dims: self.dims.clone(),
             unit: self.unit.clone(),
             encoding: self.encoding.clone(),
@@ -475,7 +593,10 @@ impl<S: ReprMut> VariableBase<S> {
     /// [`CoreError::DTypeMismatch`] if the data is not of element type `T`.
     pub fn data_mut<T: Element>(&mut self) -> Result<ArrayViewMutD<'_, T>> {
         let found = self.dtype();
-        T::peek_mut(&mut self.data)
+        let Data::Loaded(data) = &mut self.data else {
+            return Err(CoreError::NotLoaded);
+        };
+        T::peek_mut(data)
             .map(S::view_mut)
             .ok_or(CoreError::DTypeMismatch {
                 expected: T::DTYPE,
@@ -483,7 +604,8 @@ impl<S: ReprMut> VariableBase<S> {
             })
     }
 
-    /// [`isel`](Self::isel) returning a mutable view.
+    /// [`isel`](Self::isel) returning a mutable view. Lazily loaded data stays lazy (and
+    /// read-only until loaded).
     ///
     /// # Errors
     /// As for [`isel`](Self::isel).

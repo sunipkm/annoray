@@ -434,7 +434,7 @@ pub(crate) fn to_raw(buf: &[u8], h: &Header) -> Result<RawDataset, IoError> {
             v.name.clone(),
             RawVariable {
                 dims: v.dims.clone(),
-                data,
+                data: data.into(),
                 is_char: v.ty == NcType::Char,
                 attrs: v.attrs.clone(),
                 storage: Storage::default(),

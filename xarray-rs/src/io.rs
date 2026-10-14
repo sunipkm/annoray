@@ -38,6 +38,15 @@ impl OpenOptions {
         self
     }
 
+    /// Read data lazily (the default): opening reads only metadata and dimension coordinates;
+    /// other variables are read on first access, and only the part selected. With `false`,
+    /// everything is read when opening.
+    #[must_use]
+    pub fn lazy(mut self, lazy: bool) -> Self {
+        self.decode.lazy = lazy;
+        self
+    }
+
     /// Choose what to decode.
     #[must_use]
     pub fn decode(mut self, decode: DecodeOptions) -> Self {
@@ -64,7 +73,11 @@ pub fn open_dataset_with_backend(
     path: impl AsRef<Path>,
     opts: &OpenOptions,
 ) -> Result<Opened, Error> {
-    let raw = backend.read(path.as_ref())?;
+    let raw = if opts.decode.lazy {
+        backend.read_lazy(path.as_ref())?
+    } else {
+        backend.read(path.as_ref())?
+    };
     let group = raw.group(opts.group.as_deref().unwrap_or(""))?;
     let decoded = xr_cf::decode(group, &opts.decode)?;
     Ok(Opened {
@@ -88,6 +101,10 @@ pub fn to_netcdf_with_backend<S: Repr>(
     Ok(())
 }
 
+fn not_netcdf(path: &Path) -> xr_io::IoError {
+    xr_io::IoError::Unsupported(format!("{}: not a netCDF or HDF5 file", path.display()))
+}
+
 /// Picks a backend per file, all pure Rust: netCDF-3 via [`xr_netcdf3::Netcdf3`], netCDF-4 and
 /// HDF5 via [`xr_netcdf4::Netcdf4`]. Files are memory-mapped, so opening is cheap.
 #[derive(Debug, Clone, Copy, Default)]
@@ -106,10 +123,19 @@ impl Backend for AutoBackend {
         if xr_hdf5::is_hdf5(&bytes) {
             return xr_netcdf4::Netcdf4.read(path);
         }
-        Err(xr_io::IoError::Unsupported(format!(
-            "{}: not a netCDF or HDF5 file",
-            path.display()
-        )))
+        Err(not_netcdf(path))
+    }
+
+    fn read_lazy(&self, path: &Path) -> xr_io::Result<RawDataset> {
+        let bytes = xr_io::map_file(path)?;
+        if xr_netcdf3::is_netcdf3(&bytes) {
+            let file = xr_netcdf3::Netcdf3File::from_file_bytes(bytes)?;
+            return Ok(std::sync::Arc::new(file).to_raw_lazy());
+        }
+        if xr_hdf5::is_hdf5(&bytes) {
+            return xr_netcdf4::Netcdf4.read_lazy(path);
+        }
+        Err(not_netcdf(path))
     }
 
     fn write(&self, ds: &RawDataset, path: &Path, opts: &WriteOptions) -> xr_io::Result<()> {
@@ -134,7 +160,8 @@ pub fn default_backend() -> &'static dyn Backend {
     &AutoBackend
 }
 
-/// Open a netCDF file (netCDF-3, or netCDF-4 with the `netcdf-c` feature) and CF-decode it.
+/// Open a netCDF-3, netCDF-4 or HDF5 file and CF-decode it. Data is read lazily: see
+/// [`OpenOptions::lazy`] and [`Dataset::load`].
 ///
 /// # Errors
 /// I/O or decoding errors.

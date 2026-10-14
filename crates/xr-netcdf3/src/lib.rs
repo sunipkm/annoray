@@ -22,9 +22,13 @@ mod types;
 mod write;
 
 use std::path::Path;
+use std::sync::Arc;
 
-use xr_core::{Attrs, Name, Owned, TypedArray};
-use xr_io::{Backend, FileBytes, IoError, RawDataset, RawDim, Result, WriteOptions};
+use xr_core::{Attrs, DType, LazySource, Name, Owned, TypedArray};
+use xr_io::{
+    Backend, FileBytes, IoError, RawData, RawDataset, RawDim, RawVariable, Result, Storage,
+    WriteOptions,
+};
 
 /// The pure-Rust netCDF-3 backend.
 #[derive(Debug, Clone, Copy, Default)]
@@ -157,6 +161,61 @@ impl Netcdf3File {
     pub fn to_raw(&self) -> Result<RawDataset> {
         read::to_raw(&self.bytes, &self.header)
     }
+
+    /// Everything, as a raw dataset whose variables read their data on demand.
+    #[must_use]
+    pub fn to_raw_lazy(self: &Arc<Self>) -> RawDataset {
+        let h = &self.header;
+        let mut ds = RawDataset {
+            attrs: h.attrs.clone(),
+            ..RawDataset::default()
+        };
+        ds.dims.extend(h.dims.iter().cloned());
+        for v in &h.vars {
+            let source = Nc3Source {
+                file: Arc::clone(self),
+                name: v.name.to_string(),
+                dtype: v.ty.dtype(),
+                shape: v.shape.clone(),
+            };
+            ds.vars.insert(
+                v.name.clone(),
+                RawVariable {
+                    dims: v.dims.clone(),
+                    data: RawData::Lazy(Arc::new(source)),
+                    is_char: v.ty == types::NcType::Char,
+                    attrs: v.attrs.clone(),
+                    storage: Storage::default(),
+                },
+            );
+        }
+        ds
+    }
+}
+
+/// One variable of an open file, read slice by slice.
+#[derive(Debug)]
+struct Nc3Source {
+    file: Arc<Netcdf3File>,
+    name: String,
+    dtype: DType,
+    shape: Vec<usize>,
+}
+
+impl LazySource for Nc3Source {
+    fn dtype(&self) -> DType {
+        self.dtype
+    }
+
+    fn shape(&self) -> &[usize] {
+        &self.shape
+    }
+
+    fn read_slice(&self, start: &[usize], count: &[usize]) -> xr_core::Result<TypedArray<Owned>> {
+        self.file
+            .read_slice(&self.name, start, count)
+            .map_err(|e| xr_core::CoreError::Read(e.to_string()))
+    }
 }
 
 impl Backend for Netcdf3 {
@@ -166,6 +225,10 @@ impl Backend for Netcdf3 {
 
     fn read(&self, path: &Path) -> Result<RawDataset> {
         Netcdf3File::open(path)?.to_raw()
+    }
+
+    fn read_lazy(&self, path: &Path) -> Result<RawDataset> {
+        Ok(Arc::new(Netcdf3File::open(path)?).to_raw_lazy())
     }
 
     fn write(&self, ds: &RawDataset, path: &Path, opts: &WriteOptions) -> Result<()> {

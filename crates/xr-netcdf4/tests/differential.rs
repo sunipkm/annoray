@@ -29,7 +29,7 @@ fn tmp(name: &str) -> PathBuf {
 fn var(dims: &[&str], data: TypedArray<Owned>) -> RawVariable {
     RawVariable {
         dims: dims.iter().map(|d| Name::from(*d)).collect(),
-        data,
+        data: data.into(),
         is_char: false,
         attrs: Default::default(),
         storage: Storage::default(),

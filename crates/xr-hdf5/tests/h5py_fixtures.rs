@@ -362,7 +362,7 @@ proptest! {
             let got = xr_core::Variable::from_typed((0..shape.len()).map(|i| format!("d{i}")), slice).unwrap();
             // Compare values and shape (ndarray's Debug also prints strides, which differ for empty arrays).
             let key = |t: String| t.split(", strides=").next().unwrap_or_default().to_string();
-            prop_assert_eq!(key(format!("{:?}", cut.typed())), key(format!("{:?}", got.typed())), "{} {:?}+{:?}", d.path(), start, count);
+            prop_assert_eq!(key(format!("{:?}", cut.typed().unwrap())), key(format!("{:?}", got.typed().unwrap())), "{} {:?}+{:?}", d.path(), start, count);
         }
     }
 }

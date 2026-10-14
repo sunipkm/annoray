@@ -156,7 +156,8 @@ fn keys_of<S: Repr>(coord: &VariableBase<S>, ctx: &Ctx<'_>) -> Result<Keys> {
         return Err(ctx.invalid("the dimension coordinate is not one-dimensional"));
     }
     let num = |it: &mut dyn Iterator<Item = f64>| Keys::Num(it.collect());
-    Ok(match coord.typed() {
+    let values = coord.typed()?;
+    Ok(match &values {
         TypedArray::F32(a) => num(&mut a.iter().map(|v| f64::from(*v))),
         TypedArray::F64(a) => num(&mut a.iter().copied()),
         TypedArray::I8(a) => num(&mut a.iter().map(|v| f64::from(*v))),

@@ -97,7 +97,7 @@ fn group_to_raw(g: &Group) -> Result<RawDataset> {
                     Name::from(name.as_str()),
                     RawVariable {
                         dims,
-                        data,
+                        data: data.into(),
                         is_char: false,
                         attrs,
                         storage,
@@ -111,40 +111,34 @@ fn group_to_raw(g: &Group) -> Result<RawDataset> {
 }
 
 /// A raw dataset as a plain HDF5 tree (dimension names are not stored).
-pub(crate) fn raw_to_tree(ds: &RawDataset) -> WGroup {
+pub(crate) fn raw_to_tree(ds: &RawDataset) -> Result<WGroup> {
     let attrs = |a: &xr_core::Attrs| {
         a.iter()
             .map(|(k, v)| (k.to_string(), AttrData::Value(v.clone())))
             .collect()
     };
-    let mut members: Vec<(String, WNode)> = ds
-        .vars
-        .iter()
-        .map(|(name, v)| {
-            let unlimited = v
-                .dims
-                .iter()
-                .map(|d| ds.dims.get(d).is_some_and(|x| x.unlimited))
-                .collect();
-            let mut w = WDataset::new(v.data.clone());
-            w.char_data = v.is_char;
-            w.unlimited = unlimited;
-            w.chunks.clone_from(&v.storage.chunks);
-            w.deflate = v.storage.deflate;
-            w.shuffle = v.storage.shuffle;
-            w.attrs = attrs(&v.attrs);
-            (name.to_string(), WNode::Dataset(w))
-        })
-        .collect();
-    members.extend(
-        ds.groups
+    let mut members: Vec<(String, WNode)> = Vec::new();
+    for (name, v) in &ds.vars {
+        let mut w = WDataset::new(v.data.values()?.into_owned());
+        w.char_data = v.is_char;
+        w.unlimited = v
+            .dims
             .iter()
-            .map(|(n, g)| (n.to_string(), WNode::Group(raw_to_tree(g)))),
-    );
-    WGroup {
+            .map(|d| ds.dims.get(d).is_some_and(|x| x.unlimited))
+            .collect();
+        w.chunks.clone_from(&v.storage.chunks);
+        w.deflate = v.storage.deflate;
+        w.shuffle = v.storage.shuffle;
+        w.attrs = attrs(&v.attrs);
+        members.push((name.to_string(), WNode::Dataset(w)));
+    }
+    for (n, g) in &ds.groups {
+        members.push((n.to_string(), WNode::Group(raw_to_tree(g)?)));
+    }
+    Ok(WGroup {
         attrs: attrs(&ds.attrs),
         members,
-    }
+    })
 }
 
 impl Backend for Hdf5 {
@@ -157,7 +151,7 @@ impl Backend for Hdf5 {
     }
 
     fn write(&self, ds: &RawDataset, path: &Path, _opts: &WriteOptions) -> Result<()> {
-        let bytes = crate::write_file(&raw_to_tree(ds))?;
+        let bytes = crate::write_file(&raw_to_tree(ds)?)?;
         std::fs::write(path, bytes).map_err(|e| crate::bad(format!("{}: {e}", path.display())))
     }
 }

@@ -235,7 +235,7 @@ fn encode_var<R: Repr>(name: &str, v: &VariableBase<R>, format: Format) -> Resul
     let enc = v.encoding();
     let mut attrs = v.attrs().clone();
     let mut dims: Vec<Name> = v.dims().to_vec();
-    let mut data = v.typed().to_owned();
+    let mut data = v.typed()?.to_owned();
     let mut is_char = false;
     let mut char_dim = None;
 
@@ -369,7 +369,7 @@ fn encode_var<R: Repr>(name: &str, v: &VariableBase<R>, format: Format) -> Resul
     Ok(Encoded {
         raw: RawVariable {
             dims,
-            data,
+            data: data.into(),
             is_char,
             attrs,
             storage,

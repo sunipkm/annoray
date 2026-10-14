@@ -28,7 +28,7 @@ fn tmp(name: &str) -> PathBuf {
 }
 
 fn f64s<S: xarray_rs::Repr>(v: &VariableBase<S>) -> Vec<f64> {
-    match v.typed() {
+    match v.typed().unwrap() {
         TypedArray::F32(a) => a.iter().map(|x| f64::from(*x)).collect(),
         TypedArray::F64(a) => a.iter().copied().collect(),
         other => panic!("not float: {other:?}"),

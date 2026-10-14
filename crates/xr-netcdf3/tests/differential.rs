@@ -31,7 +31,7 @@ fn tmp(name: &str) -> PathBuf {
 fn var(dims: &[&str], data: TypedArray<Owned>) -> RawVariable {
     RawVariable {
         dims: dims.iter().map(|d| Name::from(*d)).collect(),
-        data,
+        data: data.into(),
         is_char: false,
         attrs: Default::default(),
         storage: Storage::default(),
@@ -188,7 +188,7 @@ fn assert_same(a: &RawDataset, b: &RawDataset, ctx: &str) {
         assert_eq!((&v.dims, v.is_char), (&w.dims, w.is_char), "{ctx}: {k}");
         assert_eq!(attrs_key(&v.attrs), attrs_key(&w.attrs), "{ctx}: {k} attrs");
         assert!(
-            nan_eq(&v.data, &w.data),
+            nan_eq(&v.data.values().unwrap(), &w.data.values().unwrap()),
             "{ctx}: {k}: {:?} vs {:?}",
             v.data,
             w.data
@@ -370,13 +370,13 @@ proptest! {
             let count: Vec<usize> = shape.iter().zip(&start).map(|(s, st)| next(s - st + 1)).collect();
             let got = file.read_slice(&name, &start, &count).unwrap();
             let dims: Vec<String> = (0..shape.len()).map(|i| format!("d{i}")).collect();
-            let whole = xr_core::Variable::from_typed(dims.clone(), full.vars[&name].data.clone()).unwrap();
+            let whole = xr_core::Variable::from_typed(dims.clone(), full.vars[&name].data.values().unwrap().into_owned()).unwrap();
             let idx: Vec<(String, xr_core::Indexer)> = dims.iter().zip(start.iter().zip(&count))
                 .map(|(d, (s, c))| (d.clone(), xr_core::Indexer::Slice(xr_core::PySlice::new(Some(*s as isize), Some((s + c) as isize), None))))
                 .collect();
             let cut = whole.isel(idx).unwrap().to_owned();
             let key = |t: String| t.split(", strides=").next().unwrap_or_default().to_string();
-            prop_assert_eq!(key(format!("{:?}", cut.typed())), key(format!("{:?}", got)), "{:?} {:?} {:?}+{:?}", f, name, start, count);
+            prop_assert_eq!(key(format!("{:?}", cut.typed().unwrap())), key(format!("{:?}", got)), "{:?} {:?} {:?}+{:?}", f, name, start, count);
         }
         let _ = std::fs::remove_file(&path);
     }

@@ -8,7 +8,10 @@ use std::ops::Deref;
 use std::path::Path;
 
 use indexmap::IndexMap;
-use xr_core::{Attrs, CoreError, DType, Name, Owned, TypedArray};
+use std::borrow::Cow;
+use std::sync::Arc;
+
+use xr_core::{Attrs, CoreError, DType, LazySource, Name, Owned, TypedArray};
 
 /// Errors from reading or writing files.
 #[derive(Debug, thiserror::Error)]
@@ -120,13 +123,71 @@ pub struct Storage {
     pub shuffle: bool,
 }
 
+/// A variable's values: in memory, or a source to read them from on demand.
+#[derive(Clone)]
+pub enum RawData {
+    /// Values in memory.
+    Loaded(TypedArray<Owned>),
+    /// Values read on demand (only the parts selected).
+    Lazy(Arc<dyn LazySource>),
+}
+
+impl std::fmt::Debug for RawData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Loaded(a) => std::fmt::Debug::fmt(a, f),
+            Self::Lazy(s) => write!(f, "Lazy({s:?})"),
+        }
+    }
+}
+
+impl From<TypedArray<Owned>> for RawData {
+    fn from(a: TypedArray<Owned>) -> Self {
+        Self::Loaded(a)
+    }
+}
+
+impl RawData {
+    /// Element type.
+    #[must_use]
+    pub fn dtype(&self) -> DType {
+        match self {
+            Self::Loaded(a) => a.dtype(),
+            Self::Lazy(s) => s.dtype(),
+        }
+    }
+
+    /// Shape.
+    #[must_use]
+    pub fn shape(&self) -> &[usize] {
+        match self {
+            Self::Loaded(a) => a.shape(),
+            Self::Lazy(s) => s.shape(),
+        }
+    }
+
+    /// The values (read in full if lazy).
+    ///
+    /// # Errors
+    /// [`IoError::Core`] if a lazy source cannot be read.
+    pub fn values(&self) -> Result<Cow<'_, TypedArray<Owned>>> {
+        match self {
+            Self::Loaded(a) => Ok(Cow::Borrowed(a)),
+            Self::Lazy(s) => {
+                let start = vec![0; s.shape().len()];
+                Ok(Cow::Owned(s.read_slice(&start, s.shape())?))
+            }
+        }
+    }
+}
+
 /// A variable as stored: raw values in the on-disk type, attributes verbatim.
 #[derive(Debug, Clone)]
 pub struct RawVariable {
     /// Dimension names.
     pub dims: Vec<Name>,
     /// Values. `NC_CHAR` data is `U8` with [`is_char`](Self::is_char) set.
-    pub data: TypedArray<Owned>,
+    pub data: RawData,
     /// Whether the on-disk type is `NC_CHAR` (text as fixed-width byte arrays).
     pub is_char: bool,
     /// Attributes exactly as stored, including `_FillValue`, `scale_factor`, `units`, ….
@@ -193,6 +254,15 @@ pub trait Backend {
     /// # Errors
     /// [`IoError::Backend`] for unreadable files.
     fn read(&self, path: &Path) -> Result<RawDataset>;
+
+    /// Open a file lazily: metadata now, variable data as [`RawData::Lazy`] sources that read
+    /// only the slices asked for. Backends without lazy support read everything.
+    ///
+    /// # Errors
+    /// [`IoError::Backend`] for unreadable files.
+    fn read_lazy(&self, path: &Path) -> Result<RawDataset> {
+        self.read(path)
+    }
 
     /// Write a dataset (and its groups), replacing any existing file.
     ///

@@ -148,6 +148,26 @@ impl Dataset {
             .ok_or_else(|| CoreError::NoSuchVariable(name.into()))
     }
 
+    /// Read every lazily loaded variable into memory (xarray's `load`).
+    ///
+    /// # Errors
+    /// [`CoreError::Read`] if a source cannot be read.
+    pub fn load(&mut self) -> Result<()> {
+        for v in self.data_vars.values_mut().chain(self.coords.values_mut()) {
+            v.load()?;
+        }
+        Ok(())
+    }
+
+    /// [`load`](Self::load), by value.
+    ///
+    /// # Errors
+    /// [`CoreError::Read`] if a source cannot be read.
+    pub fn loaded(mut self) -> Result<Self> {
+        self.load()?;
+        Ok(self)
+    }
+
     /// Turn a data variable into a coordinate (xarray's `set_coords`).
     ///
     /// # Errors

@@ -141,6 +141,12 @@ pub enum CoreError {
         /// The element type.
         dtype: DType,
     },
+    /// Reading lazily loaded data failed.
+    #[error("reading data failed: {0}")]
+    Read(String),
+    /// Mutation needs the data in memory: call `load()` first.
+    #[error("variable data is not loaded; call load() before modifying it")]
+    NotLoaded,
     /// Integer arithmetic overflowed.
     #[error("integer overflow in {0}")]
     ArithmeticOverflow(&'static str),

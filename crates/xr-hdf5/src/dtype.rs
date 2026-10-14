@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 
 use ndarray::{ArrayD, IxDyn};
-use xr_core::{Owned, TypedArray};
+use xr_core::{DType, Owned, TypedArray};
 use xr_io::IoError;
 
 use crate::cursor::{Cursor, Sizes, align8};
@@ -82,6 +82,42 @@ fn pad_of(bits: u8) -> StrPad {
 }
 
 impl Datatype {
+    /// The element type values are read as, or `None` if they cannot be read.
+    #[must_use]
+    pub fn value_dtype(&self) -> Option<DType> {
+        Some(match self {
+            Self::Int {
+                size: 1,
+                signed: true,
+                ..
+            } => DType::I8,
+            Self::Int { size: 1, .. } => DType::U8,
+            Self::Int {
+                size: 2,
+                signed: true,
+                ..
+            } => DType::I16,
+            Self::Int { size: 2, .. } => DType::U16,
+            Self::Int {
+                size: 4,
+                signed: true,
+                ..
+            } => DType::I32,
+            Self::Int { size: 4, .. } => DType::U32,
+            Self::Int {
+                size: 8,
+                signed: true,
+                ..
+            } => DType::I64,
+            Self::Int { .. } => DType::U64,
+            Self::Float { size: 4, .. } => DType::F32,
+            Self::Float { .. } => DType::F64,
+            Self::FixedString { .. } | Self::VarString { .. } => DType::Str,
+            Self::Enum { base, .. } => return base.value_dtype(),
+            Self::ObjectReference | Self::ReferenceList | Self::Other { .. } => return None,
+        })
+    }
+
     /// Parse a datatype message.
     pub(crate) fn parse(data: &[u8]) -> Result<Self, IoError> {
         let mut c = Cursor::new(

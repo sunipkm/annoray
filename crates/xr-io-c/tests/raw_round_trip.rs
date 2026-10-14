@@ -9,7 +9,7 @@ use xr_io_c::NetcdfC;
 fn var(dims: &[&str], data: TypedArray<xr_core::Owned>) -> RawVariable {
     RawVariable {
         dims: dims.iter().map(|d| Name::from(*d)).collect(),
-        data,
+        data: data.into(),
         is_char: false,
         attrs: Default::default(),
         storage: Storage::default(),
@@ -128,8 +128,16 @@ fn check(a: &RawDataset, b: &RawDataset) {
         assert_eq!(v.is_char, w.is_char, "{k}");
         assert!(
             xr_core::variables_equal(
-                &xr_core::Variable::from_typed(v.dims.clone(), v.data.clone()).unwrap(),
-                &xr_core::Variable::from_typed(w.dims.clone(), w.data.clone()).unwrap()
+                &xr_core::Variable::from_typed(
+                    v.dims.clone(),
+                    v.data.values().unwrap().into_owned()
+                )
+                .unwrap(),
+                &xr_core::Variable::from_typed(
+                    w.dims.clone(),
+                    w.data.values().unwrap().into_owned()
+                )
+                .unwrap()
             ),
             "{k}: {:?} vs {:?}",
             v.data,

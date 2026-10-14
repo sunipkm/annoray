@@ -19,11 +19,13 @@
 
 use std::collections::HashMap;
 use std::path::Path;
+use std::sync::Arc;
 
-use xr_core::{AttrValue, Attrs, DType, Name, Owned, TypedArray};
+use xr_core::{AttrValue, Attrs, DType, LazySource, Name, Owned, TypedArray};
 use xr_hdf5::{AttrData, Dataset, Datatype, File, Group, Node, WDataset, WGroup, WNode};
 use xr_io::{
-    Backend, Format, IoError, RawDataset, RawDim, RawVariable, Result, Storage, WriteOptions,
+    Backend, Format, IoError, RawData, RawDataset, RawDim, RawVariable, Result, Storage,
+    WriteOptions,
 };
 
 /// The pure-Rust netCDF-4 backend.
@@ -139,7 +141,34 @@ fn chars(data: TypedArray<Owned>) -> TypedArray<Owned> {
     }
 }
 
-fn read_group(g: &Group, parent: &Scope) -> Result<RawDataset> {
+/// One variable of an open file, read slice by slice.
+#[derive(Debug)]
+struct H5Source {
+    dataset: Dataset,
+    dtype: DType,
+    shape: Vec<usize>,
+    is_char: bool,
+}
+
+impl LazySource for H5Source {
+    fn dtype(&self) -> DType {
+        self.dtype
+    }
+
+    fn shape(&self) -> &[usize] {
+        &self.shape
+    }
+
+    fn read_slice(&self, start: &[usize], count: &[usize]) -> xr_core::Result<TypedArray<Owned>> {
+        let data = self
+            .dataset
+            .read_slice(start, count)
+            .map_err(|e| xr_core::CoreError::Read(e.to_string()))?;
+        Ok(if self.is_char { chars(data) } else { data })
+    }
+}
+
+fn read_group(g: &Group, parent: &Scope, lazy: bool) -> Result<RawDataset> {
     let mut ds = RawDataset::default();
     let mut scope = parent.clone();
     let members = g.members()?;
@@ -169,7 +198,7 @@ fn read_group(g: &Group, parent: &Scope) -> Result<RawDataset> {
         match node {
             Node::Group(child) => {
                 ds.groups
-                    .insert(Name::from(name.as_str()), read_group(&child, &scope)?);
+                    .insert(Name::from(name.as_str()), read_group(&child, &scope, lazy)?);
             }
             Node::Dataset(d) => {
                 if scales.iter().any(|(a, s)| *a == d.address() && s.dim_only) {
@@ -239,8 +268,17 @@ fn read_group(g: &Group, parent: &Scope) -> Result<RawDataset> {
                     }
                 }
                 let is_char = matches!(d.dtype(), Datatype::FixedString { size: 1, .. });
-                let data = match d.read() {
-                    Ok(v) if is_char => chars(v),
+                let value_dtype = d.dtype().value_dtype();
+                let data = match (lazy, value_dtype) {
+                    (true, Some(dtype)) => Ok(RawData::Lazy(Arc::new(H5Source {
+                        dataset: Dataset::clone(&d),
+                        dtype: if is_char { DType::U8 } else { dtype },
+                        shape: shape.clone(),
+                        is_char,
+                    }))),
+                    _ => d.read().map(|v| if is_char { chars(v) } else { v }.into()),
+                };
+                let data = match data {
                     Ok(v) => v,
                     Err(e) => {
                         ds.skipped.push((var_name, e.to_string()));
@@ -273,7 +311,7 @@ fn read_group(g: &Group, parent: &Scope) -> Result<RawDataset> {
 /// # Errors
 /// [`IoError::Backend`] for unreadable files.
 pub fn read_bytes(bytes: Vec<u8>) -> Result<RawDataset> {
-    read_group(&File::from_bytes(bytes)?.root()?, &Scope::default())
+    read_group(&File::from_bytes(bytes)?.root()?, &Scope::default(), false)
 }
 
 // ----- writing -----
@@ -367,11 +405,11 @@ fn default_chunks(shape: &[usize], unlimited: &[bool], type_size: usize) -> Vec<
     chunks
 }
 
-fn element_size(d: &TypedArray<Owned>) -> usize {
+fn element_size(d: DType) -> usize {
     match d {
-        TypedArray::I8(_) | TypedArray::U8(_) => 1,
-        TypedArray::I16(_) | TypedArray::U16(_) => 2,
-        TypedArray::I32(_) | TypedArray::U32(_) | TypedArray::F32(_) => 4,
+        DType::I8 | DType::U8 => 1,
+        DType::I16 | DType::U16 => 2,
+        DType::I32 | DType::U32 | DType::F32 => 4,
         _ => 8, // 64-bit numbers, and strings (a pointer in netCDF-C's memory model)
     }
 }
@@ -469,7 +507,7 @@ fn build_group(ds: &RawDataset, path: &str, parent: &WScope, next_id: &mut i32) 
         members.push((dim.to_string(), WNode::Dataset(w)));
     }
     for (name, v) in &ds.vars {
-        let mut w = WDataset::new(v.data.clone());
+        let mut w = WDataset::new(v.data.values()?.into_owned());
         w.char_data = v.is_char;
         w.unlimited = v
             .dims
@@ -484,7 +522,7 @@ fn build_group(ds: &RawDataset, path: &str, parent: &WScope, next_id: &mut i32) 
             w.chunks = Some(default_chunks(
                 v.data.shape(),
                 &w.unlimited,
-                element_size(&v.data),
+                element_size(v.data.dtype()),
             ));
         }
         w.fill = v
@@ -630,7 +668,11 @@ impl Backend for Netcdf4 {
     }
 
     fn read(&self, path: &Path) -> Result<RawDataset> {
-        read_group(&File::open(path)?.root()?, &Scope::default())
+        read_group(&File::open(path)?.root()?, &Scope::default(), false)
+    }
+
+    fn read_lazy(&self, path: &Path) -> Result<RawDataset> {
+        read_group(&File::open(path)?.root()?, &Scope::default(), true)
     }
 
     fn write(&self, ds: &RawDataset, path: &Path, opts: &WriteOptions) -> Result<()> {
