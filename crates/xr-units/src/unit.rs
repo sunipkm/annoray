@@ -331,10 +331,10 @@ impl Unit {
     /// # Errors
     /// As for [`mul`](Self::mul).
     pub fn div(&self, rhs: &Self) -> Result<Self, UnitError> {
-        if let (UnitKind::Log(_), UnitKind::Linear) = (&self.kind, &rhs.kind) {
-            if rhs.dim.is_none() {
-                return self.scaled(rhs.scale.recip()?);
-            }
+        if let (UnitKind::Log(_), UnitKind::Linear) = (&self.kind, &rhs.kind)
+            && rhs.dim.is_none()
+        {
+            return self.scaled(rhs.scale.recip()?);
         }
         self.mul(&rhs.recip()?)
     }

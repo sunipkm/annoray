@@ -18,7 +18,7 @@ use std::path::Path;
 pub use xr_cf::{DecodeOptions, EncodeOptions};
 pub use xr_io::{Backend, Format, RawDataset, WriteOptions};
 
-use crate::{Dataset, DatasetBase, Error, Repr};
+use crate::{DataTree, Dataset, DatasetBase, Error, Repr};
 
 /// Options for opening a dataset.
 #[derive(Debug, Clone, Default)]
@@ -179,18 +179,12 @@ pub fn open_dataset_with(path: impl AsRef<Path>, opts: &OpenOptions) -> Result<O
 
 /// Writing datasets to netCDF.
 pub trait ToNetcdf {
-    /// Write with the default format: netCDF-4 with the `netcdf-c` feature, otherwise
-    /// netCDF-3 with 64-bit offsets.
+    /// Write as netCDF-4 (the default format, as in xarray).
     ///
     /// # Errors
     /// Encoding or I/O errors.
     fn to_netcdf(&self, path: impl AsRef<Path>) -> Result<(), Error> {
-        let format = if cfg!(feature = "netcdf-c") {
-            Format::Netcdf4
-        } else {
-            Format::Netcdf3Offset64
-        };
-        self.to_netcdf_with(path, &WriteOptions::format(format))
+        self.to_netcdf_with(path, &WriteOptions::format(Format::Netcdf4))
     }
 
     /// Write with options (e.g. `WriteOptions::format(Format::Netcdf3Offset64)`).
@@ -204,4 +198,193 @@ impl<S: Repr> ToNetcdf for DatasetBase<S> {
     fn to_netcdf_with(&self, path: impl AsRef<Path>, opts: &WriteOptions) -> Result<(), Error> {
         to_netcdf_with_backend(default_backend(), self, path, opts)
     }
+}
+
+// ----- data trees -----
+
+/// A data tree opened from a file, with any non-fatal decoding warnings.
+#[derive(Debug)]
+pub struct OpenedTree {
+    /// The tree.
+    pub tree: DataTree,
+    /// Problems that did not stop decoding, prefixed with their group's path.
+    pub warnings: Vec<String>,
+}
+
+fn decode_tree(
+    raw: &RawDataset,
+    opts: &DecodeOptions,
+    path: &str,
+    warnings: &mut Vec<String>,
+) -> Result<DataTree, Error> {
+    let decoded = xr_cf::decode(raw, opts)?;
+    let shown = if path.is_empty() { "/" } else { path };
+    warnings.extend(
+        decoded
+            .warnings
+            .into_iter()
+            .map(|w| format!("{shown}: {w}")),
+    );
+    let mut tree = DataTree::new(decoded.dataset);
+    for (name, group) in &raw.groups {
+        let child = decode_tree(group, opts, &format!("{path}/{name}"), warnings)?;
+        tree.add_child(name.clone(), child)?;
+    }
+    Ok(tree)
+}
+
+/// Open every group of a file as a [`DataTree`] (with a specific backend).
+///
+/// # Errors
+/// I/O or decoding errors, or a group that disagrees with its parent's coordinates.
+pub fn open_datatree_with_backend(
+    backend: &dyn Backend,
+    path: impl AsRef<Path>,
+    opts: &OpenOptions,
+) -> Result<OpenedTree, Error> {
+    let raw = if opts.decode.lazy {
+        backend.read_lazy(path.as_ref())?
+    } else {
+        backend.read(path.as_ref())?
+    };
+    let root = opts.group.as_deref().unwrap_or("");
+    let mut warnings = Vec::new();
+    let tree = decode_tree(raw.group(root)?, &opts.decode, "", &mut warnings)?;
+    Ok(OpenedTree { tree, warnings })
+}
+
+/// Open every group of a file as a [`DataTree`].
+///
+/// # Errors
+/// As for [`open_datatree_with_backend`].
+pub fn open_datatree(path: impl AsRef<Path>) -> Result<DataTree, Error> {
+    Ok(open_datatree_with_backend(default_backend(), path, &OpenOptions::default())?.tree)
+}
+
+/// Open a data tree with options (the `group` option picks the root), keeping warnings.
+///
+/// # Errors
+/// As for [`open_datatree_with_backend`].
+pub fn open_datatree_with(path: impl AsRef<Path>, opts: &OpenOptions) -> Result<OpenedTree, Error> {
+    open_datatree_with_backend(default_backend(), path, opts)
+}
+
+fn encode_tree(tree: &DataTree, format: Format) -> Result<RawDataset, Error> {
+    let mut raw = xr_cf::encode(tree.dataset(), &EncodeOptions::format(format))?;
+    if !tree.children().is_empty() && format != Format::Netcdf4 {
+        return Err(xr_io::IoError::Format {
+            what: "groups".into(),
+            format,
+            reason: "only netCDF-4 has groups".into(),
+        }
+        .into());
+    }
+    for (name, child) in tree.children() {
+        raw.groups.insert(name.clone(), encode_tree(child, format)?);
+    }
+    Ok(raw)
+}
+
+impl ToNetcdf for DataTree {
+    fn to_netcdf_with(&self, path: impl AsRef<Path>, opts: &WriteOptions) -> Result<(), Error> {
+        let raw = encode_tree(self, opts.format)?;
+        default_backend().write(&raw, path.as_ref(), opts)?;
+        Ok(())
+    }
+}
+
+// ----- many files -----
+
+/// How [`open_mfdataset`] puts files together.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum Combine {
+    /// Order the files by the one dimension whose coordinates differ, and concatenate along
+    /// it (xarray's `combine="by_coords"`); merge if none differs. The default.
+    #[default]
+    ByCoords,
+    /// Concatenate in the given order along this dimension, existing or new (xarray's
+    /// `combine="nested"` with one `concat_dim`).
+    Nested(String),
+}
+
+/// Options for [`open_mfdataset`].
+#[derive(Debug, Clone, Default)]
+#[non_exhaustive]
+pub struct MfOptions {
+    /// How each file is opened (lazily by default).
+    pub open: OpenOptions,
+    /// How the files are put together.
+    pub combine: Combine,
+    /// How to concatenate (xarray's new defaults: exact join, minimal variables).
+    pub concat: crate::ConcatOptions,
+}
+
+impl MfOptions {
+    /// Concatenate in the given order along `dim`.
+    #[must_use]
+    pub fn concat_dim(mut self, dim: impl Into<String>) -> Self {
+        self.combine = Combine::Nested(dim.into());
+        self
+    }
+
+    /// Options for opening each file.
+    #[must_use]
+    pub fn open(mut self, open: OpenOptions) -> Self {
+        self.open = open;
+        self
+    }
+
+    /// Options for concatenating.
+    #[must_use]
+    pub fn concat(mut self, concat: crate::ConcatOptions) -> Self {
+        self.concat = concat;
+        self
+    }
+}
+
+/// Open many files as one dataset (xarray's `open_mfdataset`). Files are opened lazily, and
+/// the result stays lazy: reading a slice reads only the files (and parts) it covers.
+///
+/// # Errors
+/// [`xr_io::IoError::Unsupported`] for an empty list; I/O, decoding or combining errors.
+pub fn open_mfdataset<P: AsRef<Path>>(
+    paths: impl IntoIterator<Item = P>,
+    opts: &MfOptions,
+) -> Result<Opened, Error> {
+    let mut warnings = Vec::new();
+    let mut datasets = Vec::new();
+    for p in paths {
+        let opened = open_dataset_with(p.as_ref(), &opts.open)?;
+        let shown = p.as_ref().display().to_string();
+        warnings.extend(opened.warnings.into_iter().map(|w| format!("{shown}: {w}")));
+        datasets.push(opened.dataset);
+    }
+    if datasets.is_empty() {
+        return Err(xr_io::IoError::Unsupported("open_mfdataset: no files".into()).into());
+    }
+    let refs: Vec<&Dataset> = datasets.iter().collect();
+    let dataset = match &opts.combine {
+        Combine::ByCoords => crate::combine_by_coords(&refs, &opts.concat)?,
+        Combine::Nested(dim) => crate::concat_datasets(&refs, dim, &opts.concat)?,
+    };
+    Ok(Opened { dataset, warnings })
+}
+
+/// The paths matching a shell pattern (`data/air_*.nc`, `runs/*/out_[0-9].nc`, `**` for any
+/// depth), sorted.
+///
+/// # Errors
+/// [`xr_io::IoError::Backend`] for an invalid pattern or a directory that cannot be read.
+pub fn glob(pattern: &str) -> Result<Vec<std::path::PathBuf>, Error> {
+    let bad = |message: String| xr_io::IoError::Backend {
+        backend: "glob",
+        message,
+    };
+    let mut out = glob::glob(pattern)
+        .map_err(|e| bad(format!("{pattern}: {e}")))?
+        .collect::<std::result::Result<Vec<_>, _>>()
+        .map_err(|e| bad(e.to_string()))?;
+    out.sort();
+    Ok(out)
 }

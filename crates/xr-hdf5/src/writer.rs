@@ -12,8 +12,10 @@
 //! lets objects reference each other in any direction.
 
 use std::collections::HashMap;
+use std::io::{Seek, SeekFrom, Write};
+use std::sync::Arc;
 
-use xr_core::{AttrValue, Owned, TypedArray};
+use xr_core::{AttrValue, LazySource, Owned, TypedArray};
 use xr_io::IoError;
 
 use crate::bad;
@@ -49,7 +51,12 @@ pub enum WNode {
 #[derive(Debug, Clone)]
 pub struct WDataset {
     /// Values. Strings become variable-length UTF-8 unless `char_data` is set on `U8` data.
+    /// With a [`source`](Self::source), only its element type matters (an empty array will
+    /// do).
     pub data: TypedArray<Owned>,
+    /// Read the values from here instead, slice by slice, as they are written (so a dataset
+    /// need never be in memory at once). Not for strings.
+    pub source: Option<Arc<dyn LazySource>>,
     /// Write `U8` data as 1-byte strings (netCDF's `NC_CHAR`).
     pub char_data: bool,
     /// Per dimension: unlimited (forces chunking).
@@ -60,6 +67,8 @@ pub struct WDataset {
     pub deflate: Option<u8>,
     /// Shuffle filter.
     pub shuffle: bool,
+    /// A compression codec other than deflate (Blosc brings its own shuffle).
+    pub compression: Option<xr_core::Compression>,
     /// Fill value as raw little-endian element bytes.
     pub fill: Option<Vec<u8>>,
     /// Allocate no storage and write no values (readers see fill values). netCDF-C writes
@@ -70,17 +79,43 @@ pub struct WDataset {
 }
 
 impl WDataset {
+    /// A dataset whose values are read from `source` as they are written.
+    ///
+    /// # Errors
+    /// [`IoError::Unsupported`] for string sources.
+    pub fn from_source(source: Arc<dyn LazySource>) -> Result<Self, IoError> {
+        if source.dtype() == xr_core::DType::Str {
+            return Err(IoError::Unsupported(
+                "writing strings from a lazy source".into(),
+            ));
+        }
+        let proto = TypedArray::empty(source.dtype(), &[0]).ok_or_else(|| bad("empty array"))?;
+        let mut d = Self::new(proto);
+        d.unlimited = vec![false; source.shape().len()];
+        d.source = Some(source);
+        Ok(d)
+    }
+
+    /// The shape of the values.
+    fn shape(&self) -> Vec<usize> {
+        self.source
+            .as_ref()
+            .map_or_else(|| self.data.shape().to_vec(), |s| s.shape().to_vec())
+    }
+
     /// A contiguous dataset with no attributes.
     #[must_use]
     pub fn new(data: TypedArray<Owned>) -> Self {
         let rank = data.ndim();
         Self {
             data,
+            source: None,
             char_data: false,
             unlimited: vec![false; rank],
             chunks: None,
             deflate: None,
             shuffle: false,
+            compression: None,
             fill: None,
             skip_data: false,
             attrs: Vec::new(),
@@ -117,6 +152,8 @@ enum Target {
     Object(usize),
     Block(usize),
     Heap(usize),
+    /// An address already in the file (data written as it was produced).
+    Abs(u64),
 }
 
 #[derive(Debug, Default)]
@@ -171,14 +208,29 @@ enum HeapObj {
     Refs(Vec<usize>),
 }
 
-#[derive(Default)]
-struct Plan {
+/// Where data goes as it is produced.
+trait Sink: Write + Seek {}
+impl<T: Write + Seek> Sink for T {}
+
+struct Plan<'a> {
     paths: HashMap<String, usize>,
     blocks: Vec<Block>,
     /// Block index of each object's header.
     headers: Vec<usize>,
     heap: Vec<HeapObj>,
+    /// Data is written here as it is produced, from the superblock's end on; every other
+    /// block is laid out after it.
+    out: &'a mut dyn Sink,
+    /// The next free address.
+    pos: u64,
 }
+
+fn io(e: &std::io::Error) -> IoError {
+    bad(format!("writing: {e}"))
+}
+
+/// Bytes the data of a source take per write, at most (rows are never split).
+const SLAB_BYTES: usize = 32 << 20;
 
 fn too_big(what: &str) -> IoError {
     bad(format!("{what} is too large to write"))
@@ -337,7 +389,41 @@ fn le_bytes(d: &TypedArray<Owned>) -> Option<Vec<u8>> {
     })
 }
 
-impl Plan {
+impl Plan<'_> {
+    /// Write `bytes` at the next 8-byte-aligned address; that address.
+    fn put_data(&mut self, bytes: &[u8]) -> Result<u64, IoError> {
+        let at = self
+            .pos
+            .checked_add(7)
+            .map(|x| x & !7)
+            .ok_or_else(|| too_big("file"))?;
+        self.out
+            .seek(SeekFrom::Start(self.pos))
+            .map_err(|e| io(&e))?;
+        let pad = usize::try_from(at.saturating_sub(self.pos)).unwrap_or(0);
+        self.out
+            .write_all([0u8; 8].get(..pad.min(8)).unwrap_or_default())
+            .map_err(|e| io(&e))?;
+        self.out.write_all(bytes).map_err(|e| io(&e))?;
+        self.pos = at
+            .checked_add(bytes.len() as u64)
+            .ok_or_else(|| too_big("file"))?;
+        Ok(at)
+    }
+
+    /// Write `bytes` right after the previous data (continuing one contiguous region).
+    fn put_more(&mut self, bytes: &[u8]) -> Result<(), IoError> {
+        self.out
+            .seek(SeekFrom::Start(self.pos))
+            .map_err(|e| io(&e))?;
+        self.out.write_all(bytes).map_err(|e| io(&e))?;
+        self.pos = self
+            .pos
+            .checked_add(bytes.len() as u64)
+            .ok_or_else(|| too_big("file"))?;
+        Ok(())
+    }
+
     fn block(&mut self, bytes: Bytes, checksum: bool) -> usize {
         self.blocks.push(Block { bytes, checksum });
         self.blocks.len().saturating_sub(1)
@@ -516,10 +602,13 @@ impl Plan {
         cdims: &[usize],
         esize: usize,
     ) -> Result<Option<usize>, IoError> {
-        let shape = ds.data.shape().to_vec();
+        let shape = ds.shape();
         let rank = shape.len();
-        let elements = self.element_bytes(&ds.data)?;
-        let filtered = ds.deflate.is_some() || ds.shuffle;
+        let elements = match &ds.source {
+            Some(_) => Bytes::default(),
+            None => self.element_bytes(&ds.data)?,
+        };
+        let filtered = ds.deflate.is_some() || ds.shuffle || ds.compression.is_some();
         if filtered && !elements.fixups.is_empty() {
             return Err(IoError::Unsupported(
                 "compressing variable-length strings".into(),
@@ -541,15 +630,16 @@ impl Plan {
             .iter()
             .try_fold(1usize, |a, c| a.checked_mul(*c))
             .ok_or_else(|| too_big("chunk"))?;
-        let chunk_bytes = chunk_elems
+        // Checked here so the buffer below cannot overflow.
+        chunk_elems
             .checked_mul(esize)
             .ok_or_else(|| too_big("chunk"))?;
         let fill: Vec<u8> = match &ds.fill {
             Some(f) if f.len() == esize => f.clone(),
             _ => vec![0; esize],
         };
-        // Leaf entries: (chunk offset, stored size, data block).
-        let mut leaves: Vec<(Vec<u64>, u32, usize)> = Vec::with_capacity(total);
+        // Leaf entries: (chunk offset, stored size, where the chunk is).
+        let mut leaves: Vec<(Vec<u64>, u32, Target)> = Vec::with_capacity(total);
         for ci in 0..total {
             // Chunk coordinates (row-major).
             let mut idx = vec![0usize; rank];
@@ -563,58 +653,104 @@ impl Plan {
                 .zip(cdims)
                 .map(|(i, c)| i.saturating_mul(*c))
                 .collect();
+            // The part of the chunk inside the dataset.
+            let count: Vec<usize> = origin
+                .iter()
+                .zip(cdims)
+                .zip(&shape)
+                .map(|((o, c), d)| (*c).min(d.saturating_sub(*o)))
+                .collect();
             let mut chunk = Bytes {
-                data: fill.iter().copied().cycle().take(chunk_bytes).collect(),
+                data: fill.repeat(chunk_elems),
                 fixups: Vec::new(),
             };
-            // Copy every element of the chunk that lies inside the dataset.
-            for e in 0..chunk_elems {
-                let mut rem = e;
-                let mut inside = true;
-                let mut src = 0usize;
-                let mut local = vec![0usize; rank];
-                for (slot, c) in local.iter_mut().zip(cdims).rev() {
-                    *slot = rem.checked_rem(*c).unwrap_or(0);
-                    rem = rem.checked_div(*c).unwrap_or(0);
+            match &ds.source {
+                Some(src) => {
+                    let slab = src
+                        .read_slice(&origin, &count)
+                        .map_err(|e| bad(format!("reading data to write: {e}")))?;
+                    let bytes = le_bytes(&slab).ok_or_else(|| {
+                        IoError::Unsupported(format!("writing {} data", slab.dtype()))
+                    })?;
+                    copy_rows(
+                        &bytes,
+                        &count,
+                        &vec![0; rank],
+                        &mut chunk.data,
+                        cdims,
+                        &count,
+                        esize,
+                    )?;
                 }
-                for ((l, o), d) in local.iter().zip(&origin).zip(&shape) {
-                    let g = o.saturating_add(*l);
-                    if g >= *d {
-                        inside = false;
-                        break;
+                None if elements.fixups.is_empty() => {
+                    copy_rows(
+                        &elements.data,
+                        &shape,
+                        &origin,
+                        &mut chunk.data,
+                        cdims,
+                        &count,
+                        esize,
+                    )?;
+                }
+                None => {
+                    // Strings: element by element, keeping their heap references.
+                    for e in 0..chunk_elems {
+                        let mut rem = e;
+                        let mut inside = true;
+                        let mut src = 0usize;
+                        let mut local = vec![0usize; rank];
+                        for (slot, c) in local.iter_mut().zip(cdims).rev() {
+                            *slot = rem.checked_rem(*c).unwrap_or(0);
+                            rem = rem.checked_div(*c).unwrap_or(0);
+                        }
+                        for ((l, o), d) in local.iter().zip(&origin).zip(&shape) {
+                            let g = o.saturating_add(*l);
+                            if g >= *d {
+                                inside = false;
+                                break;
+                            }
+                            src = src.saturating_mul(*d).saturating_add(g);
+                        }
+                        if !inside {
+                            continue;
+                        }
+                        let s = src.saturating_mul(esize);
+                        let dst = e.saturating_mul(esize);
+                        if let (Some(d), Some(v)) = (
+                            chunk.data.get_mut(dst..dst.saturating_add(esize)),
+                            elements.data.get(s..s.saturating_add(esize)),
+                        ) {
+                            d.copy_from_slice(v);
+                        }
+                        for (at, t) in elements
+                            .fixups
+                            .iter()
+                            .filter(|(at, _)| *at >= s && *at < s.saturating_add(esize))
+                        {
+                            chunk
+                                .fixups
+                                .push((dst.saturating_add(at.saturating_sub(s)), *t));
+                        }
                     }
-                    src = src.saturating_mul(*d).saturating_add(g);
-                }
-                if !inside {
-                    continue;
-                }
-                let s = src.saturating_mul(esize);
-                let dst = e.saturating_mul(esize);
-                if let (Some(d), Some(v)) = (
-                    chunk.data.get_mut(dst..dst.saturating_add(esize)),
-                    elements.data.get(s..s.saturating_add(esize)),
-                ) {
-                    d.copy_from_slice(v);
-                }
-                for (at, t) in elements
-                    .fixups
-                    .iter()
-                    .filter(|(at, _)| *at >= s && *at < s.saturating_add(esize))
-                {
-                    chunk
-                        .fixups
-                        .push((dst.saturating_add(at.saturating_sub(s)), *t));
                 }
             }
-            if ds.shuffle {
+            if ds.shuffle && !blosc(ds) {
                 chunk.data = shuffle(&chunk.data, esize);
             }
             if let Some(level) = ds.deflate {
                 chunk.data = miniz_oxide::deflate::compress_to_vec_zlib(&chunk.data, level.min(9));
             }
+            if let Some(c) = ds.compression {
+                chunk.data = compress(c, &chunk.data, esize)?;
+            }
             let size = u32_of(chunk.data.len(), "chunk")?;
-            let block = self.block(chunk, false);
-            leaves.push((origin.iter().map(|o| *o as u64).collect(), size, block));
+            let place = if chunk.fixups.is_empty() {
+                Target::Abs(self.put_data(&chunk.data)?)
+            } else {
+                Target::Block(self.block(chunk, false))
+            };
+            leaves.push((origin.iter().map(|o| *o as u64).collect(), size, place));
         }
         // Upper bound key: the dataset extent rounded up to whole chunks.
         let bound: Vec<u64> = nchunks
@@ -644,7 +780,7 @@ impl Plan {
                 };
                 for (off, size, child) in group {
                     key(&mut b, *size, off);
-                    b.addr(Target::Block(*child));
+                    b.addr(*child);
                 }
                 key(&mut b, 0, &bound);
                 // Pad to the full node size: the HDF5 library reads whole nodes.
@@ -658,10 +794,13 @@ impl Plan {
                     .map(|(o, s, _)| (o.clone(), *s))
                     .unwrap_or_default();
                 let node = self.block(b, false);
-                parents.push((first.0, first.1, node));
+                parents.push((first.0, first.1, Target::Block(node)));
             }
             if parents.len() == 1 {
-                return Ok(parents.first().map(|p| p.2));
+                return Ok(parents.first().and_then(|p| match p.2 {
+                    Target::Block(k) => Some(k),
+                    _ => None,
+                }));
             }
             nodes = parents;
             level = level.saturating_add(1);
@@ -669,7 +808,7 @@ impl Plan {
     }
 
     fn dataset(&mut self, id: usize, ds: &WDataset) -> Result<(), IoError> {
-        let shape = ds.data.shape().to_vec();
+        let shape = ds.shape();
         let rank = shape.len();
         let dtype = element_type(&ds.data, ds.char_data)?;
         let esize = esize_of(&ds.data);
@@ -713,21 +852,22 @@ impl Plan {
         match &chunks {
             None => {
                 layout.u8(1);
-                let data = if ds.skip_data {
-                    Bytes::default()
-                } else {
-                    self.element_bytes(&ds.data)?
-                };
-                let size = if ds.skip_data {
-                    ds.data.len().saturating_mul(esize)
-                } else {
-                    data.data.len()
-                };
+                let n: usize = shape.iter().product();
+                let size = n.saturating_mul(esize);
                 if ds.skip_data || size == 0 {
                     layout.u64(UNDEF);
+                } else if let Some(src) = &ds.source {
+                    // Slabs along the first axis, written back to back.
+                    let addr = self.contiguous_from(src.as_ref(), &shape, esize)?;
+                    layout.addr(Target::Abs(addr));
                 } else {
-                    let block = self.block(data, false);
-                    layout.addr(Target::Block(block));
+                    let data = self.element_bytes(&ds.data)?;
+                    if data.fixups.is_empty() {
+                        layout.addr(Target::Abs(self.put_data(&data.data)?));
+                    } else {
+                        let block = self.block(data, false);
+                        layout.addr(Target::Block(block));
+                    }
                 }
                 layout.u64(size as u64);
             }
@@ -750,11 +890,14 @@ impl Plan {
             }
         }
         msgs.push((0x08, layout));
-        if chunks.is_some() && (ds.shuffle || ds.deflate.is_some()) {
+        if chunks.is_some() && (ds.shuffle || ds.deflate.is_some() || ds.compression.is_some()) {
+            let shuffled = ds.shuffle && !blosc(ds);
             let mut p = Bytes::default();
             p.u8(2);
-            p.u8(u8::from(ds.shuffle).saturating_add(u8::from(ds.deflate.is_some())));
-            if ds.shuffle {
+            p.u8(u8::from(shuffled)
+                .saturating_add(u8::from(ds.deflate.is_some()))
+                .saturating_add(u8::from(ds.compression.is_some())));
+            if shuffled {
                 p.u16(2);
                 p.u16(1); // optional
                 p.u16(1);
@@ -766,9 +909,70 @@ impl Plan {
                 p.u16(1);
                 p.u32(u32::from(level.min(9)));
             }
+            if let Some(c) = ds.compression {
+                let chunk_bytes = chunks
+                    .as_ref()
+                    .map_or(Some(esize), |c| {
+                        c.iter().try_fold(esize, |a, d| a.checked_mul(*d))
+                    })
+                    .ok_or_else(|| bad("chunk too large"))?;
+                let (id, client) = filter_params(c, esize, chunk_bytes)?;
+                // Plugin filters (id ≥ 256) carry a name length (0: no name).
+                p.u16(id);
+                p.u16(0);
+                p.u16(0); // mandatory
+                p.u16(u16::try_from(client.len()).unwrap_or(0));
+                for v in client {
+                    p.u32(v);
+                }
+            }
             msgs.push((0x0B, p));
         }
         self.finish_object(id, msgs, &ds.attrs)
+    }
+
+    /// Write a source's values contiguously, a slab of whole rows at a time; the address.
+    fn contiguous_from(
+        &mut self,
+        src: &dyn LazySource,
+        shape: &[usize],
+        esize: usize,
+    ) -> Result<u64, IoError> {
+        let read = |start: &[usize], count: &[usize]| -> Result<Vec<u8>, IoError> {
+            let t = src
+                .read_slice(start, count)
+                .map_err(|e| bad(format!("reading data to write: {e}")))?;
+            le_bytes(&t).ok_or_else(|| IoError::Unsupported(format!("writing {} data", t.dtype())))
+        };
+        let Some((&rows, rest)) = shape.split_first() else {
+            return self.put_data(&read(&[], &[])?);
+        };
+        let row_bytes = rest
+            .iter()
+            .try_fold(esize, |a, d| a.checked_mul(*d))
+            .ok_or_else(|| too_big("row"))?
+            .max(1);
+        let step = SLAB_BYTES.checked_div(row_bytes).unwrap_or(1).max(1);
+        let mut start = vec![0usize; shape.len()];
+        let mut addr = None;
+        let mut r = 0usize;
+        while r < rows {
+            let n = step.min(rows.saturating_sub(r));
+            if let Some(s) = start.first_mut() {
+                *s = r;
+            }
+            let mut count = shape.to_vec();
+            if let Some(c) = count.first_mut() {
+                *c = n;
+            }
+            let bytes = read(&start, &count)?;
+            match addr {
+                None => addr = Some(self.put_data(&bytes)?),
+                Some(_) => self.put_more(&bytes)?,
+            }
+            r = r.saturating_add(n);
+        }
+        addr.ok_or_else(|| bad("empty contiguous data"))
     }
 
     fn group(&mut self, id: usize, g: &WGroup, path: &str) -> Result<(), IoError> {
@@ -901,13 +1105,34 @@ fn esize_of(d: &TypedArray<Owned>) -> usize {
     }
 }
 
-/// Serialise a tree as an HDF5 file.
+/// Serialise a tree as an HDF5 file in memory.
+///
+/// # Errors
+/// As for [`write_to`].
+pub fn write_file(root: &WGroup) -> Result<Vec<u8>, IoError> {
+    let mut out = std::io::Cursor::new(Vec::new());
+    write_to(root, &mut out)?;
+    Ok(out.into_inner())
+}
+
+/// Write a tree as an HDF5 file to `out` (a file, typically). Values are written as they
+/// are produced, read from [`WDataset::source`]s slice by slice, so datasets larger than
+/// memory can be written; object headers, B-trees and heaps follow the data, and the
+/// superblock is written last.
 ///
 /// # Errors
 /// [`IoError::Unsupported`] for element types or features the writer does not handle;
-/// [`IoError::Backend`] for sizes beyond the format's limits or dangling references.
-pub fn write_file(root: &WGroup) -> Result<Vec<u8>, IoError> {
-    let mut plan = Plan::default();
+/// [`IoError::Backend`] for sizes beyond the format's limits, dangling references, source
+/// read errors, or write errors.
+pub fn write_to(root: &WGroup, out: &mut (impl Write + Seek)) -> Result<(), IoError> {
+    let mut plan = Plan {
+        paths: HashMap::new(),
+        blocks: Vec::new(),
+        headers: Vec::new(),
+        heap: Vec::new(),
+        out,
+        pos: 48,
+    };
     plan.headers.push(usize::MAX);
     plan.paths.insert("/".into(), 0);
     plan.walk_ids(root, "/");
@@ -964,9 +1189,9 @@ pub fn write_file(root: &WGroup) -> Result<Vec<u8>, IoError> {
             .for_each(|(cb, _)| *cb = block);
     }
 
-    // Lay out: superblock, then every block, 8-byte aligned.
+    // Lay out every block after the data, 8-byte aligned.
     let mut addrs = Vec::with_capacity(plan.blocks.len());
-    let mut at: usize = 48;
+    let mut at = usize::try_from(plan.pos).map_err(|_| too_big("file"))?;
     for b in &plan.blocks {
         at = at
             .checked_add(7)
@@ -986,7 +1211,6 @@ pub fn write_file(root: &WGroup) -> Result<Vec<u8>, IoError> {
             .ok_or_else(|| bad("object without a header"))
     };
 
-    let mut out = vec![0u8; at];
     for (i, b) in plan.blocks.iter().enumerate() {
         let mut data = b.bytes.data.clone();
         for (pos, t) in &b.bytes.fixups {
@@ -999,6 +1223,7 @@ pub fn write_file(root: &WGroup) -> Result<Vec<u8>, IoError> {
                         .ok_or_else(|| bad("dangling block"))?,
                     None,
                 ),
+                Target::Abs(a) => (*a, None),
                 Target::Heap(k) => {
                     let (cb, index) = heap_slots
                         .get(*k)
@@ -1027,11 +1252,9 @@ pub fn write_file(root: &WGroup) -> Result<Vec<u8>, IoError> {
                 slot.copy_from_slice(&sum.to_le_bytes());
             }
         }
-        let start =
-            usize::try_from(addrs.get(i).copied().unwrap_or(0)).map_err(|_| too_big("file"))?;
-        if let Some(slot) = out.get_mut(start..start.saturating_add(data.len())) {
-            slot.copy_from_slice(&data);
-        }
+        let start = addrs.get(i).copied().unwrap_or(0);
+        plan.out.seek(SeekFrom::Start(start)).map_err(|e| io(&e))?;
+        plan.out.write_all(&data).map_err(|e| io(&e))?;
     }
 
     // Superblock v2.
@@ -1044,8 +1267,155 @@ pub fn write_file(root: &WGroup) -> Result<Vec<u8>, IoError> {
     sb.u64(object_addr(0)?);
     let sum = lookup3(&sb.data, 0);
     sb.u32(sum);
-    if let Some(slot) = out.get_mut(..sb.data.len()) {
-        slot.copy_from_slice(&sb.data);
+    plan.out.seek(SeekFrom::Start(0)).map_err(|e| io(&e))?;
+    plan.out.write_all(&sb.data).map_err(|e| io(&e))?;
+    // The file ends at the last block (data may have been the last thing written).
+    let end = eof.max(plan.pos);
+    plan.out.seek(SeekFrom::Start(end)).map_err(|e| io(&e))?;
+    plan.out.flush().map_err(|e| io(&e))?;
+    Ok(())
+}
+
+/// Copy a box of extent `count` starting at `src_start` in `src` (row-major, shape
+/// `src_shape`) to the start of `dst` (row-major, shape `dst_shape`), a row at a time.
+fn copy_rows(
+    src: &[u8],
+    src_shape: &[usize],
+    src_start: &[usize],
+    dst: &mut [u8],
+    dst_shape: &[usize],
+    count: &[usize],
+    esize: usize,
+) -> Result<(), IoError> {
+    let rank = count.len();
+    if count.contains(&0) {
+        return Ok(());
     }
-    Ok(out)
+    let Some((&last, outer)) = count.split_last() else {
+        // A scalar.
+        let (Some(d), Some(s)) = (dst.get_mut(..esize), src.get(..esize)) else {
+            return Err(bad("scalar out of range"));
+        };
+        d.copy_from_slice(s);
+        return Ok(());
+    };
+    let run = last.checked_mul(esize).ok_or_else(|| too_big("row"))?;
+    let rows: usize = outer.iter().product();
+    let mut idx = vec![0usize; rank.saturating_sub(1)];
+    for _ in 0..rows {
+        let (mut s, mut d) = (0usize, 0usize);
+        for k in 0..rank {
+            let i = if k.saturating_add(1) == rank {
+                0
+            } else {
+                idx.get(k).copied().unwrap_or(0)
+            };
+            let sk = src_start.get(k).copied().unwrap_or(0).saturating_add(i);
+            s = s
+                .saturating_mul(src_shape.get(k).copied().unwrap_or(0))
+                .saturating_add(sk);
+            d = d
+                .saturating_mul(dst_shape.get(k).copied().unwrap_or(0))
+                .saturating_add(i);
+        }
+        let (s, d) = (s.saturating_mul(esize), d.saturating_mul(esize));
+        let (Some(dd), Some(ss)) = (
+            dst.get_mut(d..d.saturating_add(run)),
+            src.get(s..s.saturating_add(run)),
+        ) else {
+            return Err(bad("copy outside the data"));
+        };
+        dd.copy_from_slice(ss);
+        // Next row index (row-major over the outer dimensions).
+        for (k, slot) in idx.iter_mut().enumerate().rev() {
+            *slot = slot.saturating_add(1);
+            if *slot < outer.get(k).copied().unwrap_or(0) {
+                break;
+            }
+            *slot = 0;
+        }
+    }
+    Ok(())
+}
+
+fn blosc(ds: &WDataset) -> bool {
+    matches!(ds.compression, Some(xr_core::Compression::Blosc { .. }))
+}
+
+/// Blosc's code for a codec inside its frames.
+fn blosc_code(codec: xr_core::BloscCodec) -> Result<u8, IoError> {
+    match codec {
+        xr_core::BloscCodec::Lz4 | xr_core::BloscCodec::Lz4Hc => Ok(1),
+        xr_core::BloscCodec::Zlib => Ok(3),
+        xr_core::BloscCodec::Zstd => Ok(4),
+        _ => Err(IoError::Unsupported("writing Blosc with BloscLZ".into())),
+    }
+}
+
+/// Encode one chunk with a plugin codec.
+fn compress(c: xr_core::Compression, data: &[u8], esize: usize) -> Result<Vec<u8>, IoError> {
+    match c {
+        #[cfg(feature = "zstd")]
+        xr_core::Compression::Zstd { .. } => Ok(crate::filters::zstd_compress(data)),
+        #[cfg(feature = "lz4")]
+        xr_core::Compression::Lz4 => crate::filters::lz4_compress(data),
+        xr_core::Compression::Blosc {
+            codec,
+            level,
+            shuffle,
+        } => crate::codecs::blosc::compress(data, esize, blosc_code(codec)?, level, shuffle),
+        other => Err(IoError::Unsupported(format!(
+            "writing {other:?} (needs the `zstd`/`lz4` features)"
+        ))),
+    }
+}
+
+/// The filter id and client values that describe a codec, as the HDF5 plugins write them.
+fn filter_params(
+    c: xr_core::Compression,
+    esize: usize,
+    chunk_bytes: usize,
+) -> Result<(u16, Vec<u32>), IoError> {
+    let big = || bad("chunk too large");
+    Ok(match c {
+        xr_core::Compression::Zstd { level } => (
+            crate::filters::ZSTD,
+            vec![u32::from_ne_bytes(level.to_ne_bytes())],
+        ),
+        xr_core::Compression::Lz4 => (
+            crate::filters::LZ4,
+            vec![u32::try_from(chunk_bytes).map_err(|_| big())?],
+        ),
+        xr_core::Compression::Blosc {
+            codec,
+            level,
+            shuffle,
+        } => {
+            // Blosc's filter codes: 0 BloscLZ, 1 LZ4, 2 LZ4HC, 3 Snappy, 4 zlib, 5 Zstandard.
+            let code = match codec {
+                xr_core::BloscCodec::Lz4 | xr_core::BloscCodec::Lz4Hc => 1,
+                xr_core::BloscCodec::Zlib => 4,
+                xr_core::BloscCodec::Zstd => 5,
+                _ => return Err(IoError::Unsupported("writing Blosc with BloscLZ".into())),
+            };
+            let shuffle = match shuffle {
+                xr_core::BloscShuffle::Byte => 1,
+                xr_core::BloscShuffle::Bit => 2,
+                _ => 0,
+            };
+            (
+                crate::filters::BLOSC,
+                vec![
+                    2,
+                    2,
+                    u32::try_from(esize).map_err(|_| big())?,
+                    u32::try_from(chunk_bytes).map_err(|_| big())?,
+                    u32::from(level.min(9)),
+                    shuffle,
+                    code,
+                ],
+            )
+        }
+        other => return Err(IoError::Unsupported(format!("writing {other:?}"))),
+    })
 }

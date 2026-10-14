@@ -4,7 +4,8 @@ use chrono::{NaiveDateTime, TimeDelta};
 use ndarray::{ArrayD, IxDyn};
 use xr_core::xr_units::{Calendar, CfDate, Unit};
 use xr_core::{
-    AttrValue, Attrs, DType, DatasetBase, NaT, Name, Owned, Repr, TypedArray, VariableBase,
+    AttrValue, Attrs, DType, DatasetBase, LazySource, NaT, Name, Owned, Repr, TypedArray,
+    VariableBase,
 };
 use xr_io::{Format, RawDataset, RawDim, RawVariable, Storage};
 
@@ -421,6 +422,7 @@ fn encode_var<R: Repr>(name: &str, v: &VariableBase<R>, format: Format) -> Resul
                     .collect()
             });
         storage.deflate = enc.deflate;
+        storage.compression = enc.compression;
         storage.shuffle = enc.shuffle;
     }
     Ok(Encoded {
@@ -433,6 +435,108 @@ fn encode_var<R: Repr>(name: &str, v: &VariableBase<R>, format: Format) -> Resul
         },
         char_dim,
     })
+}
+
+/// Whether `v` can be encoded slice by slice: its encoding must not depend on all of its
+/// values (string widths, duration units and unset time units do; and without 64-bit
+/// integers the stored type of times depends on whether any is NaT).
+fn encodable_lazily<R: Repr>(v: &VariableBase<R>, format: Format) -> bool {
+    v.is_lazy()
+        && !v.is_empty()
+        && match v.dtype() {
+            DType::Str | DType::TimeDelta => false,
+            DType::DateTime | DType::CfDate => {
+                v.encoding().time_units.is_some() && format.supports(DType::I64)
+            }
+            _ => true,
+        }
+}
+
+/// Encode `v`, lazily when possible: its attributes and stored type come from encoding its
+/// first element, and its values are encoded as they are read.
+fn encode_maybe_lazy<R: Repr>(name: &str, v: &VariableBase<R>, format: Format) -> Result<Encoded> {
+    if !encodable_lazily(v, format) {
+        return encode_var(name, v, format);
+    }
+    let first: Vec<(Name, std::ops::Range<usize>)> =
+        v.dims().iter().map(|d| (d.clone(), 0..1)).collect();
+    let mut probe = v.isel(first)?.to_owned();
+    probe.load()?;
+    let mut e = encode_var(name, &probe, format)?;
+    // The probe's storage was fitted to one element: fit the chunks to the real shape.
+    if e.raw.storage.chunks.is_some() {
+        e.raw.storage.chunks = v.encoding().chunks.as_ref().map(|c| {
+            c.iter()
+                .zip(v.shape())
+                .map(|(c, n)| (*c).clamp(1, (*n).max(1)))
+                .collect()
+        });
+    }
+    let source = EncodeSource {
+        inner: v.as_lazy_source()?,
+        name: name.to_owned(),
+        dims: v.dims().to_vec(),
+        unit: v.unit().cloned(),
+        attrs: v.attrs().clone(),
+        encoding: v.encoding().clone(),
+        format,
+        dtype: e.raw.data.dtype(),
+        shape: v.shape().to_vec(),
+    };
+    e.raw.data = xr_io::RawData::Lazy(std::sync::Arc::new(source));
+    Ok(e)
+}
+
+/// A lazy variable encoded slice by slice as it is read (for writing without loading).
+#[derive(Debug)]
+struct EncodeSource {
+    inner: std::sync::Arc<dyn LazySource>,
+    name: String,
+    dims: Vec<Name>,
+    unit: Option<Unit>,
+    attrs: Attrs,
+    encoding: xr_core::Encoding,
+    format: Format,
+    dtype: DType,
+    shape: Vec<usize>,
+}
+
+impl LazySource for EncodeSource {
+    fn dtype(&self) -> DType {
+        self.dtype
+    }
+
+    fn shape(&self) -> &[usize] {
+        &self.shape
+    }
+
+    fn read_slice(&self, start: &[usize], count: &[usize]) -> xr_core::Result<TypedArray<Owned>> {
+        let err = |e: CfError| xr_core::CoreError::Read(e.to_string());
+        let mut var = xr_core::Variable::from_typed(
+            self.dims.iter().cloned(),
+            self.inner.read_slice(start, count)?,
+        )?
+        .with_encoding(self.encoding.clone());
+        var.set_unit(self.unit.clone());
+        var.attrs_mut()
+            .extend(self.attrs.iter().map(|(k, a)| (k.clone(), a.clone())));
+        let e = encode_var(&self.name, &var, self.format).map_err(err)?;
+        let data = e
+            .raw
+            .data
+            .values()
+            .map_err(|e| xr_core::CoreError::Read(e.to_string()))?
+            .into_owned();
+        if data.dtype() != self.dtype {
+            return Err(xr_core::CoreError::Read(format!(
+                "{}: encoded as {} here but {} elsewhere",
+                self.name,
+                data.dtype(),
+                self.dtype
+            )));
+        }
+        Ok(data)
+    }
 }
 
 /// Encode a dataset for writing in `opts.format`.
@@ -489,11 +593,11 @@ pub fn encode<S: Repr>(ds: &DatasetBase<S>, opts: &EncodeOptions) -> Result<RawD
     };
 
     for (name, c) in ds.coords() {
-        let e = encode_var(name, c, format)?;
+        let e = encode_maybe_lazy(name, c, format)?;
         add(&mut raw, name, e)?;
     }
     for (name, v) in ds.data_vars() {
-        let mut e = encode_var(name, v, format)?;
+        let mut e = encode_maybe_lazy(name, v, format)?;
         let mine: Vec<&str> = aux
             .iter()
             .filter(|(_, cd)| cd.iter().all(|d| v.dims().contains(d)))

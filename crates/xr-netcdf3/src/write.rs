@@ -1,7 +1,9 @@
 //! Serialising netCDF-3 files.
 
+use std::io::Write;
+
 use xr_core::{Attrs, Name};
-use xr_io::{Format, IoError, RawDataset};
+use xr_io::{Format, IoError, RawData, RawDataset};
 
 use crate::ck::{Ck, pad4};
 use crate::types::{
@@ -86,22 +88,85 @@ fn too_big(what: &str) -> IoError {
     bad(format!("{what} too large for this format"))
 }
 
-struct Plan {
+/// Bytes per read when writing values from a lazy source (whole rows or records at least).
+const SLAB_BYTES: usize = 32 << 20;
+
+/// Where a variable's values come from.
+enum Values<'a> {
+    /// Encoded already (data in memory).
+    Bytes(Vec<u8>),
+    /// Read, and encoded, a slab at a time.
+    Lazy(&'a dyn xr_core::LazySource),
+}
+
+struct Plan<'a> {
     ty: NcType,
     record: bool,
     /// Bytes of one record (record variables) or of the whole variable.
     slab: usize,
     /// `slab` rounded up to four bytes (the header's `vsize`).
     vsize: usize,
-    bytes: Vec<u8>,
+    values: Values<'a>,
+    /// The variable's shape.
+    shape: Vec<usize>,
     /// One element of the fill value, used for padding as netCDF-C does.
     fill: Vec<u8>,
     begin: usize,
 }
 
-impl Plan {
-    fn padding(&self, n: usize) -> impl Iterator<Item = u8> + '_ {
-        self.fill.iter().copied().cycle().take(pad4(n))
+impl Plan<'_> {
+    fn padding(&self, n: usize) -> Vec<u8> {
+        self.fill.iter().copied().cycle().take(pad4(n)).collect()
+    }
+
+    /// Encoded bytes of rows `[row, row + n)` (along the first dimension; a scalar is one
+    /// row).
+    fn rows(&self, row: usize, n: usize) -> Result<std::borrow::Cow<'_, [u8]>, IoError> {
+        let row_bytes = self.row_bytes()?;
+        match &self.values {
+            Values::Bytes(b) => {
+                let start = (Ck::from(row) * row_bytes)
+                    .to::<usize>()
+                    .ok_or_else(|| too_big("data"))?;
+                let end = (Ck::from(start) + Ck::from(n) * row_bytes)
+                    .to::<usize>()
+                    .ok_or_else(|| too_big("data"))?;
+                Ok(b.get(start..end)
+                    .ok_or_else(|| bad("data shorter than its dimensions"))?
+                    .into())
+            }
+            Values::Lazy(src) => {
+                let mut start = vec![0usize; self.shape.len()];
+                let mut count = self.shape.clone();
+                if let (Some(s), Some(c)) = (start.first_mut(), count.first_mut()) {
+                    *s = row;
+                    *c = n;
+                }
+                let t = src
+                    .read_slice(&start, &count)
+                    .map_err(|e| bad(format!("reading data to write: {e}")))?;
+                Ok(encode_array(&t)
+                    .ok_or_else(|| bad("element type must be CF-encoded first"))?
+                    .into())
+            }
+        }
+    }
+
+    /// Bytes of one row (one element for scalars).
+    fn row_bytes(&self) -> Result<usize, IoError> {
+        self.shape
+            .iter()
+            .skip(1)
+            .try_fold(self.ty.size(), |a, d| a.checked_mul(*d))
+            .ok_or_else(|| too_big("variable"))
+    }
+
+    /// Rows per read, keeping reads near `SLAB_BYTES`.
+    fn rows_per_read(&self) -> Result<usize, IoError> {
+        Ok(SLAB_BYTES
+            .checked_div(self.row_bytes()?)
+            .unwrap_or(1)
+            .max(1))
     }
 }
 
@@ -144,8 +209,20 @@ fn header(ds: &RawDataset, plans: &[Plan], v: Version, numrecs: usize) -> Result
     Ok(o.buf)
 }
 
-/// Serialise a dataset as a netCDF-3 file.
+/// Serialise a dataset as a netCDF-3 file in memory.
 pub(crate) fn serialize(ds: &RawDataset, format: Format) -> Result<Vec<u8>, IoError> {
+    let mut out = Vec::new();
+    write_to(ds, format, &mut out)?;
+    Ok(out)
+}
+
+/// Write a dataset as a netCDF-3 file to `out`, in order. Lazy variables are read and
+/// written a slab (or a batch of records) at a time, so they need never be in memory at once.
+pub(crate) fn write_to(
+    ds: &RawDataset,
+    format: Format,
+    out: &mut dyn Write,
+) -> Result<(), IoError> {
     let v = match format {
         Format::Netcdf3Classic => Version::Cdf1,
         Format::Netcdf3Offset64 => Version::Cdf2,
@@ -217,16 +294,21 @@ pub(crate) fn serialize(ds: &RawDataset, format: Format) -> Result<Vec<u8>, IoEr
         let vsize = (Ck::from(slab) + pad4(slab))
             .to()
             .ok_or_else(|| too_big("variable"))?;
-        let values = var.data.values()?;
-        let bytes = encode_array(&values)
-            .ok_or_else(|| bad(format!("{name:?}: element type must be CF-encoded first")))?;
+        let values =
+            match &var.data {
+                RawData::Lazy(src) => Values::Lazy(src.as_ref()),
+                RawData::Loaded(a) => Values::Bytes(encode_array(a).ok_or_else(|| {
+                    bad(format!("{name:?}: element type must be CF-encoded first"))
+                })?),
+            };
         let fill = fill_element(ty, var.attrs.get("_FillValue"));
         plans.push(Plan {
             ty,
             record,
             slab,
             vsize,
-            bytes,
+            values,
+            shape: expected,
             fill,
             begin: 0,
         });
@@ -248,26 +330,53 @@ pub(crate) fn serialize(ds: &RawDataset, format: Format) -> Result<Vec<u8>, IoEr
     }
     recsize.to::<usize>().ok_or_else(|| too_big("record"))?;
 
-    let mut out = header(ds, &plans, v, numrecs)?;
+    let io = |e: std::io::Error| bad(format!("writing: {e}"));
+    out.write_all(&header(ds, &plans, v, numrecs)?)
+        .map_err(io)?;
+    // Fixed-size variables, each followed by its padding.
     for p in plans.iter().filter(|p| !p.record) {
-        out.extend_from_slice(&p.bytes);
-        out.extend(p.padding(p.bytes.len()));
+        let rows = p.shape.first().copied().unwrap_or(1);
+        let step = p.rows_per_read()?;
+        let mut r = 0usize;
+        while r < rows {
+            let n = step.min(rows.saturating_sub(r));
+            out.write_all(&p.rows(r, n)?).map_err(io)?;
+            r = r.saturating_add(n);
+        }
+        out.write_all(&p.padding(p.slab)).map_err(io)?;
     }
-    for r in 0..numrecs {
-        for p in plans.iter().filter(|p| p.record) {
-            let start = (Ck::from(r) * p.slab)
-                .to::<usize>()
-                .ok_or_else(|| too_big("record"))?;
-            let end = start.checked_add(p.slab).ok_or_else(|| too_big("record"))?;
-            out.extend_from_slice(
-                p.bytes
-                    .get(start..end)
-                    .ok_or_else(|| bad("record data shorter than its dimensions"))?,
-            );
-            if n_record != 1 {
-                out.extend(p.padding(p.slab));
+    // Records, interleaved: read a batch of records of every record variable at a time.
+    let records: Vec<&Plan<'_>> = plans.iter().filter(|p| p.record).collect();
+    let recsize = records
+        .iter()
+        .try_fold(0usize, |a, p| a.checked_add(p.vsize))
+        .ok_or_else(|| too_big("record"))?;
+    let batch = SLAB_BYTES.checked_div(recsize).unwrap_or(1).max(1);
+    let mut r0 = 0usize;
+    while r0 < numrecs {
+        let n = batch.min(numrecs.saturating_sub(r0));
+        let slabs = records
+            .iter()
+            .map(|p| p.rows(r0, n))
+            .collect::<Result<Vec<_>, _>>()?;
+        for i in 0..n {
+            for (p, bytes) in records.iter().zip(&slabs) {
+                let start = (Ck::from(i) * p.slab)
+                    .to::<usize>()
+                    .ok_or_else(|| too_big("record"))?;
+                let end = start.checked_add(p.slab).ok_or_else(|| too_big("record"))?;
+                out.write_all(
+                    bytes
+                        .get(start..end)
+                        .ok_or_else(|| bad("record data shorter than its dimensions"))?,
+                )
+                .map_err(io)?;
+                if n_record != 1 {
+                    out.write_all(&p.padding(p.slab)).map_err(io)?;
+                }
             }
         }
+        r0 = r0.saturating_add(n);
     }
-    Ok(out)
+    Ok(())
 }

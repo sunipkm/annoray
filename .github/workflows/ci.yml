@@ -41,18 +41,20 @@ jobs:
       - name: Python xarray reads our files
         if: matrix.os == 'ubuntu-latest'
         run: |
-          pip install xarray netCDF4 cftime h5py
+          pip install xarray netCDF4 cftime h5py hdf5plugin
           cargo test -p xarray-rs --features netcdf-c --test netcdf_io -- --ignored python
           cargo test -p xr-hdf5 --test write_round_trip -- --ignored
           cargo test -p xarray-rs --test nat -- --ignored
+          cargo test -p xarray-rs --test tree -- --ignored
+          cargo test -p xr-hdf5 --all-features --test write_codecs -- --ignored
 
   msrv:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.85
+      - uses: dtolnay/rust-toolchain@1.97
       - uses: Swatinem/rust-cache@v2
       # trybuild's expected compiler output is pinned to stable, so MSRV only builds and runs unit
-      # tests. The optional netcdf-c backend (MSRV 1.85.1) is not part of this job.
+      # tests. The optional netcdf-c backend (which builds the C libraries) is not part of this job.
       - run: cargo check --workspace --exclude xr-io-c --all-targets
       - run: cargo test --workspace --exclude xr-io-c --lib

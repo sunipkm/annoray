@@ -14,7 +14,7 @@ The data model copies ndarray's owned/view split: `Dataset`, `DatasetView`, `Dat
 | HDF5 / netCDF-4 | Our own pure-Rust reader and writer in the long run |
 | Bootstrapping | Start with C bindings (`netcdf` and `hdf5-metno` crates) behind the `c-backend` feature. Keep them afterwards as test oracles |
 | I/O milestones | Each format ships read and write together, with a round-trip test |
-| MSRV | Rust 1.85, edition 2024 |
+| MSRV | Rust 1.97, edition 2024 (raised from 1.85 during M8) |
 | Errors | No `unwrap`, `expect` or `panic!` in library code. Every failure is propagated as a `Result`, and lints enforce this (§2a) |
 
 ## 1. Workspace layout
@@ -342,8 +342,7 @@ The pipeline is `open_dataset` = backend.open, then `xr-cf` decode, then `Datase
 ### Implementation notes (M3, as built)
 - **The C backend is the `netcdf-c` cargo feature** (`xr-io-c`, default off). The `netcdf` crate's
   `static` feature builds netCDF-C 4.9 and HDF5 from source, which takes about 1.5 minutes and
-  needs cmake. Its dependency `hdf5-metno-sys` needs Rust **1.85.1**, so CI's MSRV job excludes
-  that crate. Writing `NC_CHAR` needs one `unsafe impl` (a `repr(transparent)` byte), allowed
+  needs cmake. CI's MSRV job skips that crate, since it builds C libraries. Writing `NC_CHAR` needs one `unsafe impl` (a `repr(transparent)` byte), allowed
   locally with a SAFETY comment.
 - **Plain HDF5 files are not supported through the C backend.** The `hdf5-metno` bindings were
   skipped: pure-Rust `xr-hdf5` (M5) covers plain HDF5, tested against h5py-written fixtures.
@@ -549,6 +548,207 @@ The pipeline is `open_dataset` = backend.open, then `xr-cf` decode, then `Datase
   lazily and eagerly. It also checks reductions, arithmetic and alignment, round-trips in both
   formats, and confirms that Python xarray reads our output (ignored test, run in CI).
 
+### Implementation notes (M8, groupby, as built)
+- **`VariableBase::dt(component)`** is xarray's `.dt` accessor. Components: year, month, day,
+  hour, minute, second, dayofyear, dayofweek, season. It works for chrono and CF-calendar dates.
+  NaT gives NaN (and an empty season).
+- **`groupby(group)`** on `DataArray` and `Dataset`. The group can be:
+  - a 1-D coordinate;
+  - for datasets, a data variable;
+  - a date component, as in `"time.month"`.
+
+  **`groupby_bins(group, edges, BinOptions)`** groups by bins instead. `right` and
+  `include_lowest` are supported, and labels look like `"(a, b]"`.
+- Labels are sorted, as with pandas' factorize. Missing labels (NaN, NaT) belong to no group.
+  Every bin is kept, and empty bins reduce to NaN.
+- **Operations:**
+  - `reduce` and the shortcuts (`sum`, `mean`, … `all`);
+  - `first` and `last`;
+  - `map`: results that keep the grouped dimension are restored to the original order;
+    others are stacked along the group dimension;
+  - group arithmetic `gb.binary(op, other)`, also available as `&gb - &clim`, against an
+    array indexed by the labels. It adds the grouping variable as a coordinate, as xarray does.
+- **Implementation:** one internal `Grouper` (labels plus positions) and one combine step,
+  shared by data arrays and datasets through a crate-private `GroupOut` trait. Splitting uses
+  `take`, combining uses `concat`, and empty bins are reindexed with `align`.
+- **Deliberate differences from xarray:**
+  - Dataset variables without the grouped dimension are kept as they are; xarray repeats them
+    once per group.
+  - The `include_lowest` first bin is labelled `[a, b]`; pandas shows a widened `(a-ε, b]`.
+- **Tests:** 17 xarray cases (`fixtures/gen_groupby.py`), covering labels, NaN labels, bins,
+  months, seasons, years on 2-D data, noleap dates, `first`/`last`, `map` and anomalies. Also
+  tested: NaT labels, datasets, errors and the `.dt` accessor.
+
+### Implementation notes (M8, resample, as built)
+- **`resample(dim, freq)`** on `DataArray` and `Dataset` returns the groupby types, with the
+  resampled dimension as the group dimension. Everything groupby offers works on the result:
+  reductions, `first`/`last`, `map` and group arithmetic.
+- **Frequencies** use pandas strings, with multiples:
+  - fixed steps: `ns us ms s min h D`, plus the old aliases `N U L S T H`;
+  - start-anchored: `MS`, `QS[-MON]`, `YS[-MON]`/`AS`;
+  - end-anchored: `W[-DAY]`, `ME`/`M`, `QE[-MON]`/`Q`, `YE[-MON]`/`Y`/`A`.
+- **Bins follow pandas:**
+  - Fixed steps are closed on the left, labelled with the start, and counted from midnight of
+    the first day (`origin = "start_day"`).
+  - Start-anchored periods are closed on the left and labelled with the start.
+  - End-anchored periods go by calendar date, so the whole last day is in the bin, and are
+    labelled with that day.
+  - Multiples count from the first period with data. Every bin between the first and last time
+    is kept.
+- **Calendars:** chrono dates are binned through `CfDate` in the proleptic Gregorian calendar,
+  and CF dates in their own calendar. Weeks need a real-world calendar.
+- **Deliberate differences from xarray:**
+  - Empty groups (resample bins and `groupby_bins`) reduce like empty arrays: sum 0, count 0,
+    NaN mean. xarray gives NaN for all three; pandas gives 0 for the sum.
+  - Times need not be sorted and may contain NaT, which belongs to no bin. xarray requires a
+    monotonic index.
+- **Bug fixed along the way:** empty float sums gave `-0.0`, because Rust's float `Sum` starts
+  at -0.0. They now fold from +0.0.
+- **Tests:** 22 xarray cases (`fixtures/gen_resample.py`) cover the frequency families,
+  anchors, multiples and a noleap calendar, checking labels, mean, sum, count and first.
+  Separate tests cover NaT, unsorted times, datasets and errors.
+
+### Implementation notes (M8, rolling, as built)
+- **`rolling(dim, window, RollingOptions { center, min_periods })`** on `DataArray` and
+  `Dataset` supports the reductions sum, prod, mean, median, std, var, min, max, count,
+  argmin and argmax, plus `construct(window_dim)`.
+- **Semantics follow xarray:**
+  - Windows are trailing by default. A centred even window `w` covers `i - w/2 ..= i + w/2 - 1`.
+  - `min_periods` defaults to the window size; windows with fewer non-NaN values give NaN,
+    `count` included.
+  - Integers become `f64`, and `f32` stays `f32`.
+  - `argmin`/`argmax` are positions within the window.
+  - Units follow the reduction rules. Coordinates are kept.
+  - Dataset variables without the dimension, or non-numeric ones, are kept unchanged.
+- **Implementation:** the window is built as a NaN-padded trailing dimension, reduced with
+  the M7 reductions, then masked by count. Memory scales with the window, so long windows
+  over big arrays would want a streaming version later.
+- **Tests:** 207 xarray cases (`fixtures/gen_rolling.py`). They cover every reduction for
+  NaN floats, int32 and 2-D data, with trailing, centred and even windows and various
+  `min_periods`, plus `construct`.
+
+### Implementation notes (M8, missing values, as built)
+- **Missing values:**
+  - `isnull`/`notnull` on variables and data arrays (NaN, NaT) return booleans.
+  - `fillna(f64)` on variables, data arrays and datasets fills floats; other types pass
+    through.
+- **`where_(cond)` / `where_or(cond, other)`:**
+  - `cond` is aligned with an inner join and broadcast over the dimensions it lacks.
+  - Integers become `f64` and times get NaT; strings and booleans are an error unless
+    `other` is given.
+  - `where_or` returns floats, because `other` is an `f64`; xarray keeps the integer type for
+    an integer `other`.
+- **`dropna(dim, How::{Any, All})`** works on data arrays and datasets. For datasets it looks
+  at every data variable with the dimension.
+- **`reindex(dim, labels)`** on data arrays and datasets, and `reindex_like(other)`, are built
+  on `align` with a right join. Integer data stays integer when nothing is missing.
+
+### Implementation notes (M8, DataTree, as built)
+- **`xr_core::DataTree`** is a node's own `Dataset` plus named children. Its API:
+  `add_child`/`with_child`, `get(path)`, `inherited(path)`, `paths()` (depth first),
+  `map_over_datasets`, `set_dataset`, `load`, and a `Display` that lists groups.
+- **Inheritance** works as in xarray. `inherited(path)` adds the ancestors' coordinates the
+  node lacks. A child must agree with them: a dimension shared with an inherited dimension
+  coordinate must have the same length, and a same-name coordinate must have equal values.
+  Whole subtrees are checked on attach.
+- **I/O** (facade):
+  - `open_datatree`, `open_datatree_with` (lazy by default; `group` picks the root) and
+    `open_datatree_with_backend`. Warnings are prefixed with their group path.
+  - `DataTree: ToNetcdf` writes each node as a group. Only netCDF-4 has groups, so other
+    formats are an error.
+- **The default `to_netcdf` format is now netCDF-4** (as in xarray). It had stayed netCDF-3
+  without the C feature, a leftover from before the pure-Rust netCDF-4 writer.
+- **Tests:** `tests/tree.rs` reads xarray's tree file (`fixtures/gen_tree.py`), checking
+  inherited coordinates, nested groups, an empty group and subtrees. It also round-trips the
+  tree and checks validation. Python xarray checks every node of our output with
+  `assert_identical` (ignored test, run in CI).
+
+### Implementation notes (M8, HDF5 filters, as built)
+- **Decoders, all our own except two crates:**
+  - bzip2 (307): Huffman, inverse BWT and RLE, with every block's CRC checked.
+  - Blosc (32001): format-version-2 frames, multi-block and split streams. Inner codecs are
+    our own BloscLZ, plus LZ4 (`lz4_flex`), zlib (`miniz_oxide`) and Zstandard (`ruzstd`).
+    Byte and bit shuffles are supported. A version-2 block of a non-multiple-of-8 element
+    count is not bit-shuffled at all, as c-blosc does it.
+  - Bitshuffle (32008): none, LZ4 or Zstandard. Bits are transposed through an 8×8 matrix in
+    a `u64` (10× faster than a bit loop).
+  - Scale-offset (6): integers with a fill value, and float D-scaling, computed in the data's
+    own type exactly as `H5Zscaleoffset.c` does.
+  - N-bit (5): atomic types. Reading it brought support for **bit-field integer types**
+    (`Datatype::PackedInt`: a precision and offset inside the word, sign-extended), which HDF5
+    files can hold with or without the filter.
+  - LZF (32000), LZ4 (32004) and Zstandard (32015). Zstandard and LZ4 sit behind the `zstd`
+    and `lz4` features, on by default in the facade; without them, such data is an error
+    naming the feature.
+- **Encoders (writing):**
+  - `Encoding::compression` (and `Storage::compression`) chooses `Compression::{Zstd, Lz4,
+    Blosc { codec, level, shuffle }}`, beside deflate and shuffle.
+  - Reads report the codec (`Dataset::codec`), so files keep their compression on round-trip.
+  - Zstd uses `ruzstd`'s fastest level (its only implemented one). We patch the frame header
+    to carry the content size, which the HDF5 zstd plugin needs and `ruzstd` leaves out.
+  - Blosc writes one block and stream (LZ4, zlib or Zstandard).
+  - bzip2 and BloscLZ stay read-only.
+- **MSRV raised to 1.97**, so `ruzstd` 0.9 and `lz4_flex` 0.14 are fine. Clippy's let-chain
+  and `is_multiple_of` suggestions were applied across the workspace.
+- **Tests:**
+  - Small fixture: `fixtures/gen_filters.py` (run with `h5py` + `hdf5plugin`, i.e. HDF5's
+    own plugins) writes 34 filtered datasets. Every one must equal HDF5's read, whole and in
+    slices.
+  - Corruption: 300 randomly corrupted copies of the fixture must never panic (in debug
+    builds, where integer overflow also panics).
+  - Large chunks: `--big` writes 1024×1024 chunks (~300 MB, not committed; ignored test
+    `big_chunks`). These exercise multiple Blosc blocks, Bitshuffle blocks, bzip2 blocks and
+    LZ4 blocks.
+  - Writing: our Zstd, LZ4 and Blosc files are read back by HDF5's plugins (ignored test,
+    run in CI with `hdf5plugin`), and by the facade through netCDF-4.
+- **Fixture lesson:** reading a dataset right after writing it can come from HDF5's chunk
+  cache, which holds the data before filtering. For lossy filters that is not what a reader
+  gets, so the plain copies are now written after reopening the file.
+
+### Implementation notes (M8, interp / open_mfdataset / streaming, as built)
+- **`interp(dim, at, InterpMethod::{Linear, Nearest})`** on `DataArray` and `Dataset`, plus
+  `interp_like`. It follows numpy's `interp`:
+  - Exact hits keep their value, even next to a NaN; `nearest` ties go to the lower
+    coordinate. There is no extrapolation: out-of-range targets give NaN.
+  - Coordinates may be unsorted or descending, numbers or dates (interpolated in
+    nanoseconds).
+  - Targets in another unit of the same kind are converted to the coordinate's.
+  - Numeric coordinates along the dimension are interpolated; other ones are dropped.
+  - Deliberate differences from xarray: a NaN target gives NaN (xarray's `nearest` gives the
+    last value), and string coordinates are dropped (xarray back-fills them).
+  - Tested against 15 xarray cases (`fixtures/gen_interp.py`).
+- **`open_mfdataset(paths, MfOptions { open, combine, concat })`** and **`io::glob`**, which
+  uses the `glob` crate.
+  - `Combine::ByCoords` (the default) orders the files by the one dimension whose coordinates
+    differ; that coordinate may run either way but must be monotonic. It merges if no
+    dimension differs. `Combine::Nested(dim)` concatenates in the given order, along an
+    existing or a new dimension.
+  - The result stays lazy. `concat` of lazy parts builds a `ConcatSource` that reads only the
+    files (and parts) a slice covers. Loaded parts join through `MemorySource`, and a
+    variable's lazy data is reachable through `as_lazy_source()`.
+  - Tested: xarray's own `open_mfdataset` rebuilds the whole from `fixtures/nc/mf` (generated
+    by `gen_mf.py`), and so does ours, in any file order.
+- **`rolling` reductions work one window at a time**, so memory stays that of the input and
+  output; only `construct` materializes windows.
+- **Streaming writes.** Lazy datasets (e.g. from `open_mfdataset`) are written without being
+  loaded:
+  - **CF encoding** of a lazy variable becomes an `EncodeSource` that encodes each slice as it
+    is read. Its attributes and stored type come from encoding its first element, and its
+    chunk shape is fitted to the real shape. This doesn't apply to strings, durations, times
+    without fixed `time_units`, or times in netCDF-3, which are loaded (they are normally
+    small).
+  - **HDF5:** `WDataset::source` / `WDataset::from_source`, and `write_to(root, sink)` for
+    any `Write + Seek`. Chunks and contiguous slabs are read, filtered and written as they are
+    produced, at increasing addresses; object headers, B-trees and heaps follow the data, and
+    the superblock is written last. `write_file` is the in-memory case. Chunks are now
+    assembled by row copies rather than element by element.
+  - **netCDF-3:** `write_to` writes in order. Fixed-size variables go in slabs of rows, and
+    records in batches, about 32 MB per read.
+  - The netCDF-4 and netCDF-3 backends write straight into a buffered file.
+  - `tests/streaming.rs` writes a 40 MB synthetic lazy variable, packed to `i16` by CF
+    encoding. It checks that netCDF-4 reads exactly one chunk at a time, that netCDF-3 never
+    reads it whole, and that the values read back.
+
 ### CF layer (`xr-cf`)
 - On decode: apply `_FillValue`, `missing_value`, `scale_factor`, `add_offset` and `_Unsigned`. Parse `units` into `Unit`.
   Turn time variables into `NaiveDateTime` or `CfDate` depending on the calendar (§3 Time), and resolve `coordinates` and `bounds`.
@@ -678,7 +878,7 @@ let v = isel!(da[time = i:i + n, lat = {cfg.lat_range()}])?;
 | M5 | **xr-hdf5** read and write: layers 1–4, contiguous and chunked, deflate and shuffle | `h5dump` diff clean on our output. Reads files written by h5py and netCDF-C |
 | M6 | **xr-netcdf4** read and write | Files we write open in netCDF-C/`ncdump` and Python xarray with no warnings, and the reverse also holds. Real files (ERA5, CMIP6, GOES) open |
 | M7 | Alignment, reductions, concat/merge, lazy chunked reads, `rayon` | Ported subset of xarray's test suite |
-| M8 | groupby/resample/rolling (chrono-based time bins), DataTree, more filters | — |
+| M8 | groupby/resample/rolling (chrono-based time bins), DataTree, more filters; also NaT, where/fillna/dropna/reindex | Oracle tests against xarray for each |
 | M9 | **`uom` and `whippyunits` features** (last, once everything else is done): `StaticUnit` impls, `to_typed`, `view_typed`, `from_typed`, typed `sel` | Feature-powerset CI. Typed round-trip tests for each feature |
 
 At M6 the C backend becomes optional (`default-features = false` gives a fully pure-Rust build). It stays enabled in CI as the oracle.

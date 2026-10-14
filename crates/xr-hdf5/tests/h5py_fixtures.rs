@@ -235,11 +235,10 @@ proptest! {
         for (pos, b) in edits {
             bytes[pos % len] = b;
         }
-        if let Ok(f) = File::from_bytes(bytes).map(|f| f.with_load_limit(1 << 22)) {
-            if let Ok(root) = f.root() {
+        if let Ok(f) = File::from_bytes(bytes).map(|f| f.with_load_limit(1 << 22))
+            && let Ok(root) = f.root() {
                 walk_all(&root, 0);
             }
-        }
     }
 }
 

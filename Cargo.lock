@@ -281,6 +281,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "lz4_flex"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ecbdfe44b1bd960b68170b417450a628c43f7cf56bb3c5317e61cb230ee7f226"
+
+[[package]]
 name = "matrixmultiply"
 version = "0.3.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -659,6 +665,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "ruzstd"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "69e4ce4a039f42bf25920b95667e4d789e98749ab11bbb8d2c2936f788421bb5"
+
+[[package]]
 name = "scopeguard"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -945,6 +957,7 @@ name = "xarray-rs"
 version = "0.0.1"
 dependencies = [
  "chrono",
+ "glob",
  "thiserror",
  "trybuild",
  "xr-cf",
@@ -987,10 +1000,12 @@ name = "xr-hdf5"
 version = "0.0.1"
 dependencies = [
  "indexmap",
+ "lz4_flex",
  "miniz_oxide",
  "ndarray",
  "proptest",
  "rayon",
+ "ruzstd",
  "xr-core",
  "xr-io",
  "xr-io-c",

@@ -121,6 +121,8 @@ pub struct Storage {
     pub deflate: Option<u8>,
     /// Whether the shuffle filter is on.
     pub shuffle: bool,
+    /// A compression codec other than deflate.
+    pub compression: Option<xr_core::Compression>,
 }
 
 /// A variable's values: in memory, or a source to read them from on demand.

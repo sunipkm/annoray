@@ -368,6 +368,7 @@ fn plan(name: &str, raw: &RawVariable, opts: &DecodeOptions, warnings: &mut Vec<
     enc.chunks.clone_from(&raw.storage.chunks);
     enc.deflate = raw.storage.deflate;
     enc.shuffle = raw.storage.shuffle;
+    enc.compression = raw.storage.compression;
     let mut steps = Vec::new();
 
     // Text stored as characters.

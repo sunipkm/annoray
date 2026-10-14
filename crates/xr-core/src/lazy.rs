@@ -228,10 +228,10 @@ impl LazyArray {
             )));
         }
         for (axis, p) in post.iter().enumerate() {
-            if let Some(s) = p {
-                if s.step != 1 {
-                    data.slice_axis_inplace(axis, *s);
-                }
+            if let Some(s) = p
+                && s.step != 1
+            {
+                data.slice_axis_inplace(axis, *s);
             }
         }
         for (axis, p) in post.iter().enumerate().rev() {
@@ -240,6 +240,220 @@ impl LazyArray {
             }
         }
         Ok(data)
+    }
+}
+
+impl LazyArray {
+    /// Read `[start, start + count)` of the selection (not cached).
+    pub(crate) fn read_slice(&self, start: &[usize], count: &[usize]) -> Result<TypedArray<Owned>> {
+        let ops: Vec<Option<LazyOp>> = start
+            .iter()
+            .zip(count)
+            .map(|(s, n)| {
+                Some(LazyOp::Slice(SliceIndices {
+                    start: *s,
+                    step: 1,
+                    len: *n,
+                }))
+            })
+            .collect();
+        if ops.len() != self.shape.len()
+            || start
+                .iter()
+                .zip(count)
+                .zip(&self.shape)
+                .any(|((s, n), len)| s.checked_add(*n).is_none_or(|e| e > *len))
+        {
+            return Err(CoreError::Read(format!(
+                "slice {start:?}+{count:?} outside shape {:?}",
+                self.shape
+            )));
+        }
+        self.isel(&ops)?.read()
+    }
+}
+
+/// A variable's lazy data as a source (its selection applied).
+#[derive(Debug)]
+pub(crate) struct ViewSource(pub(crate) LazyArray);
+
+impl LazySource for ViewSource {
+    fn dtype(&self) -> DType {
+        self.0.dtype()
+    }
+    fn shape(&self) -> &[usize] {
+        self.0.shape()
+    }
+    fn read_slice(&self, start: &[usize], count: &[usize]) -> Result<TypedArray<Owned>> {
+        self.0.read_slice(start, count)
+    }
+}
+
+/// Data already in memory, as a source.
+#[derive(Debug)]
+pub(crate) struct MemorySource(pub(crate) TypedArray<Owned>);
+
+fn slice_as<T: crate::Element>(
+    a: &TypedArray<Owned>,
+    start: &[usize],
+    count: &[usize],
+    _: crate::array::Marker<T>,
+) -> Option<TypedArray<Owned>> {
+    let x = T::peek(a)?;
+    let mut ranges = start.iter().zip(count);
+    let v = x.slice_each_axis(|_| {
+        let (s, n) = ranges.next().map_or((0, 0), |(s, n)| (*s, *n));
+        ndarray::Slice::from(s..s.saturating_add(n))
+    });
+    Some(T::wrap(v.to_owned()))
+}
+
+impl LazySource for MemorySource {
+    fn dtype(&self) -> DType {
+        self.0.dtype()
+    }
+    fn shape(&self) -> &[usize] {
+        self.0.shape()
+    }
+    fn read_slice(&self, start: &[usize], count: &[usize]) -> Result<TypedArray<Owned>> {
+        let bad = start.len() != self.0.ndim()
+            || start
+                .iter()
+                .zip(count)
+                .zip(self.0.shape())
+                .any(|((s, n), len)| s.checked_add(*n).is_none_or(|e| e > *len));
+        if bad {
+            return Err(CoreError::Read("slice outside the data".into()));
+        }
+        crate::array::typed_dispatch!(&self.0, x => slice_as(&self.0, start, count, crate::array::marker(x)))
+            .ok_or_else(|| CoreError::Read("slice".into()))
+    }
+}
+
+fn join_as<T: crate::Element>(
+    parts: &[TypedArray<Owned>],
+    axis: usize,
+    _: crate::array::Marker<T>,
+) -> Option<TypedArray<Owned>> {
+    let views = parts
+        .iter()
+        .map(|p| T::peek(p).map(|a| a.view()))
+        .collect::<Option<Vec<_>>>()?;
+    ndarray::concatenate(ndarray::Axis(axis), &views)
+        .ok()
+        .map(T::wrap)
+}
+
+/// Sources joined along `axis`: an existing axis of every part, or (with `new_axis`) a new
+/// one, each part contributing one position. Reads touch only the parts a slice overlaps.
+#[derive(Debug)]
+pub(crate) struct ConcatSource {
+    parts: Vec<Arc<dyn LazySource>>,
+    axis: usize,
+    new_axis: bool,
+    dtype: DType,
+    shape: Vec<usize>,
+}
+
+impl ConcatSource {
+    pub(crate) fn new(
+        parts: Vec<Arc<dyn LazySource>>,
+        axis: usize,
+        new_axis: bool,
+    ) -> Result<Self> {
+        let first = parts
+            .first()
+            .ok_or_else(|| CoreError::Read("nothing to join".into()))?;
+        let dtype = first.dtype();
+        let mut shape = first.shape().to_vec();
+        if new_axis {
+            if axis > shape.len() {
+                return Err(overflow());
+            }
+            shape.insert(axis, parts.len());
+        } else {
+            let total = parts
+                .iter()
+                .map(|p| p.shape().get(axis).copied().unwrap_or(0))
+                .try_fold(0usize, usize::checked_add)
+                .ok_or_else(overflow)?;
+            *shape.get_mut(axis).ok_or_else(overflow)? = total;
+        }
+        for p in &parts {
+            let mut s = p.shape().to_vec();
+            if new_axis {
+                s.insert(axis.min(s.len()), 1);
+            } else if let Some(x) = s.get_mut(axis) {
+                *x = shape.get(axis).copied().unwrap_or(0);
+            }
+            if p.dtype() != dtype
+                || s.len() != shape.len()
+                || s.iter()
+                    .zip(&shape)
+                    .enumerate()
+                    .any(|(i, (a, b))| i != axis && a != b)
+            {
+                return Err(CoreError::Read(
+                    "joined parts differ in type or shape".into(),
+                ));
+            }
+        }
+        Ok(Self {
+            parts,
+            axis,
+            new_axis,
+            dtype,
+            shape,
+        })
+    }
+}
+
+impl LazySource for ConcatSource {
+    fn dtype(&self) -> DType {
+        self.dtype
+    }
+    fn shape(&self) -> &[usize] {
+        &self.shape
+    }
+    fn read_slice(&self, start: &[usize], count: &[usize]) -> Result<TypedArray<Owned>> {
+        let (lo, n) = (
+            start.get(self.axis).copied().ok_or_else(overflow)?,
+            count.get(self.axis).copied().ok_or_else(overflow)?,
+        );
+        let hi = lo.checked_add(n).ok_or_else(overflow)?;
+        let mut pieces = Vec::new();
+        let mut offset = 0usize;
+        for p in &self.parts {
+            let len = if self.new_axis {
+                1
+            } else {
+                p.shape().get(self.axis).copied().unwrap_or(0)
+            };
+            let end = offset.checked_add(len).ok_or_else(overflow)?;
+            let (a, b) = (lo.max(offset), hi.min(end));
+            if a < b {
+                let mut s = start.to_vec();
+                let mut c = count.to_vec();
+                if self.new_axis {
+                    s.remove(self.axis);
+                    c.remove(self.axis);
+                    let piece = p.read_slice(&s, &c)?;
+                    pieces.push(piece.insert_axis_owned(self.axis));
+                } else {
+                    *s.get_mut(self.axis).ok_or_else(overflow)? =
+                        a.checked_sub(offset).ok_or_else(overflow)?;
+                    *c.get_mut(self.axis).ok_or_else(overflow)? =
+                        b.checked_sub(a).ok_or_else(overflow)?;
+                    pieces.push(p.read_slice(&s, &c)?);
+                }
+            }
+            offset = end;
+        }
+        match pieces.first() {
+            None => TypedArray::empty(self.dtype, count).ok_or_else(overflow),
+            Some(first) => crate::array::typed_dispatch!(first, x => join_as(&pieces, self.axis, crate::array::marker(x)))
+                .ok_or_else(|| CoreError::Read("joining slices".into())),
+        }
     }
 }
 

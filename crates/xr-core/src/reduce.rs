@@ -437,7 +437,12 @@ fn mean(v: &[f64]) -> f64 {
 }
 
 /// One lane's statistic, numpy-style (`nan*` functions when skipping NaNs).
-fn float_stat(op: Reduction, buf: &mut Vec<f64>, skipna: bool, opts: &ReduceOptions) -> f64 {
+pub(crate) fn float_stat(
+    op: Reduction,
+    buf: &mut Vec<f64>,
+    skipna: bool,
+    opts: &ReduceOptions,
+) -> f64 {
     if buf.iter().any(|v| v.is_nan()) {
         if !skipna {
             return f64::NAN;
@@ -450,7 +455,8 @@ fn float_stat(op: Reduction, buf: &mut Vec<f64>, skipna: bool, opts: &ReduceOpti
         return f64::NAN;
     }
     match op {
-        Reduction::Sum => buf.iter().sum(),
+        // Folding from +0.0: `Sum` for floats starts at -0.0, but an empty sum is 0.0.
+        Reduction::Sum => buf.iter().fold(0.0, |a, b| a + b),
         Reduction::Prod => buf.iter().product(),
         Reduction::Mean if n > 0 => mean(buf),
         Reduction::Median if n > 0 => {
@@ -706,7 +712,7 @@ fn reduce_typed(
 }
 
 /// The unit of a reduction's result.
-fn reduced_unit(unit: Option<&Unit>, op: Reduction, n: usize) -> Result<Option<Unit>> {
+pub(crate) fn reduced_unit(unit: Option<&Unit>, op: Reduction, n: usize) -> Result<Option<Unit>> {
     let Some(u) = unit else { return Ok(None) };
     Ok(match op {
         Reduction::Count

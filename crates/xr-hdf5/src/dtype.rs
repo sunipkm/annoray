@@ -34,6 +34,20 @@ pub enum Datatype {
         /// Whether stored big-endian.
         big_endian: bool,
     },
+    /// An integer whose value occupies only `precision` bits starting at bit `offset` of its
+    /// `size` bytes (HDF5 "bit field" precision; what the N-bit filter writes).
+    PackedInt {
+        /// Bytes per element (1, 2, 4 or 8).
+        size: u8,
+        /// Whether signed (the field is sign-extended).
+        signed: bool,
+        /// Whether stored big-endian.
+        big_endian: bool,
+        /// The first significant bit.
+        offset: u16,
+        /// The number of significant bits.
+        precision: u16,
+    },
     /// An IEEE float.
     Float {
         /// Bytes per element (4 or 8).
@@ -114,6 +128,19 @@ impl Datatype {
             Self::Float { .. } => DType::F64,
             Self::FixedString { .. } | Self::VarString { .. } => DType::Str,
             Self::Enum { base, .. } => return base.value_dtype(),
+            Self::PackedInt {
+                size,
+                signed,
+                big_endian,
+                ..
+            } => {
+                return Self::Int {
+                    size: *size,
+                    signed: *signed,
+                    big_endian: *big_endian,
+                }
+                .value_dtype();
+            }
             Self::ObjectReference | Self::ReferenceList | Self::Other { .. } => return None,
         })
     }
@@ -142,13 +169,32 @@ impl Datatype {
         let size = usize::try_from(c.u32()?).map_err(|_| bad("datatype too large"))?;
         Ok(match class {
             0 => {
-                c.skip(4)?; // bit offset, precision
+                let offset = c.u16()?;
+                let precision = c.u16()?;
+                let (signed, big_endian) = (b0 & 0x08 != 0, b0 & 1 != 0);
                 match u8::try_from(size) {
-                    Ok(s @ (1 | 2 | 4 | 8)) => Self::Int {
-                        size: s,
-                        signed: b0 & 0x08 != 0,
-                        big_endian: b0 & 1 != 0,
-                    },
+                    Ok(s @ (1 | 2 | 4 | 8))
+                        if offset == 0 && Some(usize::from(precision)) == size.checked_mul(8) =>
+                    {
+                        Self::Int {
+                            size: s,
+                            signed,
+                            big_endian,
+                        }
+                    }
+                    Ok(s @ (1 | 2 | 4 | 8))
+                        if precision > 0
+                            && usize::from(offset).checked_add(usize::from(precision))
+                                <= size.checked_mul(8) =>
+                    {
+                        Self::PackedInt {
+                            size: s,
+                            signed,
+                            big_endian,
+                            offset,
+                            precision,
+                        }
+                    }
                     _ => Self::Other { class, size },
                 }
             }
@@ -221,7 +267,9 @@ impl Datatype {
     #[must_use]
     pub fn size(&self) -> usize {
         match self {
-            Self::Int { size, .. } | Self::Float { size, .. } => usize::from(*size),
+            Self::Int { size, .. } | Self::PackedInt { size, .. } | Self::Float { size, .. } => {
+                usize::from(*size)
+            }
             Self::FixedString { size, .. } | Self::Other { size, .. } => *size,
             // Length (4) + global heap collection address + object index (4); sized at the
             // file's offset width by `element_size`.
@@ -327,6 +375,47 @@ macro_rules! ints {
     };
 }
 
+/// The `precision`-bit field at bit `offset` of every integer, sign-extended if `signed` (what
+/// HDF5's conversion of a bit-field integer type to a native one gives).
+fn unpack_bits(
+    data: TypedArray<Owned>,
+    offset: u16,
+    precision: u16,
+    signed: bool,
+) -> TypedArray<Owned> {
+    let (offset, precision) = (u32::from(offset), u32::from(precision));
+    let field = move |raw: u64| -> i128 {
+        let v = raw.checked_shr(offset).unwrap_or(0)
+            & (1u64.checked_shl(precision).unwrap_or(0).wrapping_sub(1));
+        let top = 1u64.checked_shl(precision.saturating_sub(1)).unwrap_or(0);
+        if signed && precision > 0 && v & top != 0 {
+            // Two's complement in `precision` bits; both values are below 2^64.
+            i128::from(v).saturating_sub(i128::from(top).saturating_mul(2))
+        } else {
+            i128::from(v)
+        }
+    };
+    macro_rules! go {
+        ($a:expr, $t:ty, $u:ty) => {
+            $a.mapv(|x: $t| {
+                let raw = u64::from(<$u>::from_ne_bytes(x.to_ne_bytes()));
+                <$t>::try_from(field(raw)).unwrap_or(0)
+            })
+        };
+    }
+    match data {
+        TypedArray::I8(a) => TypedArray::I8(go!(a, i8, u8)),
+        TypedArray::U8(a) => TypedArray::U8(go!(a, u8, u8)),
+        TypedArray::I16(a) => TypedArray::I16(go!(a, i16, u16)),
+        TypedArray::U16(a) => TypedArray::U16(go!(a, u16, u16)),
+        TypedArray::I32(a) => TypedArray::I32(go!(a, i32, u32)),
+        TypedArray::U32(a) => TypedArray::U32(go!(a, u32, u32)),
+        TypedArray::I64(a) => TypedArray::I64(go!(a, i64, u64)),
+        TypedArray::U64(a) => TypedArray::U64(go!(a, u64, u64)),
+        other => other,
+    }
+}
+
 /// Convert raw element bytes into an array of `shape`.
 pub(crate) fn decode(
     file: &File,
@@ -410,6 +499,25 @@ pub(crate) fn decode(
             TypedArray::Str(ArrayD::from_shape_vec(sh, strings).map_err(err)?)
         }
         Datatype::Enum { base, .. } => decode(file, base, bytes, shape)?,
+        Datatype::PackedInt {
+            size,
+            signed,
+            big_endian,
+            offset,
+            precision,
+        } => {
+            let whole = Datatype::Int {
+                size: *size,
+                signed: *signed,
+                big_endian: *big_endian,
+            };
+            unpack_bits(
+                decode(file, &whole, bytes, shape)?,
+                *offset,
+                *precision,
+                *signed,
+            )
+        }
         Datatype::Other { class, .. } => {
             return Err(IoError::Unsupported(format!("HDF5 datatype class {class}")));
         }

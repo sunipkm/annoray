@@ -188,6 +188,27 @@ impl_element!(
     DateTime chrono::NaiveDateTime, CfDate xr_units::CfDate, TimeDelta chrono::TimeDelta,
 );
 
+impl TypedArray<Owned> {
+    /// An array of `dtype` and `shape` with no elements (some dimension must be 0).
+    #[must_use]
+    pub fn empty(dtype: DType, shape: &[usize]) -> Option<Self> {
+        if shape.iter().product::<usize>() != 0 {
+            return None;
+        }
+        let sh = ndarray::IxDyn(shape);
+        macro_rules! e {
+            ($($v:ident),*) => {
+                match dtype {
+                    $(DType::$v => TypedArray::$v(ndarray::ArrayD::from_shape_vec(sh, Vec::new()).ok()?),)*
+                }
+            };
+        }
+        Some(e!(
+            F32, F64, I8, I16, I32, I64, U8, U16, U32, U64, Bool, Str, DateTime, CfDate, TimeDelta
+        ))
+    }
+}
+
 impl<S: Repr> TypedArray<S> {
     /// The runtime element type.
     #[must_use]
@@ -252,6 +273,12 @@ impl<S: Repr> TypedArray<S> {
     /// Callers must have validated `axis < ndim` and `index < shape[axis]`; ndarray panics otherwise.
     pub(crate) fn index_axis_move(self, axis: usize, index: usize) -> Self {
         typed_map!(self, a => a.index_axis_move(Axis(axis), index))
+    }
+
+    /// Insert a length-1 axis at `axis` (clamped to `ndim`).
+    pub(crate) fn insert_axis_owned(self, axis: usize) -> Self {
+        let axis = axis.min(self.ndim());
+        typed_map!(self, a => a.insert_axis(Axis(axis)))
     }
 
     /// Copy the given positions along `axis` (fancy indexing).

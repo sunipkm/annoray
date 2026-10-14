@@ -24,6 +24,7 @@
 mod backend;
 mod checksum;
 mod ck;
+mod codecs;
 mod cursor;
 mod dtype;
 mod filters;
@@ -44,7 +45,7 @@ use cursor::{Cursor, Sizes};
 pub use dtype::{Datatype, StrPad};
 use format::{ChunkIndex, Filter, Layout, Message, Space, kind};
 use storage::{ChunkRef, Element, FractalHeap};
-pub use writer::{AttrData, WDataset, WGroup, WNode, write_file};
+pub use writer::{AttrData, WDataset, WGroup, WNode, write_file, write_to};
 
 /// Default limit on the decoded size of one dataset read ([`File::with_load_limit`]).
 /// Chunked data can legitimately decode to more than the file size (unwritten chunks become
@@ -583,6 +584,37 @@ impl Dataset {
             deflate,
             self.filters.iter().any(|f| f.id == filters::SHUFFLE),
         )
+    }
+
+    /// A plugin compression codec in the filter pipeline (Zstandard, LZ4 or Blosc), as the
+    /// writer would reproduce it.
+    #[must_use]
+    pub fn codec(&self) -> Option<xr_core::Compression> {
+        self.filters.iter().find_map(|f| {
+            let c = |i: usize| f.client.get(i).copied();
+            match f.id {
+                filters::ZSTD => Some(xr_core::Compression::Zstd {
+                    level: c(0).map_or(3, |v| i32::from_ne_bytes(v.to_ne_bytes())),
+                }),
+                filters::LZ4 => Some(xr_core::Compression::Lz4),
+                filters::BLOSC => Some(xr_core::Compression::Blosc {
+                    codec: match c(6) {
+                        Some(0) => xr_core::BloscCodec::BloscLz,
+                        Some(2) => xr_core::BloscCodec::Lz4Hc,
+                        Some(4) => xr_core::BloscCodec::Zlib,
+                        Some(5) => xr_core::BloscCodec::Zstd,
+                        _ => xr_core::BloscCodec::Lz4,
+                    },
+                    level: c(4).and_then(|v| u8::try_from(v).ok()).unwrap_or(5),
+                    shuffle: match c(5) {
+                        Some(1) => xr_core::BloscShuffle::Byte,
+                        Some(2) => xr_core::BloscShuffle::Bit,
+                        _ => xr_core::BloscShuffle::None,
+                    },
+                }),
+                _ => None,
+            }
+        })
     }
 
     /// Attributes, in creation order.

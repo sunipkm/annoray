@@ -1,0 +1,15 @@
+nan|linear|x|13|nan 0.0 5.0 10.0 nan nan nan 35.0 40.0 nan nan nan nan
+nan|nearest|x|13|nan 0.0 0.0 10.0 10.0 nan nan 30.0 40.0 nan nan nan 40.0
+uneven|linear|x|13|nan nan nan 1.0 2.5 4.0 5.666666666666667 9.0 10.0 12.0 20.5 nan nan
+uneven|nearest|x|13|nan nan nan 1.0 1.0 4.0 4.0 9.0 9.0 9.0 16.0 nan 25.0
+unsorted|linear|x|13|nan 2.0 3.0 4.0 2.5 1.0 nan nan nan nan nan nan nan
+unsorted|nearest|x|13|nan 2.0 2.0 4.0 4.0 1.0 nan nan nan nan nan nan 1.0
+desc|linear|x|13|nan nan nan nan nan nan nan nan nan nan nan 4.0 nan
+desc|nearest|x|13|nan nan nan nan nan nan nan nan nan nan nan 3.0 5.0
+int|linear|x|13|nan 1.0 2.0 3.0 6.0 9.0 nan nan nan nan nan nan nan
+int|nearest|x|13|nan 1.0 1.0 3.0 3.0 9.0 nan nan nan nan nan nan 9.0
+grid|linear|x|3,13|nan 0.0 0.05 0.1 0.15000000000000002 0.2 0.25 0.35000000000000003 0.4 0.5 0.7250000000000001 2.5 nan nan 4.0 4.05 4.1 4.15 4.2 4.25 4.35 4.4 4.5 4.725 6.5 nan nan 8.0 8.05 8.1 8.15 8.2 8.25 8.35 8.4 8.5 8.725 10.5 nan
+grid|nearest|x|3,13|nan 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 1.0 2.0 3.0 nan 4.0 4.0 4.0 4.0 4.0 4.0 4.0 4.0 4.0 5.0 6.0 7.0 nan 8.0 8.0 8.0 8.0 8.0 8.0 8.0 8.0 8.0 9.0 10.0 11.0
+grid2|linear|x,y|2,2|2.5 4.5 7.5 9.5
+grid2|nearest|x,y|2,2|0.0 2.0 8.0 10.0
+time|linear|x|3|6.0 42.0 nan

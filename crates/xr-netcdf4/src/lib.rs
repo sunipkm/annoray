@@ -176,10 +176,10 @@ fn read_group(g: &Group, parent: &Scope, lazy: bool) -> Result<RawDataset> {
     // Dimensions: the scales of this group, ordered by dimension id.
     let mut scales: Vec<(u64, Scale)> = Vec::new();
     for (name, node) in &members {
-        if let Node::Dataset(d) = node {
-            if let Some(s) = scale_of(name, d)? {
-                scales.push((d.address(), s));
-            }
+        if let Node::Dataset(d) = node
+            && let Some(s) = scale_of(name, d)?
+        {
+            scales.push((d.address(), s));
         }
     }
     scales.sort_by_key(|(_, s)| s.id.unwrap_or(i32::MAX));
@@ -288,6 +288,7 @@ fn read_group(g: &Group, parent: &Scope, lazy: bool) -> Result<RawDataset> {
                 let mut storage = Storage::default();
                 storage.chunks = d.chunks();
                 (storage.deflate, storage.shuffle) = d.compression();
+                storage.compression = d.codec();
                 let attrs = user_attrs(attrs, &mut ds.skipped, d.path());
                 ds.vars.insert(
                     var_name,
@@ -507,7 +508,11 @@ fn build_group(ds: &RawDataset, path: &str, parent: &WScope, next_id: &mut i32) 
         members.push((dim.to_string(), WNode::Dataset(w)));
     }
     for (name, v) in &ds.vars {
-        let mut w = WDataset::new(v.data.values()?.into_owned());
+        // Lazy values are read slice by slice as they are written.
+        let mut w = match &v.data {
+            RawData::Lazy(src) if src.dtype() != DType::Str => WDataset::from_source(src.clone())?,
+            _ => WDataset::new(v.data.values()?.into_owned()),
+        };
         w.char_data = v.is_char;
         w.unlimited = v
             .dims
@@ -516,8 +521,12 @@ fn build_group(ds: &RawDataset, path: &str, parent: &WScope, next_id: &mut i32) 
             .collect();
         w.chunks.clone_from(&v.storage.chunks);
         w.deflate = v.storage.deflate;
+        w.compression = v.storage.compression;
         w.shuffle = v.storage.shuffle;
-        let needs_chunks = w.unlimited.iter().any(|u| *u) || w.deflate.is_some() || w.shuffle;
+        let needs_chunks = w.unlimited.iter().any(|u| *u)
+            || w.deflate.is_some()
+            || w.shuffle
+            || w.compression.is_some();
         if w.chunks.is_none() && needs_chunks && !v.dims.is_empty() {
             w.chunks = Some(default_chunks(
                 v.data.shape(),
@@ -595,6 +604,11 @@ fn build_group(ds: &RawDataset, path: &str, parent: &WScope, next_id: &mut i32) 
 /// [`IoError::Format`] for a non-netCDF-4 format or a classic-model violation; HDF5 writer
 /// errors otherwise.
 pub fn write_bytes(ds: &RawDataset, opts: &WriteOptions) -> Result<Vec<u8>> {
+    xr_hdf5::write_file(&build_root(ds, opts)?)
+}
+
+/// The HDF5 tree of a netCDF-4 dataset.
+fn build_root(ds: &RawDataset, opts: &WriteOptions) -> Result<WGroup> {
     let format = opts.format;
     match format {
         Format::Netcdf4 => {}
@@ -659,7 +673,7 @@ pub fn write_bytes(ds: &RawDataset, opts: &WriteOptions) -> Result<Vec<u8>> {
             ),
         );
     }
-    xr_hdf5::write_file(&root)
+    Ok(root)
 }
 
 impl Backend for Netcdf4 {
@@ -675,8 +689,16 @@ impl Backend for Netcdf4 {
         read_group(&File::open(path)?.root()?, &Scope::default(), true)
     }
 
+    /// Writes straight to the file, reading lazy variables slice by slice.
     fn write(&self, ds: &RawDataset, path: &Path, opts: &WriteOptions) -> Result<()> {
-        let bytes = write_bytes(ds, opts)?;
-        std::fs::write(path, bytes).map_err(|e| bad(format!("{}: {e}", path.display())))
+        let root = build_root(ds, opts)?;
+        let file =
+            std::fs::File::create(path).map_err(|e| bad(format!("{}: {e}", path.display())))?;
+        let mut out = std::io::BufWriter::new(file);
+        xr_hdf5::write_to(&root, &mut out)?;
+        out.into_inner()
+            .map_err(|e| bad(format!("{}: {e}", path.display())))?
+            .sync_all()
+            .map_err(|e| bad(format!("{}: {e}", path.display())))
     }
 }

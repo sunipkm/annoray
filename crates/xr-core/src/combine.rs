@@ -312,6 +312,30 @@ fn concat_vars(parts: &[&Variable], dim: &Name, lens: &[usize], name: &Name) -> 
         .ok_or_else(|| bad("internal: no axis"))?;
     let unit = template.unit();
 
+    // Lazy parts stay lazy when nothing needs converting or moving: same type and unit, and
+    // either all share the target's dimensions or all gain the new dimension in front.
+    let all_have = parts.iter().all(|v| v.dims() == target.as_slice());
+    let all_new = parts
+        .iter()
+        .all(|v| !v.dims().contains(dim) && v.dims() == target.get(1..).unwrap_or_default());
+    let uniform = parts
+        .iter()
+        .all(|v| v.dtype() == template.dtype() && v.unit() == unit);
+    if parts.iter().any(|v| v.is_lazy()) && uniform && (all_have || all_new) {
+        let sources = parts
+            .iter()
+            .map(|v| v.as_lazy_source())
+            .collect::<Result<Vec<_>>>()?;
+        let joined = crate::lazy::ConcatSource::new(sources, axis, all_new)?;
+        let mut out =
+            Variable::from_lazy(target, crate::LazyArray::new(std::sync::Arc::new(joined)))?;
+        out.set_unit(unit.cloned());
+        out.attrs_mut()
+            .extend(template.attrs().iter().map(|(k, a)| (k.clone(), a.clone())));
+        *out.encoding_mut() = template.encoding().clone();
+        return Ok(out);
+    }
+
     let mut arrays: Vec<TypedArray<Owned>> = Vec::with_capacity(parts.len());
     for (v, len) in parts.iter().zip(lens) {
         // Same unit as the template, converting if needed.
@@ -545,4 +569,92 @@ pub fn merge<S: Repr>(datasets: &[&DatasetBase<S>], opts: &MergeOptions) -> Resu
             .extend(first.attrs().iter().map(|(k, a)| (k.clone(), a.clone())));
     }
     Ok(out)
+}
+
+/// The first label of a dimension coordinate, comparable across datasets.
+fn first_key<S: Repr>(ds: &DatasetBase<S>, dim: &Name) -> Result<Vec<crate::align::Key>> {
+    let c = ds
+        .coords()
+        .get(dim)
+        .ok_or_else(|| CoreError::NoIndex(dim.clone()))?;
+    Ok(match crate::lookup::index_keys(c, dim)? {
+        crate::lookup::Keys::Num(v) => v.into_iter().map(crate::align::Key::F).collect(),
+        crate::lookup::Keys::Str(v) => v.into_iter().map(crate::align::Key::S).collect(),
+        crate::lookup::Keys::Ns(v, _) => v.into_iter().map(crate::align::Key::T).collect(),
+    })
+}
+
+/// Combine datasets that tile one dimension (xarray's `combine_by_coords`, in one
+/// dimension): find the dimension whose coordinates differ, order the datasets by it (its
+/// coordinate may run either way, but must be monotonic once combined) and concatenate
+/// along it. When no dimension differs, the datasets are merged. Lazy data stays lazy.
+///
+/// # Errors
+/// [`CoreError::CannotCombine`] if the datasets differ along several dimensions, or the
+/// combined coordinate is not monotonic; otherwise as for [`concat_datasets`] or [`merge`].
+pub fn combine_by_coords<S: Repr>(
+    datasets: &[&DatasetBase<S>],
+    opts: &ConcatOptions,
+) -> Result<Dataset> {
+    let Some(first) = datasets.first() else {
+        return Err(cannot(&Name::from(""), "nothing to combine"));
+    };
+    // Dimension coordinates every dataset has; those whose values differ.
+    let mut varying = Vec::new();
+    for (k, c) in first.coords() {
+        if c.dims() != [k.clone()] || !datasets.iter().all(|d| d.coords().contains_key(k)) {
+            continue;
+        }
+        let mut differs = false;
+        for d in datasets.iter().skip(1) {
+            if let Some(other) = d.coords().get(k) {
+                differs |= !equivalent(c, other)?;
+            }
+        }
+        if differs {
+            varying.push(k.clone());
+        }
+    }
+    let dim = match varying.as_slice() {
+        [] => return merge(datasets, &MergeOptions::default()),
+        [d] => d.clone(),
+        many => {
+            return Err(cannot(
+                &Name::from(""),
+                format!("datasets differ along several dimensions {many:?}; only one is supported"),
+            ));
+        }
+    };
+    let mut keyed = datasets
+        .iter()
+        .map(|d| first_key(d, &dim).map(|k| (k, *d)))
+        .collect::<Result<Vec<_>>>()?;
+    // The direction of the first dataset's coordinate decides the order.
+    let descending = keyed
+        .first()
+        .and_then(|(k, _)| Some(k.get(1)? < k.first()?))
+        .unwrap_or(false);
+    keyed.sort_by(|(a, _), (b, _)| {
+        let o = a.first().cmp(&b.first());
+        if descending { o.reverse() } else { o }
+    });
+    let all: Vec<&crate::align::Key> = keyed.iter().flat_map(|(k, _)| k.iter()).collect();
+    let monotonic = all.windows(2).all(|w| match w {
+        [p, q] => {
+            if descending {
+                p > q
+            } else {
+                p < q
+            }
+        }
+        _ => true,
+    });
+    if !monotonic {
+        return Err(cannot(
+            &dim,
+            "the combined coordinate is not monotonic (overlapping or interleaved datasets)",
+        ));
+    }
+    let ordered: Vec<&DatasetBase<S>> = keyed.into_iter().map(|(_, d)| d).collect();
+    concat_datasets(&ordered, &dim, opts)
 }

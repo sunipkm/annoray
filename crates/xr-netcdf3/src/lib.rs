@@ -231,8 +231,15 @@ impl Backend for Netcdf3 {
         Ok(Arc::new(Netcdf3File::open(path)?).to_raw_lazy())
     }
 
+    /// Writes straight to the file, reading lazy variables a slab at a time.
     fn write(&self, ds: &RawDataset, path: &Path, opts: &WriteOptions) -> Result<()> {
-        let bytes = write_bytes(ds, opts)?;
-        std::fs::write(path, bytes).map_err(|e| bad(format!("{}: {e}", path.display())))
+        let err = |e: std::io::Error| bad(format!("{}: {e}", path.display()));
+        let file = std::fs::File::create(path).map_err(err)?;
+        let mut out = std::io::BufWriter::new(file);
+        write::write_to(ds, opts.format, &mut out)?;
+        out.into_inner()
+            .map_err(|e| err(e.into_error()))?
+            .sync_all()
+            .map_err(err)
     }
 }

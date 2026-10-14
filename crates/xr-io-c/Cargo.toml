@@ -4,7 +4,7 @@ description = "netCDF/HDF5 backend for xarray-rs using the C libraries (netCDF-C
 version.workspace = true
 edition.workspace = true
 # netcdf-sys pulls in hdf5-metno-sys, which needs 1.85.1.
-rust-version = "1.85.1"
+rust-version.workspace = true
 license.workspace = true
 
 [dependencies]

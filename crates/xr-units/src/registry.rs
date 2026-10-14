@@ -132,16 +132,16 @@ impl Registry {
             }
         }
         for entry in pending {
-            if let Def::Expr(e) = entry.def {
-                if let Err(err) = parse_with(e, &|id| reg.lookup(id)) {
-                    let name = entry
-                        .names
-                        .first()
-                        .or(entry.symbols.first())
-                        .copied()
-                        .unwrap_or(e);
-                    reg.failures.push((name, err));
-                }
+            if let Def::Expr(e) = entry.def
+                && let Err(err) = parse_with(e, &|id| reg.lookup(id))
+            {
+                let name = entry
+                    .names
+                    .first()
+                    .or(entry.symbols.first())
+                    .copied()
+                    .unwrap_or(e);
+                reg.failures.push((name, err));
             }
         }
         reg

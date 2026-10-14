@@ -1,0 +1,207 @@
+f|sum|3|False|None|9|nan nan nan nan nan 15.0 nan nan nan
+f|sum|3|True|None|9|nan nan nan nan 15.0 nan nan nan nan
+f|sum|4|True|1|9|3.0 3.0 7.0 11.0 15.0 15.0 11.0 15.0 9.0
+f|sum|2|False|1|9|1.0 3.0 2.0 4.0 9.0 11.0 6.0 nan 9.0
+f|sum|5|False|2|9|nan 3.0 3.0 7.0 12.0 17.0 15.0 15.0 20.0
+f|sum|1|False|None|9|1.0 2.0 nan 4.0 5.0 6.0 nan nan 9.0
+f|mean|3|False|None|9|nan nan nan nan nan 5.0 nan nan nan
+f|mean|3|True|None|9|nan nan nan nan 5.0 nan nan nan nan
+f|mean|4|True|1|9|1.5 1.5 2.3333333333333335 3.6666666666666665 5.0 5.0 5.5 7.5 9.0
+f|mean|2|False|1|9|1.0 1.5 2.0 4.0 4.5 5.5 6.0 nan 9.0
+f|mean|5|False|2|9|nan 1.5 1.5 2.3333333333333335 3.0 4.25 5.0 5.0 6.666666666666667
+f|mean|1|False|None|9|1.0 2.0 nan 4.0 5.0 6.0 nan nan 9.0
+f|median|3|False|None|9|nan nan nan nan nan 5.0 nan nan nan
+f|median|3|True|None|9|nan nan nan nan 5.0 nan nan nan nan
+f|median|4|True|1|9|1.5 1.5 2.0 4.0 5.0 5.0 5.5 7.5 9.0
+f|median|2|False|1|9|1.0 1.5 2.0 4.0 4.5 5.5 6.0 nan 9.0
+f|median|5|False|2|9|nan 1.5 1.5 2.0 3.0 4.5 5.0 5.0 6.0
+f|median|1|False|None|9|1.0 2.0 nan 4.0 5.0 6.0 nan nan 9.0
+f|std|3|False|None|9|nan nan nan nan nan 0.816496580927726 nan nan nan
+f|std|3|True|None|9|nan nan nan nan 0.816496580927726 nan nan nan nan
+f|std|4|True|1|9|0.5 0.5 1.247219128924647 1.247219128924647 0.816496580927726 0.816496580927726 0.5 1.5 0.0
+f|std|2|False|1|9|0.0 0.5 0.0 0.0 0.5 0.5 0.0 nan 0.0
+f|std|5|False|2|9|nan 0.5 0.5 1.247219128924647 1.5811388300841898 1.479019945774904 0.816496580927726 0.816496580927726 1.699673171197595
+f|std|1|False|None|9|0.0 0.0 nan 0.0 0.0 0.0 nan nan 0.0
+f|var|3|False|None|9|nan nan nan nan nan 0.6666666666666666 nan nan nan
+f|var|3|True|None|9|nan nan nan nan 0.6666666666666666 nan nan nan nan
+f|var|4|True|1|9|0.25 0.25 1.5555555555555554 1.5555555555555554 0.6666666666666666 0.6666666666666666 0.25 2.25 0.0
+f|var|2|False|1|9|0.0 0.25 0.0 0.0 0.25 0.25 0.0 nan 0.0
+f|var|5|False|2|9|nan 0.25 0.25 1.5555555555555554 2.5 2.1875 0.6666666666666666 0.6666666666666666 2.888888888888889
+f|var|1|False|None|9|0.0 0.0 nan 0.0 0.0 0.0 nan nan 0.0
+f|min|3|False|None|9|nan nan nan nan nan 4.0 nan nan nan
+f|min|3|True|None|9|nan nan nan nan 4.0 nan nan nan nan
+f|min|4|True|1|9|1.0 1.0 1.0 2.0 4.0 4.0 5.0 6.0 9.0
+f|min|2|False|1|9|1.0 1.0 2.0 4.0 4.0 5.0 6.0 nan 9.0
+f|min|5|False|2|9|nan 1.0 1.0 1.0 1.0 2.0 4.0 4.0 5.0
+f|min|1|False|None|9|1.0 2.0 nan 4.0 5.0 6.0 nan nan 9.0
+f|max|3|False|None|9|nan nan nan nan nan 6.0 nan nan nan
+f|max|3|True|None|9|nan nan nan nan 6.0 nan nan nan nan
+f|max|4|True|1|9|2.0 2.0 4.0 5.0 6.0 6.0 6.0 9.0 9.0
+f|max|2|False|1|9|1.0 2.0 2.0 4.0 5.0 6.0 6.0 nan 9.0
+f|max|5|False|2|9|nan 2.0 2.0 4.0 5.0 6.0 6.0 6.0 9.0
+f|max|1|False|None|9|1.0 2.0 nan 4.0 5.0 6.0 nan nan 9.0
+f|count|3|False|None|9|nan nan nan nan nan 3.0 nan nan nan
+f|count|3|True|None|9|nan nan nan nan 3.0 nan nan nan nan
+f|count|4|True|1|9|2.0 2.0 3.0 3.0 3.0 3.0 2.0 2.0 1.0
+f|count|2|False|1|9|1.0 2.0 1.0 1.0 2.0 2.0 1.0 nan 1.0
+f|count|5|False|2|9|nan 2.0 2.0 3.0 4.0 4.0 3.0 3.0 3.0
+f|count|1|False|None|9|1.0 1.0 nan 1.0 1.0 1.0 nan nan 1.0
+f|prod|3|False|None|9|nan nan nan nan nan 120.0 nan nan nan
+f|prod|3|True|None|9|nan nan nan nan 120.0 nan nan nan nan
+f|prod|4|True|1|9|2.0 2.0 8.0 40.0 120.0 120.0 30.0 54.0 9.0
+f|prod|2|False|1|9|1.0 2.0 2.0 4.0 20.0 30.0 6.0 nan 9.0
+f|prod|5|False|2|9|nan 2.0 2.0 8.0 40.0 240.0 120.0 120.0 270.0
+f|prod|1|False|None|9|1.0 2.0 nan 4.0 5.0 6.0 nan nan 9.0
+f|argmin|3|False|None|9|nan nan nan nan nan 0.0 nan nan nan
+f|argmin|3|True|None|9|nan nan nan nan 0.0 nan nan nan nan
+f|argmin|4|True|1|9|2.0 1.0 0.0 0.0 1.0 0.0 0.0 0.0 2.0
+f|argmin|2|False|1|9|1.0 0.0 0.0 1.0 0.0 0.0 0.0 nan 1.0
+f|argmin|5|False|2|9|nan 3.0 2.0 1.0 0.0 0.0 1.0 0.0 0.0
+f|argmin|1|False|None|9|0.0 0.0 nan 0.0 0.0 0.0 nan nan 0.0
+f|argmax|3|False|None|9|nan nan nan nan nan 2.0 nan nan nan
+f|argmax|3|True|None|9|nan nan nan nan 2.0 nan nan nan nan
+f|argmax|4|True|1|9|3.0 2.0 3.0 3.0 3.0 2.0 1.0 3.0 2.0
+f|argmax|2|False|1|9|1.0 1.0 0.0 1.0 1.0 1.0 0.0 nan 1.0
+f|argmax|5|False|2|9|nan 4.0 3.0 4.0 4.0 4.0 3.0 2.0 4.0
+f|argmax|1|False|None|9|0.0 0.0 nan 0.0 0.0 0.0 nan nan 0.0
+f|construct|3|False|None|9,3|nan nan 1.0 nan 1.0 2.0 1.0 2.0 nan 2.0 nan 4.0 nan 4.0 5.0 4.0 5.0 6.0 5.0 6.0 nan 6.0 nan nan nan nan 9.0
+f|construct|3|True|None|9,3|nan 1.0 2.0 1.0 2.0 nan 2.0 nan 4.0 nan 4.0 5.0 4.0 5.0 6.0 5.0 6.0 nan 6.0 nan nan nan nan 9.0 nan 9.0 nan
+f|construct|4|True|None|9,4|nan nan 1.0 2.0 nan 1.0 2.0 nan 1.0 2.0 nan 4.0 2.0 nan 4.0 5.0 nan 4.0 5.0 6.0 4.0 5.0 6.0 nan 5.0 6.0 nan nan 6.0 nan nan 9.0 nan nan 9.0 nan
+i|sum|3|False|None|7|nan nan 8.0 6.0 10.0 15.0 16.0
+i|sum|3|True|None|7|nan 8.0 6.0 10.0 15.0 16.0 nan
+i|sum|4|True|1|7|4.0 8.0 9.0 11.0 19.0 17.0 16.0
+i|sum|2|False|1|7|3.0 4.0 5.0 5.0 6.0 14.0 11.0
+i|sum|5|False|2|7|nan 4.0 8.0 9.0 14.0 20.0 21.0
+i|sum|1|False|None|7|3.0 1.0 4.0 1.0 5.0 9.0 2.0
+i|mean|3|False|None|7|nan nan 2.6666666666666665 2.0 3.3333333333333335 5.0 5.333333333333333
+i|mean|3|True|None|7|nan 2.6666666666666665 2.0 3.3333333333333335 5.0 5.333333333333333 nan
+i|mean|4|True|1|7|2.0 2.6666666666666665 2.25 2.75 4.75 4.25 5.333333333333333
+i|mean|2|False|1|7|3.0 2.0 2.5 2.5 3.0 7.0 5.5
+i|mean|5|False|2|7|nan 2.0 2.6666666666666665 2.25 2.8 4.0 4.2
+i|mean|1|False|None|7|3.0 1.0 4.0 1.0 5.0 9.0 2.0
+i|median|3|False|None|7|nan nan 3.0 1.0 4.0 5.0 5.0
+i|median|3|True|None|7|nan 3.0 1.0 4.0 5.0 5.0 nan
+i|median|4|True|1|7|2.0 3.0 2.0 2.5 4.5 3.5 5.0
+i|median|2|False|1|7|3.0 2.0 2.5 2.5 3.0 7.0 5.5
+i|median|5|False|2|7|nan 2.0 3.0 2.0 3.0 4.0 4.0
+i|median|1|False|None|7|3.0 1.0 4.0 1.0 5.0 9.0 2.0
+i|std|3|False|None|7|nan nan 1.247219128924647 1.4142135623730951 1.699673171197595 3.265986323710904 2.8674417556808756
+i|std|3|True|None|7|nan 1.247219128924647 1.4142135623730951 1.699673171197595 3.265986323710904 2.8674417556808756 nan
+i|std|4|True|1|7|1.0 1.247219128924647 1.299038105676658 1.7853571071357126 2.8613807855648994 3.112474899497183 2.8674417556808756
+i|std|2|False|1|7|0.0 1.0 1.5 1.5 2.0 2.0 3.5
+i|std|5|False|2|7|nan 1.0 1.247219128924647 1.299038105676658 1.6 2.9664793948382653 2.785677655436824
+i|std|1|False|None|7|0.0 0.0 0.0 0.0 0.0 0.0 0.0
+i|var|3|False|None|7|nan nan 1.5555555555555554 2.0 2.8888888888888893 10.666666666666666 8.222222222222221
+i|var|3|True|None|7|nan 1.5555555555555554 2.0 2.8888888888888893 10.666666666666666 8.222222222222221 nan
+i|var|4|True|1|7|1.0 1.5555555555555554 1.6875 3.1875 8.1875 9.6875 8.222222222222221
+i|var|2|False|1|7|0.0 1.0 2.25 2.25 4.0 4.0 12.25
+i|var|5|False|2|7|nan 1.0 1.5555555555555554 1.6875 2.56 8.8 7.760000000000001
+i|var|1|False|None|7|0.0 0.0 0.0 0.0 0.0 0.0 0.0
+i|min|3|False|None|7|nan nan 1.0 1.0 1.0 1.0 2.0
+i|min|3|True|None|7|nan 1.0 1.0 1.0 1.0 2.0 nan
+i|min|4|True|1|7|1.0 1.0 1.0 1.0 1.0 1.0 2.0
+i|min|2|False|1|7|3.0 1.0 1.0 1.0 1.0 5.0 2.0
+i|min|5|False|2|7|nan 1.0 1.0 1.0 1.0 1.0 1.0
+i|min|1|False|None|7|3.0 1.0 4.0 1.0 5.0 9.0 2.0
+i|max|3|False|None|7|nan nan 4.0 4.0 5.0 9.0 9.0
+i|max|3|True|None|7|nan 4.0 4.0 5.0 9.0 9.0 nan
+i|max|4|True|1|7|3.0 4.0 4.0 5.0 9.0 9.0 9.0
+i|max|2|False|1|7|3.0 3.0 4.0 4.0 5.0 9.0 9.0
+i|max|5|False|2|7|nan 3.0 4.0 4.0 5.0 9.0 9.0
+i|max|1|False|None|7|3.0 1.0 4.0 1.0 5.0 9.0 2.0
+i|count|3|False|None|7|nan nan 3.0 3.0 3.0 3.0 3.0
+i|count|3|True|None|7|nan 3.0 3.0 3.0 3.0 3.0 nan
+i|count|4|True|1|7|2.0 3.0 4.0 4.0 4.0 4.0 3.0
+i|count|2|False|1|7|1.0 2.0 2.0 2.0 2.0 2.0 2.0
+i|count|5|False|2|7|nan 2.0 3.0 4.0 5.0 5.0 5.0
+i|count|1|False|None|7|1.0 1.0 1.0 1.0 1.0 1.0 1.0
+i|prod|3|False|None|7|nan nan 12.0 4.0 20.0 45.0 90.0
+i|prod|3|True|None|7|nan 12.0 4.0 20.0 45.0 90.0 nan
+i|prod|4|True|1|7|3.0 12.0 12.0 20.0 180.0 90.0 90.0
+i|prod|2|False|1|7|3.0 3.0 4.0 4.0 5.0 45.0 18.0
+i|prod|5|False|2|7|nan 3.0 12.0 12.0 60.0 180.0 360.0
+i|prod|1|False|None|7|3.0 1.0 4.0 1.0 5.0 9.0 2.0
+i|argmin|3|False|None|7|nan nan 1.0 0.0 1.0 0.0 2.0
+i|argmin|3|True|None|7|nan 1.0 0.0 1.0 0.0 2.0 nan
+i|argmin|4|True|1|7|3.0 2.0 1.0 0.0 1.0 0.0 2.0
+i|argmin|2|False|1|7|1.0 1.0 0.0 1.0 0.0 0.0 1.0
+i|argmin|5|False|2|7|nan 4.0 3.0 2.0 1.0 0.0 1.0
+i|argmin|1|False|None|7|0.0 0.0 0.0 0.0 0.0 0.0 0.0
+i|argmax|3|False|None|7|nan nan 2.0 1.0 2.0 2.0 1.0
+i|argmax|3|True|None|7|nan 2.0 1.0 2.0 2.0 1.0 nan
+i|argmax|4|True|1|7|2.0 3.0 2.0 3.0 3.0 2.0 1.0
+i|argmax|2|False|1|7|1.0 0.0 1.0 0.0 1.0 1.0 0.0
+i|argmax|5|False|2|7|nan 3.0 4.0 3.0 4.0 4.0 3.0
+i|argmax|1|False|None|7|0.0 0.0 0.0 0.0 0.0 0.0 0.0
+i|construct|3|False|None|7,3|nan nan 3.0 nan 3.0 1.0 3.0 1.0 4.0 1.0 4.0 1.0 4.0 1.0 5.0 1.0 5.0 9.0 5.0 9.0 2.0
+i|construct|3|True|None|7,3|nan 3.0 1.0 3.0 1.0 4.0 1.0 4.0 1.0 4.0 1.0 5.0 1.0 5.0 9.0 5.0 9.0 2.0 9.0 2.0 nan
+i|construct|4|True|None|7,4|nan nan 3.0 1.0 nan 3.0 1.0 4.0 3.0 1.0 4.0 1.0 1.0 4.0 1.0 5.0 4.0 1.0 5.0 9.0 1.0 5.0 9.0 2.0 5.0 9.0 2.0 nan
+g|sum|3|False|None|3,4|nan nan 3.0 6.0 nan nan 15.0 18.0 nan nan 27.0 30.0
+g|sum|3|True|None|3,4|nan 3.0 6.0 nan nan 15.0 18.0 nan nan 27.0 30.0 nan
+g|sum|4|True|1|3,4|1.0 3.0 6.0 6.0 9.0 15.0 22.0 18.0 17.0 27.0 38.0 30.0
+g|sum|2|False|1|3,4|0.0 1.0 3.0 5.0 4.0 9.0 11.0 13.0 8.0 17.0 19.0 21.0
+g|sum|5|False|2|3,4|nan 1.0 3.0 6.0 nan 9.0 15.0 22.0 nan 17.0 27.0 38.0
+g|sum|1|False|None|3,4|0.0 1.0 2.0 3.0 4.0 5.0 6.0 7.0 8.0 9.0 10.0 11.0
+g|mean|3|False|None|3,4|nan nan 1.0 2.0 nan nan 5.0 6.0 nan nan 9.0 10.0
+g|mean|3|True|None|3,4|nan 1.0 2.0 nan nan 5.0 6.0 nan nan 9.0 10.0 nan
+g|mean|4|True|1|3,4|0.5 1.0 1.5 2.0 4.5 5.0 5.5 6.0 8.5 9.0 9.5 10.0
+g|mean|2|False|1|3,4|0.0 0.5 1.5 2.5 4.0 4.5 5.5 6.5 8.0 8.5 9.5 10.5
+g|mean|5|False|2|3,4|nan 0.5 1.0 1.5 nan 4.5 5.0 5.5 nan 8.5 9.0 9.5
+g|mean|1|False|None|3,4|0.0 1.0 2.0 3.0 4.0 5.0 6.0 7.0 8.0 9.0 10.0 11.0
+g|median|3|False|None|3,4|nan nan 1.0 2.0 nan nan 5.0 6.0 nan nan 9.0 10.0
+g|median|3|True|None|3,4|nan 1.0 2.0 nan nan 5.0 6.0 nan nan 9.0 10.0 nan
+g|median|4|True|1|3,4|0.5 1.0 1.5 2.0 4.5 5.0 5.5 6.0 8.5 9.0 9.5 10.0
+g|median|2|False|1|3,4|0.0 0.5 1.5 2.5 4.0 4.5 5.5 6.5 8.0 8.5 9.5 10.5
+g|median|5|False|2|3,4|nan 0.5 1.0 1.5 nan 4.5 5.0 5.5 nan 8.5 9.0 9.5
+g|median|1|False|None|3,4|0.0 1.0 2.0 3.0 4.0 5.0 6.0 7.0 8.0 9.0 10.0 11.0
+g|std|3|False|None|3,4|nan nan 0.816496580927726 0.816496580927726 nan nan 0.816496580927726 0.816496580927726 nan nan 0.816496580927726 0.816496580927726
+g|std|3|True|None|3,4|nan 0.816496580927726 0.816496580927726 nan nan 0.816496580927726 0.816496580927726 nan nan 0.816496580927726 0.816496580927726 nan
+g|std|4|True|1|3,4|0.5 0.816496580927726 1.118033988749895 0.816496580927726 0.5 0.816496580927726 1.118033988749895 0.816496580927726 0.5 0.816496580927726 1.118033988749895 0.816496580927726
+g|std|2|False|1|3,4|0.0 0.5 0.5 0.5 0.0 0.5 0.5 0.5 0.0 0.5 0.5 0.5
+g|std|5|False|2|3,4|nan 0.5 0.816496580927726 1.118033988749895 nan 0.5 0.816496580927726 1.118033988749895 nan 0.5 0.816496580927726 1.118033988749895
+g|std|1|False|None|3,4|0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0
+g|var|3|False|None|3,4|nan nan 0.6666666666666666 0.6666666666666666 nan nan 0.6666666666666666 0.6666666666666666 nan nan 0.6666666666666666 0.6666666666666666
+g|var|3|True|None|3,4|nan 0.6666666666666666 0.6666666666666666 nan nan 0.6666666666666666 0.6666666666666666 nan nan 0.6666666666666666 0.6666666666666666 nan
+g|var|4|True|1|3,4|0.25 0.6666666666666666 1.25 0.6666666666666666 0.25 0.6666666666666666 1.25 0.6666666666666666 0.25 0.6666666666666666 1.25 0.6666666666666666
+g|var|2|False|1|3,4|0.0 0.25 0.25 0.25 0.0 0.25 0.25 0.25 0.0 0.25 0.25 0.25
+g|var|5|False|2|3,4|nan 0.25 0.6666666666666666 1.25 nan 0.25 0.6666666666666666 1.25 nan 0.25 0.6666666666666666 1.25
+g|var|1|False|None|3,4|0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0
+g|min|3|False|None|3,4|nan nan 0.0 1.0 nan nan 4.0 5.0 nan nan 8.0 9.0
+g|min|3|True|None|3,4|nan 0.0 1.0 nan nan 4.0 5.0 nan nan 8.0 9.0 nan
+g|min|4|True|1|3,4|0.0 0.0 0.0 1.0 4.0 4.0 4.0 5.0 8.0 8.0 8.0 9.0
+g|min|2|False|1|3,4|0.0 0.0 1.0 2.0 4.0 4.0 5.0 6.0 8.0 8.0 9.0 10.0
+g|min|5|False|2|3,4|nan 0.0 0.0 0.0 nan 4.0 4.0 4.0 nan 8.0 8.0 8.0
+g|min|1|False|None|3,4|0.0 1.0 2.0 3.0 4.0 5.0 6.0 7.0 8.0 9.0 10.0 11.0
+g|max|3|False|None|3,4|nan nan 2.0 3.0 nan nan 6.0 7.0 nan nan 10.0 11.0
+g|max|3|True|None|3,4|nan 2.0 3.0 nan nan 6.0 7.0 nan nan 10.0 11.0 nan
+g|max|4|True|1|3,4|1.0 2.0 3.0 3.0 5.0 6.0 7.0 7.0 9.0 10.0 11.0 11.0
+g|max|2|False|1|3,4|0.0 1.0 2.0 3.0 4.0 5.0 6.0 7.0 8.0 9.0 10.0 11.0
+g|max|5|False|2|3,4|nan 1.0 2.0 3.0 nan 5.0 6.0 7.0 nan 9.0 10.0 11.0
+g|max|1|False|None|3,4|0.0 1.0 2.0 3.0 4.0 5.0 6.0 7.0 8.0 9.0 10.0 11.0
+g|count|3|False|None|3,4|nan nan 3.0 3.0 nan nan 3.0 3.0 nan nan 3.0 3.0
+g|count|3|True|None|3,4|nan 3.0 3.0 nan nan 3.0 3.0 nan nan 3.0 3.0 nan
+g|count|4|True|1|3,4|2.0 3.0 4.0 3.0 2.0 3.0 4.0 3.0 2.0 3.0 4.0 3.0
+g|count|2|False|1|3,4|1.0 2.0 2.0 2.0 1.0 2.0 2.0 2.0 1.0 2.0 2.0 2.0
+g|count|5|False|2|3,4|nan 2.0 3.0 4.0 nan 2.0 3.0 4.0 nan 2.0 3.0 4.0
+g|count|1|False|None|3,4|1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0
+g|prod|3|False|None|3,4|nan nan 0.0 6.0 nan nan 120.0 210.0 nan nan 720.0 990.0
+g|prod|3|True|None|3,4|nan 0.0 6.0 nan nan 120.0 210.0 nan nan 720.0 990.0 nan
+g|prod|4|True|1|3,4|0.0 0.0 0.0 6.0 20.0 120.0 840.0 210.0 72.0 720.0 7920.0 990.0
+g|prod|2|False|1|3,4|0.0 0.0 2.0 6.0 4.0 20.0 30.0 42.0 8.0 72.0 90.0 110.0
+g|prod|5|False|2|3,4|nan 0.0 0.0 0.0 nan 20.0 120.0 840.0 nan 72.0 720.0 7920.0
+g|prod|1|False|None|3,4|0.0 1.0 2.0 3.0 4.0 5.0 6.0 7.0 8.0 9.0 10.0 11.0
+g|argmin|3|False|None|3,4|nan nan 0.0 0.0 nan nan 0.0 0.0 nan nan 0.0 0.0
+g|argmin|3|True|None|3,4|nan 0.0 0.0 nan nan 0.0 0.0 nan nan 0.0 0.0 nan
+g|argmin|4|True|1|3,4|2.0 1.0 0.0 0.0 2.0 1.0 0.0 0.0 2.0 1.0 0.0 0.0
+g|argmin|2|False|1|3,4|1.0 0.0 0.0 0.0 1.0 0.0 0.0 0.0 1.0 0.0 0.0 0.0
+g|argmin|5|False|2|3,4|nan 3.0 2.0 1.0 nan 3.0 2.0 1.0 nan 3.0 2.0 1.0
+g|argmin|1|False|None|3,4|0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0
+g|argmax|3|False|None|3,4|nan nan 2.0 2.0 nan nan 2.0 2.0 nan nan 2.0 2.0
+g|argmax|3|True|None|3,4|nan 2.0 2.0 nan nan 2.0 2.0 nan nan 2.0 2.0 nan
+g|argmax|4|True|1|3,4|3.0 3.0 3.0 2.0 3.0 3.0 3.0 2.0 3.0 3.0 3.0 2.0
+g|argmax|2|False|1|3,4|1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0
+g|argmax|5|False|2|3,4|nan 4.0 4.0 4.0 nan 4.0 4.0 4.0 nan 4.0 4.0 4.0
+g|argmax|1|False|None|3,4|0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0
+g|construct|3|False|None|3,4,3|nan nan 0.0 nan 0.0 1.0 0.0 1.0 2.0 1.0 2.0 3.0 nan nan 4.0 nan 4.0 5.0 4.0 5.0 6.0 5.0 6.0 7.0 nan nan 8.0 nan 8.0 9.0 8.0 9.0 10.0 9.0 10.0 11.0
+g|construct|3|True|None|3,4,3|nan 0.0 1.0 0.0 1.0 2.0 1.0 2.0 3.0 2.0 3.0 nan nan 4.0 5.0 4.0 5.0 6.0 5.0 6.0 7.0 6.0 7.0 nan nan 8.0 9.0 8.0 9.0 10.0 9.0 10.0 11.0 10.0 11.0 nan
+g|construct|4|True|None|3,4,4|nan nan 0.0 1.0 nan 0.0 1.0 2.0 0.0 1.0 2.0 3.0 1.0 2.0 3.0 nan nan nan 4.0 5.0 nan 4.0 5.0 6.0 4.0 5.0 6.0 7.0 5.0 6.0 7.0 nan nan nan 8.0 9.0 nan 8.0 9.0 10.0 8.0 9.0 10.0 11.0 9.0 10.0 11.0 nan

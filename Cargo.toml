@@ -16,7 +16,7 @@ members = [
 [workspace.package]
 version = "0.0.1"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.97"
 license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
@@ -34,7 +34,10 @@ chrono = { version = "0.4", default-features = false, features = ["std"] }
 indexmap = "2"
 memmap2 = "0.9"
 miniz_oxide = "0.8"
+glob = "0.3"
 rayon = "1.10"
+ruzstd = { version = "0.9", default-features = false, features = ["std"] }
+lz4_flex = { version = "0.14", default-features = false, features = ["safe-decode", "safe-encode", "std"] }
 ndarray = "0.17"
 smallvec = "1"
 thiserror = "2"

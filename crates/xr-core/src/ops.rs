@@ -72,7 +72,11 @@ pub fn variables_equal<S: Repr, R: Repr>(a: &VariableBase<S>, b: &VariableBase<R
 // ----- broadcasting -----
 
 /// Reorder `v`'s axes into `out_dims` order and insert length-1 axes for missing dimensions.
-fn align<'a, T>(v: ArrayViewD<'a, T>, dims: &[Name], out_dims: &[Name]) -> ArrayViewD<'a, T> {
+pub(crate) fn broadcast_to_dims<'a, T>(
+    v: ArrayViewD<'a, T>,
+    dims: &[Name],
+    out_dims: &[Name],
+) -> ArrayViewD<'a, T> {
     let order: Vec<usize> = out_dims
         .iter()
         .filter_map(|d| dims.iter().position(|x| x == d))
@@ -189,7 +193,7 @@ macro_rules! int_op {
         match ($a, $b) {
             $(
                 (TypedArray::$var(x), TypedArray::$var(y)) => {
-                    let (x, y) = (align(x.view(), $ad, $od), align(y.view(), $bd, $od));
+                    let (x, y) = (broadcast_to_dims(x.view(), $ad, $od), broadcast_to_dims(y.view(), $bd, $od));
                     let f = |p: &$t, q: &$t| -> Option<$t> {
                         match $op {
                             BinOp::Add => p.checked_add(*q),
@@ -233,20 +237,28 @@ fn compute(
         return Ok(int_op!(a, b, ad, bd, od, shape, op,
             I8 i8, I16 i16, I32 i32, I64 i64, U8 u8, U16 u16, U32 u32, U64 u64));
     }
-    if !converting && adt == DType::F32 && bdt == DType::F32 {
-        if let (TypedArray::F32(x), TypedArray::F32(y)) = (a, b) {
-            let (x, y) = (align(x.view(), ad, od), align(y.view(), bd, od));
-            return Ok(TypedArray::F32(zip_map(
-                &x,
-                &y,
-                shape,
-                |p, q| Some(float_op(op, *p, *q)),
-                op.name(),
-            )?));
-        }
+    if !converting
+        && adt == DType::F32
+        && bdt == DType::F32
+        && let (TypedArray::F32(x), TypedArray::F32(y)) = (a, b)
+    {
+        let (x, y) = (
+            broadcast_to_dims(x.view(), ad, od),
+            broadcast_to_dims(y.view(), bd, od),
+        );
+        return Ok(TypedArray::F32(zip_map(
+            &x,
+            &y,
+            shape,
+            |p, q| Some(float_op(op, *p, *q)),
+            op.name(),
+        )?));
     }
     let (x, y) = (to_f64(a, ac)?, to_f64(b, bc)?);
-    let (x, y) = (align(x.view(), ad, od), align(y.view(), bd, od));
+    let (x, y) = (
+        broadcast_to_dims(x.view(), ad, od),
+        broadcast_to_dims(y.view(), bd, od),
+    );
     Ok(TypedArray::F64(zip_map(
         &x,
         &y,
@@ -298,8 +310,8 @@ fn time_op(
     macro_rules! go {
         ($x:expr, $y:expr, $f:expr) => {
             zip_map(
-                &align($x.view(), ad, od),
-                &align($y.view(), bd, od),
+                &broadcast_to_dims($x.view(), ad, od),
+                &broadcast_to_dims($y.view(), bd, od),
                 shape,
                 $f,
                 name,
@@ -428,10 +440,10 @@ impl<S: Repr> DataArrayBase<S> {
         }
         // Coordinates of shared dimensions must agree.
         for d in self.dims().iter().filter(|d| rhs.dims().contains(d)) {
-            if let (Some(a), Some(b)) = (self.coords.get(d), rhs.coords.get(d)) {
-                if !variables_equal(a, b) {
-                    return Err(CoreError::NotAligned(d.clone()));
-                }
+            if let (Some(a), Some(b)) = (self.coords.get(d), rhs.coords.get(d))
+                && !variables_equal(a, b)
+            {
+                return Err(CoreError::NotAligned(d.clone()));
             }
         }
 

@@ -44,7 +44,7 @@ pub enum Join {
 
 /// A label, comparable across objects.
 #[derive(Debug, Clone)]
-enum Key {
+pub(crate) enum Key {
     F(f64),
     S(String),
     T(i128),
@@ -309,10 +309,8 @@ pub(crate) fn plan(objs: &[Obj<'_>], join: Join) -> Result<Plan> {
                 let pos: Vec<Option<usize>> = joined.iter().map(|j| map.get(j).copied()).collect();
                 let identity =
                     pos.len() == k.len() && pos.iter().enumerate().all(|(a, b)| *b == Some(a));
-                if !identity {
-                    if let Some(slot) = positions.get_mut(*i) {
-                        *slot = Some(pos);
-                    }
+                if !identity && let Some(slot) = positions.get_mut(*i) {
+                    *slot = Some(pos);
                 }
             }
         }
@@ -321,14 +319,14 @@ pub(crate) fn plan(objs: &[Obj<'_>], join: Join) -> Result<Plan> {
             if o.indexes.contains_key(&dim) {
                 continue;
             }
-            if let Some(&len) = o.sizes.get(&dim) {
-                if len != n {
-                    return Err(CoreError::DimLengthMismatch {
-                        dim: dim.clone(),
-                        expected: n,
-                        found: len,
-                    });
-                }
+            if let Some(&len) = o.sizes.get(&dim)
+                && len != n
+            {
+                return Err(CoreError::DimLengthMismatch {
+                    dim: dim.clone(),
+                    expected: n,
+                    found: len,
+                });
             }
         }
 

@@ -299,6 +299,20 @@ impl<S: Repr> VariableBase<S> {
         }
     }
 
+    /// The data as a [`LazySource`](crate::LazySource): the lazy selection itself (reading
+    /// only what is asked for), or the values in memory.
+    ///
+    /// # Errors
+    /// Read errors for lazy data that is cached but cannot be viewed.
+    pub fn as_lazy_source(&self) -> Result<std::sync::Arc<dyn crate::LazySource>> {
+        Ok(match &self.data {
+            Data::Lazy(l) if !l.is_loaded() => {
+                std::sync::Arc::new(crate::lazy::ViewSource(l.clone()))
+            }
+            _ => std::sync::Arc::new(crate::lazy::MemorySource(self.typed()?.to_owned())),
+        })
+    }
+
     /// Whether the data is read lazily (and not yet read).
     #[must_use]
     pub fn is_lazy(&self) -> bool {
