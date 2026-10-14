@@ -364,6 +364,59 @@ The pipeline is `open_dataset` = backend.open, then `xr-cf` decode, then `Datase
   netCDF4. The tests decode them identically, round-trip every format, and check (in CI) that
   Python xarray reads our output identically too.
 
+### Implementation notes (M4, as built)
+- **`xr-netcdf3` reads and writes CDF-1, CDF-2 and CDF-5 in pure Rust.**
+  - Its output is **byte-for-byte identical to netCDF-C's**, padding included (netCDF-C pads with
+    the variable's fill value), across all three versions, with one or several record variables.
+  - Each library reads the other's files identically, and it reads xarray-written netCDF-3 files.
+  - This byte-level test replaces the planned `ncdump` comparison, since `ncdump` isn't built.
+- **Robustness:**
+  - Every truncation point of every format, 2,000 random byte corruptions, and random headers
+    all return errors, never panics.
+  - Allocations are bounded by the file size.
+  - Streaming files (`numrecs = -1`) are supported.
+- **`AutoBackend` in the facade picks the reader from the magic bytes:** netCDF-3 always uses pure
+  Rust, and netCDF-4/HDF5 uses the C libraries when the `netcdf-c` feature is enabled, otherwise
+  failing with a clear error. So `open_dataset` / `to_netcdf` work for netCDF-3 with no C at all.
+  Without the C feature, `to_netcdf` defaults to netCDF-3 (64-bit offsets).
+
+### Implementation notes (M5, as built)
+- **The `xr-hdf5` reader handles everything HDF5 2.0 writes:**
+  - superblock v0–v3 and object headers v1/v2 with continuation blocks;
+  - symbol-table, compact and dense groups (fractal heap plus v2 B-tree), in creation order
+    when the file tracks it;
+  - compact and dense attributes;
+  - compact, contiguous and chunked layouts with every chunk index (v1 B-tree, single,
+    implicit, fixed array including paged, extensible array including super blocks, v2 B-tree);
+  - layout message **version 5**, which is new in HDF5 2.0 and same as v4 except filtered chunk
+    sizes are as wide as "size of lengths" (established from HDF5's `H5Olayout.c` and
+    `H5D*array.c`);
+  - deflate, shuffle and Fletcher-32 (verified, accepting either byte order like the library);
+  - integers, floats, fixed and variable-length strings, enums, committed datatypes.
+  - Compound, reference, opaque and array data are reported as unsupported, not misread.
+- **Verified:**
+  - Every h5py fixture (`fixtures/gen_hdf5.py`) dumps identically to h5py: earliest, v1.8
+    and latest library versions, both byte orders, plus dense creation-ordered groups.
+  - netCDF-C's own netCDF-4 files read identically to netCDF-C.
+  - Random corruption never panics. `File::with_load_limit` caps decoded dataset size, because a
+    corrupt header can claim huge chunked extents (the default is 16 GiB).
+- **The writer works in two passes:** every block (heap collections, data, chunks, B-tree nodes,
+  object headers) is laid out with address placeholders, then patched and checksummed (lookup3,
+  verified against HDF5's stored checksums). This allows references in any direction, which
+  netCDF-4 dimension scales need, and one shared global heap.
+- **What the writer emits:**
+  - superblock v2, and v2 object headers with link and attribute creation order tracked;
+  - compact links and attributes (attributes up to 64 KiB, since dense storage isn't written);
+  - contiguous, or chunked with a v1 B-tree whose nodes are padded to the full 2K = 64 entries,
+    as the library expects;
+  - deflate and shuffle;
+  - variable-length strings;
+  - object references, reference lists and `{dataset, dimension}` pairs.
+- **Readers of our output:** our reader, netCDF-C (the HDF5 C library) and h5py all read it
+  identically, with h5py resolving every reference to the right object.
+- **Facade:** netCDF-4 files still go through the C backend. The pure-Rust path takes over in M6,
+  once netCDF-4 semantics (dimension scales, `_Netcdf4Dimid`, …) are on top of `xr-hdf5`.
+
 ### CF layer (`xr-cf`)
 - On decode: apply `_FillValue`, `missing_value`, `scale_factor`, `add_offset` and `_Unsigned`. Parse `units` into `Unit`.
   Turn time variables into `NaiveDateTime` or `CfDate` depending on the calendar (§3 Time), and resolve `coordinates` and `bounds`.

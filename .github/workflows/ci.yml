@@ -32,6 +32,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       # `--all-features` builds netCDF-C and HDF5 from source (cmake is preinstalled on all runners).
       - run: cargo test --workspace --all-features
+      # Without C libraries: netCDF-3 must work in pure Rust, netCDF-4 must fail clearly.
+      - run: cargo test -p xarray-rs
       - uses: actions/setup-python@v5
         if: matrix.os == 'ubuntu-latest'
         with:
@@ -39,8 +41,9 @@ jobs:
       - name: Python xarray reads our files
         if: matrix.os == 'ubuntu-latest'
         run: |
-          pip install xarray netCDF4 cftime
+          pip install xarray netCDF4 cftime h5py
           cargo test -p xarray-rs --features netcdf-c --test netcdf_io -- --ignored python
+          cargo test -p xr-hdf5 --test write_round_trip -- --ignored
 
   msrv:
     runs-on: ubuntu-latest

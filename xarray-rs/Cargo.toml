@@ -13,6 +13,7 @@ xr-units.workspace = true
 xr-io.workspace = true
 xr-cf.workspace = true
 xr-io-c = { workspace = true, optional = true }
+xr-netcdf3.workspace = true
 thiserror.workspace = true
 
 [features]

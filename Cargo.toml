@@ -3,9 +3,11 @@ resolver = "3"
 members = [
     "crates/xr-cf",
     "crates/xr-core",
+    "crates/xr-hdf5",
     "crates/xr-io",
     "crates/xr-io-c",
     "crates/xr-macros",
+    "crates/xr-netcdf3",
     "crates/xr-units",
     "xarray-rs",
 ]
@@ -23,9 +25,12 @@ xr-units = { path = "crates/xr-units", version = "0.0.1" }
 xr-io = { path = "crates/xr-io", version = "0.0.1" }
 xr-cf = { path = "crates/xr-cf", version = "0.0.1" }
 xr-io-c = { path = "crates/xr-io-c", version = "0.0.1" }
+xr-netcdf3 = { path = "crates/xr-netcdf3", version = "0.0.1" }
+xr-hdf5 = { path = "crates/xr-hdf5", version = "0.0.1" }
 
 chrono = { version = "0.4", default-features = false, features = ["std"] }
 indexmap = "2"
+miniz_oxide = "0.8"
 ndarray = "0.17"
 smallvec = "1"
 thiserror = "2"
