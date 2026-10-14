@@ -417,6 +417,46 @@ The pipeline is `open_dataset` = backend.open, then `xr-cf` decode, then `Datase
 - **Facade:** netCDF-4 files still go through the C backend. The pure-Rust path takes over in M6,
   once netCDF-4 semantics (dimension scales, `_Netcdf4Dimid`, …) are on top of `xr-hdf5`.
 
+### Implementation notes (M6, as built)
+- **`xr-netcdf4` uses netCDF-C's conventions, checked against its files with our HDF5 inspector**
+  (`cargo run -p xr-hdf5 --example inspect -- FILE`):
+  - **Dimension scales:** `CLASS="DIMENSION_SCALE"` and `NAME` are NUL-terminated fixed
+    strings. Dimension-only scales are empty big-endian `float32` datasets named
+    `"This is a netCDF dimension but not a netCDF variable.%10d"`.
+  - **Bookkeeping attributes:** `_Netcdf4Dimid` (scalar int), `_Netcdf4Coordinates` (dimension
+    ids, on every variable with dimensions), `DIMENSION_LIST` (reference lists) and
+    `REFERENCE_LIST` (`{dataset, dimension}` pairs). A variable that clashes with a dimension
+    name is stored as `_nc4_non_coord_<name>`.
+  - **Root attributes:** `_NCProperties` (we write `version=2,xarray-rs=<version>`), plus
+    `_nc3_strict` for the classic model.
+  - **`_FillValue`** is both the dataset fill property and an attribute.
+  - **Default chunking** is netCDF-C's `nc4_find_default_chunksizes2`, ported exactly (f32
+    arithmetic, 4 KiB 1-D unlimited rule, overhang spreading). Unspecified chunking therefore
+    matches netCDF-C's output.
+- **Attribute order:** compact attributes are ordered by each message's creation-order field.
+  This was a real bug: before the fix, attributes came back in header-message order.
+- **Verified against netCDF-C:**
+  - Reading netCDF-C's and xarray's files gives exactly what netCDF-C reports: dimension order
+    and ids, unlimited flags, variable and attribute order, chunk shapes, char arrays, groups.
+  - netCDF-C reads our files exactly as it reads its own, in both the full and classic models.
+  - Python xarray reads our netCDF-4 output identically (CI).
+- **The facade is now pure Rust.** `AutoBackend` picks by magic bytes: netCDF-3 goes to
+  `xr-netcdf3`, netCDF-4/HDF5 to `xr-netcdf4`. Writing netCDF-4 is pure Rust too. The
+  `netcdf-c` feature is now only an alternative backend (`io::c_backend()`) and the
+  differential-test oracle.
+
+### Memory-mapped I/O (added during M6, by request)
+- **`xr_io::map_file`** memory-maps files for reading, using `memmap2` with the one `unsafe`
+  call, documented. `read_file` is the copying alternative, for files that might be modified
+  while open.
+- **The HDF5, netCDF-4 and netCDF-3 readers all map by default.** Opening touches only metadata
+  pages. Contiguous HDF5 data decodes straight from the map, with no intermediate copy.
+- **Hyperslab reads:** `xr_hdf5::Dataset::read_slice` and `xr_netcdf3::Netcdf3File::read_slice`
+  touch only the chunks, records and rows a slice spans. Property tests check them against full
+  reads for every layout, chunk index, record layout and format version.
+- **Still eager:** `open_dataset` loads every variable. Lazy variables in `Dataset`, backed by
+  these slice readers, are the first item of M7 and what large files really need.
+
 ### CF layer (`xr-cf`)
 - On decode: apply `_FillValue`, `missing_value`, `scale_factor`, `add_offset` and `_Unsigned`. Parse `units` into `Unit`.
   Turn time variables into `NaiveDateTime` or `CfDate` depending on the calendar (§3 Time), and resolve `coordinates` and `bounds`.

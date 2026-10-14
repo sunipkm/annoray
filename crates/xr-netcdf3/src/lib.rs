@@ -23,7 +23,8 @@ mod write;
 
 use std::path::Path;
 
-use xr_io::{Backend, IoError, RawDataset, Result, WriteOptions};
+use xr_core::{Attrs, Name, Owned, TypedArray};
+use xr_io::{Backend, FileBytes, IoError, RawDataset, RawDim, Result, WriteOptions};
 
 /// The pure-Rust netCDF-3 backend.
 #[derive(Debug, Clone, Copy, Default)]
@@ -68,14 +69,103 @@ pub fn write_bytes(ds: &RawDataset, opts: &WriteOptions) -> Result<Vec<u8>> {
     write::serialize(ds, opts.format)
 }
 
+/// An open netCDF-3 file: the header is parsed, data is read on demand straight from the
+/// (memory-mapped) file, so opening is cheap and slices touch only what they need.
+#[derive(Debug)]
+pub struct Netcdf3File {
+    bytes: FileBytes,
+    header: read::Header,
+}
+
+impl Netcdf3File {
+    /// Memory-map and parse the header (see [`xr_io::map_file`] for the one caveat).
+    ///
+    /// # Errors
+    /// I/O errors, or [`IoError::Backend`] for malformed headers.
+    pub fn open(path: impl AsRef<Path>) -> Result<Self> {
+        Self::from_file_bytes(xr_io::map_file(path.as_ref())?)
+    }
+
+    /// Parse the header of mapped or in-memory bytes.
+    ///
+    /// # Errors
+    /// [`IoError::Backend`] for malformed headers.
+    pub fn from_file_bytes(bytes: FileBytes) -> Result<Self> {
+        let header = read::parse_header(&bytes)?;
+        Ok(Self { bytes, header })
+    }
+
+    /// Dimensions, in file order.
+    #[must_use]
+    pub fn dims(&self) -> &[(Name, RawDim)] {
+        &self.header.dims
+    }
+
+    /// Global attributes.
+    #[must_use]
+    pub fn attrs(&self) -> &Attrs {
+        &self.header.attrs
+    }
+
+    /// Variable names, in file order.
+    pub fn variables(&self) -> impl Iterator<Item = &Name> {
+        self.header.vars.iter().map(|v| &v.name)
+    }
+
+    fn var(&self, name: &str) -> Result<&read::VarInfo> {
+        self.header
+            .vars
+            .iter()
+            .find(|v| v.name == name)
+            .ok_or_else(|| bad(format!("no variable {name:?}")))
+    }
+
+    /// A variable's dimension names, shape and attributes.
+    ///
+    /// # Errors
+    /// If there is no such variable.
+    pub fn variable(&self, name: &str) -> Result<(&[Name], &[usize], &Attrs)> {
+        let v = self.var(name)?;
+        Ok((&v.dims, &v.shape, &v.attrs))
+    }
+
+    /// Read a whole variable.
+    ///
+    /// # Errors
+    /// If there is no such variable or its data is corrupt.
+    pub fn read(&self, name: &str) -> Result<TypedArray<Owned>> {
+        read::read_var(&self.bytes, &self.header, self.var(name)?)
+    }
+
+    /// Read the hyperslab `[start, start + count)` of a variable.
+    ///
+    /// # Errors
+    /// If there is no such variable, the slice is out of range, or the data is corrupt.
+    pub fn read_slice(
+        &self,
+        name: &str,
+        start: &[usize],
+        count: &[usize],
+    ) -> Result<TypedArray<Owned>> {
+        read::read_slice(&self.bytes, &self.header, self.var(name)?, start, count)
+    }
+
+    /// Everything, as a raw dataset.
+    ///
+    /// # Errors
+    /// If any variable's data is corrupt.
+    pub fn to_raw(&self) -> Result<RawDataset> {
+        read::to_raw(&self.bytes, &self.header)
+    }
+}
+
 impl Backend for Netcdf3 {
     fn name(&self) -> &'static str {
         NAME
     }
 
     fn read(&self, path: &Path) -> Result<RawDataset> {
-        let bytes = std::fs::read(path).map_err(|e| bad(format!("{}: {e}", path.display())))?;
-        read_bytes(&bytes)
+        Netcdf3File::open(path)?.to_raw()
     }
 
     fn write(&self, ds: &RawDataset, path: &Path, opts: &WriteOptions) -> Result<()> {

@@ -1,7 +1,7 @@
 //! Reading and writing files.
 //!
-//! netCDF-3 is read and written in pure Rust. netCDF-4 (HDF5) needs the `netcdf-c` feature
-//! for now.
+//! netCDF-3, netCDF-4 and HDF5 are read and written in pure Rust; files are memory-mapped.
+//! The optional `netcdf-c` feature adds the C libraries as an alternative backend.
 //!
 //! ```no_run
 //! # fn main() -> Result<(), xarray_rs::Error> {
@@ -88,19 +88,10 @@ pub fn to_netcdf_with_backend<S: Repr>(
     Ok(())
 }
 
-/// Picks a backend per file: netCDF-3 always uses the pure-Rust [`xr_netcdf3::Netcdf3`];
-/// netCDF-4/HDF5 uses the C libraries when the `netcdf-c` feature is enabled.
+/// Picks a backend per file, all pure Rust: netCDF-3 via [`xr_netcdf3::Netcdf3`], netCDF-4 and
+/// HDF5 via [`xr_netcdf4::Netcdf4`]. Files are memory-mapped, so opening is cheap.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct AutoBackend;
-
-const HDF5_MAGIC: &[u8] = b"\x89HDF\r\n\x1a\n";
-
-#[cfg(not(feature = "netcdf-c"))]
-fn needs_c(what: &str) -> xr_io::IoError {
-    xr_io::IoError::Unsupported(format!(
-        "{what} needs the `netcdf-c` feature (a pure-Rust HDF5 backend is planned)"
-    ))
-}
 
 impl Backend for AutoBackend {
     fn name(&self) -> &'static str {
@@ -108,38 +99,33 @@ impl Backend for AutoBackend {
     }
 
     fn read(&self, path: &Path) -> xr_io::Result<RawDataset> {
-        let mut head = [0u8; 8];
-        let n = std::fs::File::open(path)
-            .and_then(|mut f| std::io::Read::read(&mut f, &mut head))
-            .map_err(|e| xr_io::IoError::Backend {
-                backend: "auto",
-                message: format!("{}: {e}", path.display()),
-            })?;
-        let head = head.get(..n).unwrap_or_default();
-        if xr_netcdf3::is_netcdf3(head) {
-            return xr_netcdf3::Netcdf3.read(path);
+        let bytes = xr_io::map_file(path)?;
+        if xr_netcdf3::is_netcdf3(&bytes) {
+            return xr_netcdf3::Netcdf3File::from_file_bytes(bytes)?.to_raw();
         }
-        if head.starts_with(HDF5_MAGIC) {
-            #[cfg(feature = "netcdf-c")]
-            return xr_io_c::NetcdfC.read(path);
-            #[cfg(not(feature = "netcdf-c"))]
-            return Err(needs_c("reading netCDF-4/HDF5"));
+        if xr_hdf5::is_hdf5(&bytes) {
+            return xr_netcdf4::Netcdf4.read(path);
         }
         Err(xr_io::IoError::Unsupported(format!(
-            "{}: not a netCDF file",
+            "{}: not a netCDF or HDF5 file",
             path.display()
         )))
     }
 
     fn write(&self, ds: &RawDataset, path: &Path, opts: &WriteOptions) -> xr_io::Result<()> {
         if opts.format.is_netcdf3() {
-            return xr_netcdf3::Netcdf3.write(ds, path, opts);
+            xr_netcdf3::Netcdf3.write(ds, path, opts)
+        } else {
+            xr_netcdf4::Netcdf4.write(ds, path, opts)
         }
-        #[cfg(feature = "netcdf-c")]
-        return xr_io_c::NetcdfC.write(ds, path, opts);
-        #[cfg(not(feature = "netcdf-c"))]
-        Err(needs_c("writing netCDF-4"))
     }
+}
+
+/// The netCDF-C/HDF5 C-library backend, for comparison with the pure-Rust one.
+#[cfg(feature = "netcdf-c")]
+#[must_use]
+pub fn c_backend() -> &'static dyn Backend {
+    &xr_io_c::NetcdfC
 }
 
 /// The default backend ([`AutoBackend`]).

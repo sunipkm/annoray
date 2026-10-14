@@ -62,6 +62,9 @@ pub struct WDataset {
     pub shuffle: bool,
     /// Fill value as raw little-endian element bytes.
     pub fill: Option<Vec<u8>>,
+    /// Allocate no storage and write no values (readers see fill values). netCDF-C writes
+    /// dimension-only scales this way.
+    pub skip_data: bool,
     /// Attributes, in order.
     pub attrs: Vec<(String, AttrData)>,
 }
@@ -79,6 +82,7 @@ impl WDataset {
             deflate: None,
             shuffle: false,
             fill: None,
+            skip_data: false,
             attrs: Vec::new(),
         }
     }
@@ -93,6 +97,11 @@ pub enum AttrData {
     Value(AttrValue),
     /// A scalar variable-length UTF-8 string.
     VarString(String),
+    /// A scalar fixed-length string including its NUL terminator (HDF5 dimension-scale `CLASS`
+    /// and `NAME`).
+    CString(String),
+    /// A scalar 32-bit integer.
+    ScalarI32(i32),
     /// Object references to the objects at these absolute paths.
     References(Vec<String>),
     /// Variable-length sequences of object references (`DIMENSION_LIST`).
@@ -425,6 +434,26 @@ impl Plan {
                     }
                 }
             }
+            AttrData::CString(s) => {
+                let mut bytes = s.as_bytes().to_vec();
+                bytes.push(0);
+                (
+                    fixed_string_type(bytes.len(), false)?,
+                    dataspace(Some(&[]), &[]),
+                    Bytes {
+                        data: bytes,
+                        fixups: Vec::new(),
+                    },
+                )
+            }
+            AttrData::ScalarI32(v) => (
+                int_type(4, true),
+                dataspace(Some(&[]), &[]),
+                Bytes {
+                    data: v.to_le_bytes().to_vec(),
+                    fixups: Vec::new(),
+                },
+            ),
             AttrData::VarString(s) => {
                 let mut b = Bytes::default();
                 self.vlen(&mut b, s.len(), HeapObj::Bytes(s.as_bytes().to_vec()))?;
@@ -684,9 +713,17 @@ impl Plan {
         match &chunks {
             None => {
                 layout.u8(1);
-                let data = self.element_bytes(&ds.data)?;
-                let size = data.data.len();
-                if size == 0 {
+                let data = if ds.skip_data {
+                    Bytes::default()
+                } else {
+                    self.element_bytes(&ds.data)?
+                };
+                let size = if ds.skip_data {
+                    ds.data.len().saturating_mul(esize)
+                } else {
+                    data.data.len()
+                };
+                if ds.skip_data || size == 0 {
                     layout.u64(UNDEF);
                 } else {
                     let block = self.block(data, false);
@@ -697,7 +734,12 @@ impl Plan {
             Some(c) => {
                 layout.u8(2);
                 layout.u8(u8::try_from(rank.saturating_add(1)).map_err(|_| too_big("rank"))?);
-                match self.chunked(ds, c, esize)? {
+                let root = if ds.skip_data {
+                    None
+                } else {
+                    self.chunked(ds, c, esize)?
+                };
+                match root {
                     Some(root) => layout.addr(Target::Block(root)),
                     None => layout.u64(UNDEF),
                 }

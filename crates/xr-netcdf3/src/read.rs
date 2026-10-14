@@ -1,7 +1,7 @@
 //! Parsing netCDF-3 files. Every read is bounds-checked; malformed files give errors, never
 //! panics or allocations larger than the file.
 
-use xr_core::{Attrs, Name};
+use xr_core::{Attrs, Name, Owned, TypedArray};
 use xr_io::{IoError, RawDataset, RawDim, RawVariable, Storage};
 
 use crate::ck::{Ck, pad4};
@@ -117,8 +117,8 @@ struct VarHeader {
     begin: u64,
 }
 
-/// Parse a whole netCDF-3 file.
-pub(crate) fn parse(buf: &[u8]) -> Result<RawDataset, IoError> {
+/// Parse the header and work out where every variable's data lives (no data is read).
+pub(crate) fn parse_header(buf: &[u8]) -> Result<Header, IoError> {
     let magic = buf.get(..4).ok_or_else(|| bad("file too short"))?;
     let v = match magic {
         b"CDF\x01" => Version::Cdf1,
@@ -226,76 +226,225 @@ pub(crate) fn parse(buf: &[u8]) -> Result<RawDataset, IoError> {
         usize::try_from(numrecs_field).map_err(|_| bad("record count too large"))?
     };
 
-    let mut ds = RawDataset {
-        attrs: gattrs,
-        ..RawDataset::default()
-    };
+    let mut dims_out: Vec<(Name, RawDim)> = Vec::with_capacity(dims.len());
     for (i, (name, len)) in dims.iter().enumerate() {
-        let (len, unlimited) = if Some(i) == record_dim {
-            (numrecs, true)
+        let d = if Some(i) == record_dim {
+            RawDim {
+                len: numrecs,
+                unlimited: true,
+            }
         } else {
-            (
-                usize::try_from(*len).map_err(|_| bad("dimension too large"))?,
-                false,
-            )
+            RawDim {
+                len: usize::try_from(*len).map_err(|_| bad("dimension too large"))?,
+                unlimited: false,
+            }
         };
-        ds.dims.insert(name.clone(), RawDim { len, unlimited });
+        dims_out.push((name.clone(), d));
     }
-
+    let mut infos = Vec::with_capacity(vars.len());
     for vh in &vars {
-        let slab_len = slab(vh)?;
-        let begin = usize::try_from(vh.begin).map_err(|_| bad("offset too large"))?;
         let shape: Vec<usize> = vh
             .dimids
             .iter()
-            .map(|id| ds.dims.get_index(*id).map_or(0, |(_, d)| d.len))
+            .map(|id| dims_out.get(*id).map_or(0, |(_, d)| d.len))
             .collect();
-        let bytes: Vec<u8> = if is_record(vh) {
-            // Never allocate more than the file can hold.
-            let total = (Ck::from(slab_len) * numrecs)
-                .to::<usize>()
-                .filter(|t| *t <= buf.len());
-            let mut out = Vec::with_capacity(
-                total.ok_or_else(|| bad(format!("{:?}: record data exceeds the file", vh.name)))?,
-            );
-            for r in 0..numrecs {
-                let start = (Ck::from(begin) + Ck::from(r) * recsize)
-                    .to::<usize>()
-                    .ok_or_else(|| bad("offset overflow"))?;
-                let end = start
-                    .checked_add(slab_len)
-                    .ok_or_else(|| bad("offset overflow"))?;
-                out.extend_from_slice(
-                    buf.get(start..end).ok_or_else(|| {
-                        bad(format!("{:?}: record data past end of file", vh.name))
-                    })?,
-                );
-            }
-            out
-        } else {
-            let end = begin
-                .checked_add(slab_len)
-                .ok_or_else(|| bad("offset overflow"))?;
-            buf.get(begin..end)
-                .ok_or_else(|| bad(format!("{:?}: data past end of file", vh.name)))?
-                .to_vec()
-        };
-        let data = decode_array(vh.ty, &bytes, &shape)?;
-        let dim_names = vh
+        let names = vh
             .dimids
             .iter()
-            .filter_map(|id| ds.dims.get_index(*id).map(|(n, _)| n.clone()))
+            .filter_map(|id| dims_out.get(*id).map(|(n, _)| n.clone()))
             .collect();
+        infos.push(VarInfo {
+            name: vh.name.clone(),
+            dims: names,
+            shape,
+            attrs: vh.attrs.clone(),
+            ty: vh.ty,
+            begin: usize::try_from(vh.begin).map_err(|_| bad("offset too large"))?,
+            record: is_record(vh),
+        });
+    }
+    Ok(Header {
+        dims: dims_out,
+        attrs: gattrs,
+        vars: infos,
+        recsize,
+    })
+}
+
+/// A parsed header.
+#[derive(Debug, Clone)]
+pub(crate) struct Header {
+    pub(crate) dims: Vec<(Name, RawDim)>,
+    pub(crate) attrs: Attrs,
+    pub(crate) vars: Vec<VarInfo>,
+    recsize: usize,
+}
+
+/// Where and how one variable is stored.
+#[derive(Debug, Clone)]
+pub(crate) struct VarInfo {
+    pub(crate) name: Name,
+    pub(crate) dims: Vec<Name>,
+    pub(crate) shape: Vec<usize>,
+    pub(crate) attrs: Attrs,
+    pub(crate) ty: NcType,
+    begin: usize,
+    record: bool,
+}
+
+/// Append the rows of the box `[start, start + count)` of a row-major array (dims `dims`,
+/// `esize` bytes per element) stored at `base` in `buf`.
+fn append_box(
+    buf: &[u8],
+    base: usize,
+    dims: &[usize],
+    start: &[usize],
+    count: &[usize],
+    esize: usize,
+    out: &mut Vec<u8>,
+) -> Result<(), IoError> {
+    let rank = dims.len();
+    if count.contains(&0) {
+        return Ok(());
+    }
+    if rank == 0 {
+        let end = base
+            .checked_add(esize)
+            .ok_or_else(|| bad("offset overflow"))?;
+        out.extend_from_slice(
+            buf.get(base..end)
+                .ok_or_else(|| bad("data past end of file"))?,
+        );
+        return Ok(());
+    }
+    let last = rank.saturating_sub(1);
+    let run = (Ck::from(count.get(last).copied().unwrap_or(0)) * esize)
+        .to::<usize>()
+        .ok_or_else(|| bad("offset overflow"))?;
+    let outer: Vec<usize> = count.iter().take(last).copied().collect();
+    let rows = outer
+        .iter()
+        .try_fold(1usize, |a, c| a.checked_mul(*c))
+        .ok_or_else(|| bad("slice too large"))?;
+    for r in 0..rows {
+        // Row-major multi-index within the box (all axes but the last).
+        let mut rem = r;
+        let mut idx = vec![0usize; last];
+        for (slot, c) in idx.iter_mut().zip(&outer).rev() {
+            *slot = rem.checked_rem(*c).unwrap_or(0);
+            rem = rem.checked_div(*c).unwrap_or(0);
+        }
+        let mut lin = Ck::from(0usize);
+        for k in 0..rank {
+            let g = Ck::from(start.get(k).copied().unwrap_or(0)) + idx.get(k).copied().unwrap_or(0);
+            lin = lin * dims.get(k).copied().unwrap_or(0) + g;
+        }
+        let at = (Ck::from(base) + lin * esize)
+            .to::<usize>()
+            .ok_or_else(|| bad("offset overflow"))?;
+        let end = at.checked_add(run).ok_or_else(|| bad("offset overflow"))?;
+        out.extend_from_slice(
+            buf.get(at..end)
+                .ok_or_else(|| bad("data past end of file"))?,
+        );
+    }
+    Ok(())
+}
+
+/// Read the hyperslab `[start, start + count)` of a variable. Only the records and rows it
+/// spans are touched.
+pub(crate) fn read_slice(
+    buf: &[u8],
+    h: &Header,
+    v: &VarInfo,
+    start: &[usize],
+    count: &[usize],
+) -> Result<TypedArray<Owned>, IoError> {
+    let rank = v.shape.len();
+    if start.len() != rank || count.len() != rank {
+        return Err(bad(format!(
+            "{:?}: slice rank does not match the variable",
+            v.name
+        )));
+    }
+    if start
+        .iter()
+        .zip(count)
+        .zip(&v.shape)
+        .any(|((s, c), d)| s.checked_add(*c).is_none_or(|e| e > *d))
+    {
+        return Err(bad(format!(
+            "{:?}: slice {start:?}+{count:?} is outside {:?}",
+            v.name, v.shape
+        )));
+    }
+    let esize = v.ty.size();
+    let n = count
+        .iter()
+        .try_fold(1usize, |a, c| a.checked_mul(*c))
+        .ok_or_else(|| bad("slice too large"))?;
+    // Never allocate more than the file can hold.
+    let bytes = n
+        .checked_mul(esize)
+        .filter(|b| *b <= buf.len())
+        .ok_or_else(|| bad(format!("{:?}: data exceeds the file", v.name)))?;
+    let mut out = Vec::with_capacity(bytes);
+    if v.record {
+        let inner_dims = v.shape.get(1..).unwrap_or_default();
+        let (r0, nr) = (
+            start.first().copied().unwrap_or(0),
+            count.first().copied().unwrap_or(0),
+        );
+        for r in r0..r0.saturating_add(nr) {
+            let base = (Ck::from(v.begin) + Ck::from(r) * h.recsize)
+                .to::<usize>()
+                .ok_or_else(|| bad("offset overflow"))?;
+            append_box(
+                buf,
+                base,
+                inner_dims,
+                start.get(1..).unwrap_or_default(),
+                count.get(1..).unwrap_or_default(),
+                esize,
+                &mut out,
+            )?;
+        }
+    } else {
+        append_box(buf, v.begin, &v.shape, start, count, esize, &mut out)?;
+    }
+    decode_array(v.ty, &out, count)
+}
+
+/// Read a whole variable.
+pub(crate) fn read_var(buf: &[u8], h: &Header, v: &VarInfo) -> Result<TypedArray<Owned>, IoError> {
+    let start = vec![0; v.shape.len()];
+    read_slice(buf, h, v, &start, &v.shape)
+}
+
+/// Everything, as a raw dataset.
+pub(crate) fn to_raw(buf: &[u8], h: &Header) -> Result<RawDataset, IoError> {
+    let mut ds = RawDataset {
+        attrs: h.attrs.clone(),
+        ..RawDataset::default()
+    };
+    ds.dims.extend(h.dims.iter().cloned());
+    for v in &h.vars {
+        let data = read_var(buf, h, v)?;
         ds.vars.insert(
-            vh.name.clone(),
+            v.name.clone(),
             RawVariable {
-                dims: dim_names,
+                dims: v.dims.clone(),
                 data,
-                is_char: vh.ty == NcType::Char,
-                attrs: vh.attrs.clone(),
+                is_char: v.ty == NcType::Char,
+                attrs: v.attrs.clone(),
                 storage: Storage::default(),
             },
         );
     }
     Ok(ds)
+}
+
+/// Parse a whole netCDF-3 file.
+pub(crate) fn parse(buf: &[u8]) -> Result<RawDataset, IoError> {
+    to_raw(buf, &parse_header(buf)?)
 }

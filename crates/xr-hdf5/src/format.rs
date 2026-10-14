@@ -100,6 +100,8 @@ pub(crate) fn superblock(buf: &[u8]) -> Result<Superblock, IoError> {
 pub(crate) struct Message {
     pub(crate) kind: u16,
     pub(crate) flags: u8,
+    /// Creation order, when the object header tracks it (attribute order).
+    pub(crate) order: Option<u16>,
     pub(crate) data: Vec<u8>,
 }
 
@@ -182,6 +184,7 @@ pub(crate) fn object_header(file: &File, addr: u64) -> Result<Vec<Message>, IoEr
 fn push(
     kind: u16,
     flags: u8,
+    order: Option<u16>,
     data: &[u8],
     out: &mut Vec<Message>,
     pending: &mut Vec<(u64, usize)>,
@@ -198,6 +201,7 @@ fn push(
         out.push(Message {
             kind,
             flags,
+            order,
             data: data.to_vec(),
         });
     }
@@ -217,7 +221,7 @@ fn read_v1_messages(
         let flags = c.u8()?;
         c.skip(3)?;
         let data = c.bytes(size)?;
-        push(kind, flags, data, out, pending, s)?;
+        push(kind, flags, None, data, out, pending, s)?;
     }
     Ok(())
 }
@@ -235,11 +239,13 @@ fn read_v2_messages(
         let kind = u16::from(c.u8()?);
         let size = usize::from(c.u16()?);
         let flags = c.u8()?;
-        if hflags & 0x04 != 0 {
-            c.skip(2)?; // creation order
-        }
+        let order = if hflags & 0x04 != 0 {
+            Some(c.u16()?)
+        } else {
+            None
+        };
         let data = c.bytes(size)?;
-        push(kind, flags, data, out, pending, s)?;
+        push(kind, flags, order, data, out, pending, s)?;
     }
     Ok(())
 }

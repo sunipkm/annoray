@@ -60,7 +60,11 @@ pub enum Datatype {
         /// `(name, value bytes)` pairs.
         members: Vec<(String, Vec<u8>)>,
     },
-    /// Anything else (compound, reference, opaque, array, bitfield, …): not converted.
+    /// An object reference (the address of an object header).
+    ObjectReference,
+    /// A variable-length sequence of object references (e.g. `DIMENSION_LIST`).
+    ReferenceList,
+    /// Anything else (compound, region reference, opaque, array, bitfield, …): not converted.
     Other {
         /// The HDF5 type class.
         class: u8,
@@ -162,11 +166,13 @@ impl Datatype {
                     Self::VarString {
                         pad: pad_of(b0 >> 4),
                     }
+                } else if base == Self::ObjectReference {
+                    Self::ReferenceList
                 } else {
-                    let _ = base;
                     Self::Other { class, size }
                 }
             }
+            7 if b0 & 0x0F == 0 && size == 8 => Self::ObjectReference,
             2 | 4 | 5 | 6 | 7 | 10 => {
                 // Properties of unsupported classes are not needed: messages are length-delimited.
                 Self::Other { class, size }
@@ -183,7 +189,8 @@ impl Datatype {
             Self::FixedString { size, .. } | Self::Other { size, .. } => *size,
             // Length (4) + global heap collection address + object index (4); sized at the
             // file's offset width by `element_size`.
-            Self::VarString { .. } => 16,
+            Self::VarString { .. } | Self::ReferenceList => 16,
+            Self::ObjectReference => 8,
             Self::Enum { base, .. } => base.size(),
         }
     }
@@ -191,7 +198,9 @@ impl Datatype {
     /// Bytes per element in a file with offset width `offset`.
     pub(crate) fn element_size(&self, offset: u8) -> usize {
         match self {
-            Self::VarString { .. } => 8usize.saturating_add(usize::from(offset)),
+            Self::VarString { .. } | Self::ReferenceList => {
+                8usize.saturating_add(usize::from(offset))
+            }
             other => other.size(),
         }
     }
@@ -368,5 +377,49 @@ pub(crate) fn decode(
         Datatype::Other { class, .. } => {
             return Err(IoError::Unsupported(format!("HDF5 datatype class {class}")));
         }
+        Datatype::ObjectReference | Datatype::ReferenceList => {
+            return Err(IoError::Unsupported(
+                "object references (use Attribute::references)".into(),
+            ));
+        }
     })
+}
+
+/// Object references: one address per element (`None` for a null reference).
+pub(crate) fn decode_references(file: &File, bytes: &[u8]) -> Result<Vec<Option<u64>>, IoError> {
+    bytes
+        .chunks_exact(usize::from(file.sizes.offset).max(8))
+        .map(|c| {
+            Cursor::new(c, 0, file.sizes)
+                .addr()
+                .map(|a| a.filter(|x| *x != 0))
+        })
+        .collect()
+}
+
+/// Variable-length lists of object references, read from the global heap.
+pub(crate) fn decode_reference_lists(file: &File, bytes: &[u8]) -> Result<Vec<Vec<u64>>, IoError> {
+    let esize = 8usize.saturating_add(usize::from(file.sizes.offset));
+    let mut heaps: HashMap<u64, HashMap<u16, Vec<u8>>> = HashMap::new();
+    let mut out = Vec::new();
+    for el in bytes.chunks_exact(esize) {
+        let mut c = Cursor::new(el, 0, file.sizes);
+        let n = usize::try_from(c.u32()?).map_err(|_| bad("reference list too long"))?;
+        let addr = c.addr()?;
+        let index = u16::try_from(c.u32()?).map_err(|_| bad("bad global heap index"))?;
+        let Some(a) = addr.filter(|_| n > 0) else {
+            out.push(Vec::new());
+            continue;
+        };
+        let heap = match heaps.entry(a) {
+            std::collections::hash_map::Entry::Occupied(e) => e.into_mut(),
+            std::collections::hash_map::Entry::Vacant(e) => e.insert(global_heap(file, a)?),
+        };
+        let obj = heap
+            .get(&index)
+            .ok_or_else(|| bad("missing global heap object"))?;
+        let refs = decode_references(file, obj)?;
+        out.push(refs.into_iter().take(n).flatten().collect());
+    }
+    Ok(out)
 }

@@ -13,7 +13,8 @@ use crate::{AttrData, Attribute, File, Group, Node, WDataset, WGroup, WNode};
 pub struct Hdf5;
 
 /// An attribute value in the netCDF attribute model (`None` if it cannot be represented).
-pub(crate) fn attr_value(a: &Attribute) -> Option<AttrValue> {
+#[must_use]
+pub fn attr_value(a: &Attribute) -> Option<AttrValue> {
     let v = a.value().ok()?;
     let scalar = a.shape.as_ref().is_some_and(Vec::is_empty);
     Some(match v {

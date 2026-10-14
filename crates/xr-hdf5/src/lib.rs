@@ -35,9 +35,9 @@ use std::path::Path;
 use std::sync::Arc;
 
 use xr_core::{Owned, TypedArray};
-use xr_io::IoError;
+use xr_io::{FileBytes, IoError};
 
-pub use backend::Hdf5;
+pub use backend::{Hdf5, attr_value};
 pub use checksum::lookup3;
 use ck::Ck;
 use cursor::{Cursor, Sizes};
@@ -69,7 +69,7 @@ pub fn is_hdf5(bytes: &[u8]) -> bool {
 /// An open HDF5 file (held in memory). Cloning is cheap.
 #[derive(Debug, Clone)]
 pub struct File {
-    buf: Arc<Vec<u8>>,
+    buf: Arc<FileBytes>,
     pub(crate) sizes: Sizes,
     base: u64,
     root: u64,
@@ -78,14 +78,22 @@ pub struct File {
 }
 
 impl File {
-    /// Open a file.
+    /// Open a file by memory-mapping it: only the metadata and the data actually read are
+    /// paged in, so opening large files is cheap. See [`xr_io::map_file`] for the one caveat
+    /// (the file must not be modified while open) and [`File::open_in_memory`] to avoid it.
     ///
     /// # Errors
     /// I/O errors, or [`IoError::Backend`] if it is not a readable HDF5 file.
     pub fn open(path: impl AsRef<Path>) -> Result<Self, IoError> {
-        let path = path.as_ref();
-        let buf = std::fs::read(path).map_err(|e| bad(format!("{}: {e}", path.display())))?;
-        Self::from_bytes(buf)
+        Self::from_file_bytes(xr_io::map_file(path.as_ref())?)
+    }
+
+    /// Open a file by reading it entirely into memory.
+    ///
+    /// # Errors
+    /// As for [`File::open`].
+    pub fn open_in_memory(path: impl AsRef<Path>) -> Result<Self, IoError> {
+        Self::from_file_bytes(xr_io::read_file(path.as_ref())?)
     }
 
     /// Parse a file held in memory.
@@ -93,6 +101,14 @@ impl File {
     /// # Errors
     /// [`IoError::Backend`] if it is not a readable HDF5 file.
     pub fn from_bytes(buf: Vec<u8>) -> Result<Self, IoError> {
+        Self::from_file_bytes(FileBytes::Owned(buf))
+    }
+
+    /// Parse mapped or in-memory file bytes.
+    ///
+    /// # Errors
+    /// [`IoError::Backend`] if it is not a readable HDF5 file.
+    pub fn from_file_bytes(buf: FileBytes) -> Result<Self, IoError> {
         let sb = format::superblock(&buf)?;
         Ok(Self {
             buf: Arc::new(buf),
@@ -126,7 +142,8 @@ impl File {
         if at > self.buf.len() {
             return Err(bad(format!("address {addr} is past the end of the file")));
         }
-        Ok(Cursor::new(&self.buf, at, self.sizes))
+        let bytes: &[u8] = &self.buf;
+        Ok(Cursor::new(bytes, at, self.sizes))
     }
 
     /// The root group.
@@ -145,7 +162,12 @@ impl File {
         let msgs = format::object_header(self, addr)?;
         let has = |k: u16| msgs.iter().any(|m| m.kind == k);
         Ok(if has(kind::LAYOUT) {
-            Node::Dataset(Box::new(Dataset::from_messages(self.clone(), path, &msgs)?))
+            Node::Dataset(Box::new(Dataset::from_messages(
+                self.clone(),
+                addr,
+                path,
+                &msgs,
+            )?))
         } else if has(kind::DATATYPE)
             && !has(kind::LINK)
             && !has(kind::LINK_INFO)
@@ -191,6 +213,12 @@ fn child_path(parent: &str, name: &str) -> String {
 }
 
 impl Group {
+    /// The address of the group's object header (what object references point to).
+    #[must_use]
+    pub fn address(&self) -> u64 {
+        self.addr
+    }
+
     /// The group's path (`/` for the root).
     #[must_use]
     pub fn path(&self) -> &str {
@@ -297,6 +325,35 @@ pub struct Attribute {
 }
 
 impl Attribute {
+    /// Object reference targets (object header addresses), for reference attributes.
+    ///
+    /// # Errors
+    /// [`IoError::Unsupported`] if the attribute does not hold object references.
+    pub fn references(&self) -> Result<Vec<Option<u64>>, IoError> {
+        if self.dtype != Datatype::ObjectReference {
+            return Err(IoError::Unsupported(format!(
+                "attribute {:?} does not hold references",
+                self.name
+            )));
+        }
+        dtype::decode_references(&self.file, &self.data)
+    }
+
+    /// Lists of object reference targets, for variable-length reference attributes such as
+    /// `DIMENSION_LIST`.
+    ///
+    /// # Errors
+    /// [`IoError::Unsupported`] if the attribute does not hold reference lists.
+    pub fn reference_lists(&self) -> Result<Vec<Vec<u64>>, IoError> {
+        if self.dtype != Datatype::ReferenceList {
+            return Err(IoError::Unsupported(format!(
+                "attribute {:?} does not hold reference lists",
+                self.name
+            )));
+        }
+        dtype::decode_reference_lists(&self.file, &self.data)
+    }
+
     /// The value.
     ///
     /// # Errors
@@ -338,13 +395,15 @@ fn attributes(file: &File, msgs: &[Message]) -> Result<Vec<Attribute>, IoError> 
             data: a.data,
         })
     };
+    // Compact attributes in creation order when the header tracks it (as netCDF-C reads them).
+    let mut compact: Vec<(Option<u16>, Attribute)> = Vec::new();
     for m in msgs {
         match m.kind {
             kind::ATTRIBUTE => {
                 if m.flags & 2 != 0 {
                     return Err(IoError::Unsupported("shared attribute messages".into()));
                 }
-                out.push(to_attr(format::attribute(file, &m.data)?)?);
+                compact.push((m.order, to_attr(format::attribute(file, &m.data)?)?));
             }
             kind::ATTRIBUTE_INFO => {
                 let info = format::attribute_info(&m.data, file.sizes)?;
@@ -371,13 +430,19 @@ fn attributes(file: &File, msgs: &[Message]) -> Result<Vec<Attribute>, IoError> 
             _ => {}
         }
     }
-    Ok(out)
+    if compact.iter().all(|(o, _)| o.is_some()) {
+        compact.sort_by_key(|(o, _)| *o);
+    }
+    let mut all: Vec<Attribute> = compact.into_iter().map(|(_, a)| a).collect();
+    all.extend(out);
+    Ok(all)
 }
 
 /// A dataset.
 #[derive(Debug, Clone)]
 pub struct Dataset {
     file: File,
+    addr: u64,
     path: String,
     space: Option<Space>,
     dtype: Datatype,
@@ -388,7 +453,12 @@ pub struct Dataset {
 }
 
 impl Dataset {
-    fn from_messages(file: File, path: String, msgs: &[Message]) -> Result<Self, IoError> {
+    fn from_messages(
+        file: File,
+        addr: u64,
+        path: String,
+        msgs: &[Message],
+    ) -> Result<Self, IoError> {
         let s = file.sizes;
         let find = |k: u16| msgs.iter().find(|m| m.kind == k);
         let dt_msg = find(kind::DATATYPE)
@@ -415,6 +485,7 @@ impl Dataset {
         };
         Ok(Self {
             file,
+            addr,
             path,
             space,
             dtype,
@@ -423,6 +494,18 @@ impl Dataset {
             fill,
             msgs: msgs.to_vec(),
         })
+    }
+
+    /// The address of the dataset's object header (what object references point to).
+    #[must_use]
+    pub fn address(&self) -> u64 {
+        self.addr
+    }
+
+    /// The fill value as raw element bytes, if one is defined.
+    #[must_use]
+    pub fn fill_value(&self) -> Option<&[u8]> {
+        self.fill.as_deref()
     }
 
     /// The dataset's path.
@@ -537,14 +620,18 @@ impl Dataset {
             Some(f) if f.len() == esize => f.clone(),
             _ => vec![0; esize],
         };
-        let bytes = match &self.layout {
+        let bytes: std::borrow::Cow<'_, [u8]> = match &self.layout {
             Layout::Compact(data) => data
                 .get(..total)
                 .ok_or_else(|| bad(format!("{}: compact data truncated", self.path)))?
-                .to_vec(),
-            Layout::Contiguous { addr: None, .. } => {
-                fill.iter().copied().cycle().take(total).collect()
-            }
+                .into(),
+            Layout::Contiguous { addr: None, .. } => fill
+                .iter()
+                .copied()
+                .cycle()
+                .take(total)
+                .collect::<Vec<u8>>()
+                .into(),
             Layout::Contiguous {
                 addr: Some(a),
                 size,
@@ -556,20 +643,22 @@ impl Dataset {
                     )));
                 }
                 if total == 0 {
-                    Vec::new()
+                    Vec::new().into()
                 } else {
-                    self.file.cursor(*a)?.bytes(total)?.to_vec()
+                    // Straight from the (mapped) file: no intermediate copy.
+                    self.file.cursor(*a)?.bytes(total)?.into()
                 }
             }
             Layout::Chunked { addr, chunk, index } => {
                 let mut out: Vec<u8> = fill.iter().copied().cycle().take(total).collect();
                 if let Some(addr) = addr {
                     let cdims: Vec<u64> = chunk.iter().take(shape.len()).copied().collect();
+                    let whole = vec![0usize; shape.len()];
                     for c in self.chunk_list(*addr, &cdims, index, &shape, esize)? {
-                        self.place_chunk(&c, &cdims, &shape, esize, &mut out)?;
+                        self.place_chunk(&c, &cdims, &shape, esize, &whole, &shape, &mut out)?;
                     }
                 }
-                out
+                out.into()
             }
         };
         dtype::decode(&self.file, &self.dtype, &bytes, &shape)
@@ -734,19 +823,45 @@ impl Dataset {
         })
     }
 
+    /// Decode one chunk and copy its part of the box `[lo, lo + count)` into `out` (which holds
+    /// exactly that box, row-major).
+    #[allow(clippy::too_many_arguments)]
     fn place_chunk(
         &self,
         c: &ChunkRef,
         cdims: &[u64],
         shape: &[usize],
         esize: usize,
+        lo: &[usize],
+        count: &[usize],
         out: &mut [u8],
     ) -> Result<(), IoError> {
-        let rank = shape.len();
         let cd: Vec<usize> = cdims
             .iter()
             .map(|d| usize::try_from(*d).unwrap_or(usize::MAX))
             .collect();
+        let off: Vec<usize> = c
+            .offset
+            .iter()
+            .map(|o| usize::try_from(*o).unwrap_or(usize::MAX))
+            .collect();
+        // The part of this chunk inside both the dataset and the requested box.
+        let mut from = Vec::with_capacity(shape.len());
+        let mut to = Vec::with_capacity(shape.len());
+        for k in 0..shape.len() {
+            let o = off.get(k).copied().unwrap_or(0);
+            let l = lo.get(k).copied().unwrap_or(0);
+            let a = o.max(l);
+            let b = o
+                .saturating_add(cd.get(k).copied().unwrap_or(0))
+                .min(shape.get(k).copied().unwrap_or(0))
+                .min(l.saturating_add(count.get(k).copied().unwrap_or(0)));
+            if a >= b {
+                return Ok(());
+            }
+            from.push(a);
+            to.push(b);
+        }
         let chunk_elems = cd
             .iter()
             .try_fold(Ck::from(1usize), |a, d| Some(a * *d))
@@ -756,11 +871,11 @@ impl Dataset {
             .usize()
             .ok_or_else(|| bad("chunk too large"))?;
         let stored = usize::try_from(c.size).map_err(|_| bad("chunk too large"))?;
-        let raw = self.file.cursor(c.addr)?.bytes(stored)?.to_vec();
-        let data = if self.filters.is_empty() {
-            raw
+        let raw = self.file.cursor(c.addr)?.bytes(stored)?;
+        let data: std::borrow::Cow<'_, [u8]> = if self.filters.is_empty() {
+            raw.into()
         } else {
-            filters::decode(&self.filters, c.mask, raw, expected)?
+            filters::decode(&self.filters, c.mask, raw.to_vec(), expected)?.into()
         };
         if data.len() < expected {
             return Err(bad(format!(
@@ -768,75 +883,155 @@ impl Dataset {
                 self.path, c.offset
             )));
         }
-        let off: Vec<usize> = c
-            .offset
-            .iter()
-            .map(|o| usize::try_from(*o).unwrap_or(usize::MAX))
-            .collect();
-        if rank == 0 {
-            if let (Some(dst), Some(src)) = (out.get_mut(..esize), data.get(..esize)) {
-                dst.copy_from_slice(src);
-            }
-            return Ok(());
-        }
-        let last = rank.saturating_sub(1);
-        let (Some(&clast), Some(&dlast), Some(&olast)) =
-            (cd.get(last), shape.get(last), off.get(last))
-        else {
-            return Ok(());
-        };
-        if olast >= dlast {
-            return Ok(());
-        }
-        let row = clast.min(dlast.saturating_sub(olast));
-        // Iterate over every row (all indices but the last) of the chunk.
-        let outer: Vec<usize> = cd.iter().take(last).copied().collect();
-        let nrows: usize = outer
-            .iter()
-            .try_fold(1usize, |a, d| a.checked_mul(*d))
-            .ok_or_else(|| bad("chunk too large"))?;
-        for r in 0..nrows {
-            let idx = unravel(
-                r as u64,
-                &outer.iter().map(|x| *x as u64).collect::<Vec<_>>(),
-            )
-            .unwrap_or_default();
-            let mut inside = true;
-            let mut dst = Ck::from(0usize);
-            let mut src = Ck::from(0usize);
-            for (k, i) in idx.iter().enumerate() {
-                let i = usize::try_from(*i).unwrap_or(usize::MAX);
-                let g = off.get(k).copied().unwrap_or(0).saturating_add(i);
-                let dim = shape.get(k).copied().unwrap_or(0);
-                if g >= dim {
-                    inside = false;
-                    break;
-                }
-                dst = dst * dim + g;
-                src = src * cd.get(k).copied().unwrap_or(0) + i;
-            }
-            if !inside {
-                continue;
-            }
-            let dst = ((dst * dlast + olast) * esize)
-                .usize()
-                .ok_or_else(|| bad("offset overflow"))?;
-            let src = ((src * clast) * esize)
-                .usize()
-                .ok_or_else(|| bad("offset overflow"))?;
-            let len = (Ck::from(row) * esize)
-                .usize()
-                .ok_or_else(|| bad("offset overflow"))?;
-            let (Some(d), Some(s)) = (
-                out.get_mut(dst..dst.saturating_add(len)),
-                data.get(src..src.saturating_add(len)),
-            ) else {
-                return Err(bad("chunk outside the dataset"));
-            };
-            d.copy_from_slice(s);
-        }
-        Ok(())
+        copy_box(&data, &cd, &off, out, count, lo, &from, &to, esize)
     }
+
+    /// Read the hyperslab `[start, start + count)`. Only the chunks (or, for contiguous data,
+    /// the rows) that intersect it are touched, so slices of large mapped files are cheap.
+    ///
+    /// # Errors
+    /// [`IoError::Backend`] if the slice is outside the dataset; otherwise as for
+    /// [`read`](Self::read).
+    pub fn read_slice(
+        &self,
+        start: &[usize],
+        count: &[usize],
+    ) -> Result<TypedArray<Owned>, IoError> {
+        let shape = self.shape();
+        if start.len() != shape.len() || count.len() != shape.len() {
+            return Err(bad(format!(
+                "{}: slice rank does not match the dataset",
+                self.path
+            )));
+        }
+        if start
+            .iter()
+            .zip(count)
+            .zip(&shape)
+            .any(|((s, c), d)| s.checked_add(*c).is_none_or(|e| e > *d))
+        {
+            return Err(bad(format!(
+                "{}: slice {start:?}+{count:?} is outside shape {shape:?}",
+                self.path
+            )));
+        }
+        let esize = self.dtype.element_size(self.file.sizes.offset);
+        let n = count
+            .iter()
+            .try_fold(Ck::from(1usize), |a, d| Some(a * *d))
+            .and_then(Ck::usize)
+            .ok_or_else(|| bad("slice too large"))?;
+        let total = (Ck::from(n) * esize)
+            .usize()
+            .filter(|t| *t <= self.file.load_limit)
+            .ok_or_else(|| bad(format!("{}: slice too large to load", self.path)))?;
+        let fill: Vec<u8> = match &self.fill {
+            Some(f) if f.len() == esize => f.clone(),
+            _ => vec![0; esize.max(1)],
+        };
+        let mut out: Vec<u8> = fill.iter().copied().cycle().take(total).collect();
+        let to: Vec<usize> = start
+            .iter()
+            .zip(count)
+            .map(|(s, c)| s.saturating_add(*c))
+            .collect();
+        let origin = vec![0usize; shape.len()];
+        if n > 0 {
+            match &self.layout {
+                Layout::Compact(data) => copy_box(
+                    data, &shape, &origin, &mut out, count, start, start, &to, esize,
+                )?,
+                Layout::Contiguous { addr: Some(a), .. } => {
+                    let full = shape
+                        .iter()
+                        .try_fold(Ck::from(esize), |acc, d| Some(acc * *d))
+                        .and_then(Ck::usize)
+                        .ok_or_else(|| bad("dataset too large"))?;
+                    // A view of the mapped file; only the rows copied below are paged in.
+                    let src = self.file.cursor(*a)?.bytes(full)?;
+                    copy_box(
+                        src, &shape, &origin, &mut out, count, start, start, &to, esize,
+                    )?;
+                }
+                Layout::Chunked {
+                    addr: Some(addr),
+                    chunk,
+                    index,
+                } => {
+                    let cdims: Vec<u64> = chunk.iter().take(shape.len()).copied().collect();
+                    for c in self.chunk_list(*addr, &cdims, index, &shape, esize)? {
+                        self.place_chunk(&c, &cdims, &shape, esize, start, count, &mut out)?;
+                    }
+                }
+                Layout::Contiguous { addr: None, .. } | Layout::Chunked { addr: None, .. } => {}
+            }
+        }
+        dtype::decode(&self.file, &self.dtype, &out, count)
+    }
+}
+
+/// Copy the box `[from, to)` (global coordinates) from `src` (dims `src_dims`, origin
+/// `src_origin`) into `dst` (dims `dst_dims`, origin `dst_origin`). Row-major, `esize` bytes per
+/// element; every index is bounds-checked.
+#[allow(clippy::too_many_arguments)]
+fn copy_box(
+    src: &[u8],
+    src_dims: &[usize],
+    src_origin: &[usize],
+    dst: &mut [u8],
+    dst_dims: &[usize],
+    dst_origin: &[usize],
+    from: &[usize],
+    to: &[usize],
+    esize: usize,
+) -> Result<(), IoError> {
+    let rank = from.len();
+    if rank == 0 {
+        let (Some(d), Some(s)) = (dst.get_mut(..esize), src.get(..esize)) else {
+            return Err(bad("scalar out of range"));
+        };
+        d.copy_from_slice(s);
+        return Ok(());
+    }
+    let last = rank.saturating_sub(1);
+    let extent: Vec<usize> = from
+        .iter()
+        .zip(to)
+        .map(|(a, b)| b.saturating_sub(*a))
+        .collect();
+    let run = (Ck::from(extent.get(last).copied().unwrap_or(0)) * esize)
+        .usize()
+        .ok_or_else(|| bad("offset overflow"))?;
+    let outer: Vec<u64> = extent.iter().take(last).map(|e| *e as u64).collect();
+    let rows: u64 = outer
+        .iter()
+        .try_fold(1u64, |a, e| a.checked_mul(*e))
+        .ok_or_else(|| bad("box too large"))?;
+    for r in 0..rows {
+        let idx = unravel(r, &outer).unwrap_or_default();
+        let mut s = Ck::from(0usize);
+        let mut d = Ck::from(0usize);
+        for k in 0..rank {
+            let g = from.get(k).copied().unwrap_or(0).saturating_add(
+                idx.get(k)
+                    .map_or(0, |x| usize::try_from(*x).unwrap_or(usize::MAX)),
+            );
+            s = s * src_dims.get(k).copied().unwrap_or(0)
+                + (Ck::from(g) - src_origin.get(k).copied().unwrap_or(0));
+            d = d * dst_dims.get(k).copied().unwrap_or(0)
+                + (Ck::from(g) - dst_origin.get(k).copied().unwrap_or(0));
+        }
+        let s = (s * esize).usize().ok_or_else(|| bad("offset overflow"))?;
+        let d = (d * esize).usize().ok_or_else(|| bad("offset overflow"))?;
+        let (Some(dd), Some(ss)) = (
+            dst.get_mut(d..d.saturating_add(run)),
+            src.get(s..s.saturating_add(run)),
+        ) else {
+            return Err(bad("data outside its bounds"));
+        };
+        dd.copy_from_slice(ss);
+    }
+    Ok(())
 }
 
 /// Row-major multi-index of linear index `i` over `dims` (`None` if out of range).

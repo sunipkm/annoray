@@ -8,6 +8,7 @@ members = [
     "crates/xr-io-c",
     "crates/xr-macros",
     "crates/xr-netcdf3",
+    "crates/xr-netcdf4",
     "crates/xr-units",
     "xarray-rs",
 ]
@@ -27,9 +28,11 @@ xr-cf = { path = "crates/xr-cf", version = "0.0.1" }
 xr-io-c = { path = "crates/xr-io-c", version = "0.0.1" }
 xr-netcdf3 = { path = "crates/xr-netcdf3", version = "0.0.1" }
 xr-hdf5 = { path = "crates/xr-hdf5", version = "0.0.1" }
+xr-netcdf4 = { path = "crates/xr-netcdf4", version = "0.0.1" }
 
 chrono = { version = "0.4", default-features = false, features = ["std"] }
 indexmap = "2"
+memmap2 = "0.9"
 miniz_oxide = "0.8"
 ndarray = "0.17"
 smallvec = "1"

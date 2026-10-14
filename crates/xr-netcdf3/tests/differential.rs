@@ -348,3 +348,36 @@ fn byte_identical_to_netcdf_c() {
         }
     }
 }
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(64))]
+
+    /// Slices read lazily from a memory-mapped file equal the same box cut from a full read.
+    #[test]
+    fn mapped_slices_match_full_reads(fmt in 0usize..3, n_rec in prop_oneof![Just(1usize), Just(3)], seed in any::<u64>()) {
+        let f = FORMATS[fmt];
+        let path = tmp(&format!("slice{fmt}-{n_rec}-{seed}.nc"));
+        Netcdf3.write(&sample(f == Format::Netcdf3Data64, n_rec), &path, &WriteOptions::format(f)).unwrap();
+        let file = xr_netcdf3::Netcdf3File::open(&path).unwrap();
+        let full = file.to_raw().unwrap();
+        let mut rng = seed;
+        let mut next = |n: usize| { rng = rng.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407); if n == 0 { 0 } else { (rng >> 33) as usize % n } };
+        let names: Vec<Name> = file.variables().cloned().collect();
+        for name in names {
+            let (_, shape, _) = file.variable(&name).unwrap();
+            let shape = shape.to_vec();
+            let start: Vec<usize> = shape.iter().map(|s| next(*s + 1)).collect();
+            let count: Vec<usize> = shape.iter().zip(&start).map(|(s, st)| next(s - st + 1)).collect();
+            let got = file.read_slice(&name, &start, &count).unwrap();
+            let dims: Vec<String> = (0..shape.len()).map(|i| format!("d{i}")).collect();
+            let whole = xr_core::Variable::from_typed(dims.clone(), full.vars[&name].data.clone()).unwrap();
+            let idx: Vec<(String, xr_core::Indexer)> = dims.iter().zip(start.iter().zip(&count))
+                .map(|(d, (s, c))| (d.clone(), xr_core::Indexer::Slice(xr_core::PySlice::new(Some(*s as isize), Some((s + c) as isize), None))))
+                .collect();
+            let cut = whole.isel(idx).unwrap().to_owned();
+            let key = |t: String| t.split(", strides=").next().unwrap_or_default().to_string();
+            prop_assert_eq!(key(format!("{:?}", cut.typed())), key(format!("{:?}", got)), "{:?} {:?} {:?}+{:?}", f, name, start, count);
+        }
+        let _ = std::fs::remove_file(&path);
+    }
+}

@@ -52,9 +52,18 @@ fn opens_and_round_trips_netcdf3_without_c() {
 }
 
 #[test]
-#[cfg(not(feature = "netcdf-c"))]
-fn netcdf4_without_c_is_a_clear_error() {
+fn netcdf4_without_c_libraries() {
     let p = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../fixtures/nc/xr_nc4.nc");
-    let err = open_dataset(&p).unwrap_err().to_string();
-    assert!(err.contains("netcdf-c"), "{err}");
+    let ds = open_dataset(&p).unwrap();
+    assert_eq!(ds.data_vars()["temp"].dtype(), DType::F32);
+    assert_eq!(ds.encoding().unlimited_dims, ["time"]);
+    let dir = std::env::temp_dir().join(format!("xarray-rs-pure4-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let out = dir.join("rt.nc");
+    ds.to_netcdf(&out).unwrap();
+    let back = open_dataset(&out).unwrap();
+    assert_eq!(
+        back.data_vars().keys().collect::<Vec<_>>(),
+        ds.data_vars().keys().collect::<Vec<_>>()
+    );
 }

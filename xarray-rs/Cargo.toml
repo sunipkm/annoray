@@ -14,10 +14,13 @@ xr-io.workspace = true
 xr-cf.workspace = true
 xr-io-c = { workspace = true, optional = true }
 xr-netcdf3.workspace = true
+xr-netcdf4.workspace = true
 thiserror.workspace = true
+xr-hdf5.workspace = true
 
 [features]
-# netCDF-3/netCDF-4 I/O through the C libraries (built from source; needs cmake).
+# The netCDF-C/HDF5 C libraries as an alternative backend (built from source; needs cmake).
+# Not needed for I/O: netCDF-3, netCDF-4 and HDF5 are read and written in pure Rust.
 netcdf-c = ["dep:xr-io-c"]
 
 [dev-dependencies]

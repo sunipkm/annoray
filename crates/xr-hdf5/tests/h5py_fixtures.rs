@@ -324,3 +324,45 @@ fn checksums_match_hdf5() {
         );
     }
 }
+
+fn datasets(g: &Group, out: &mut Vec<xr_hdf5::Dataset>) {
+    for (_, n) in g.members().unwrap() {
+        match n {
+            Node::Group(c) => datasets(&c, out),
+            Node::Dataset(d) => out.push(*d),
+            _ => {}
+        }
+    }
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(64))]
+
+    /// A slice equals the same box cut from a full read, for every dataset of every variant
+    /// (all layouts and chunk indexes, both byte orders), straight from the memory map.
+    #[test]
+    fn slices_match_full_reads(which in 0usize..6, seed in any::<u64>()) {
+        let name = ["earliest.h5", "earliest_be.h5", "v18.h5", "v18_be.h5", "latest.h5", "latest_be.h5"][which];
+        let f = File::open(fixtures().join(name)).unwrap();
+        let mut all = Vec::new();
+        datasets(&f.root().unwrap(), &mut all);
+        let mut rng = seed;
+        let mut next = |n: usize| { rng = rng.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407); if n == 0 { 0 } else { (rng >> 33) as usize % n } };
+        for d in all {
+            let shape = d.shape();
+            let start: Vec<usize> = shape.iter().map(|s| next(*s + 1)).collect();
+            let count: Vec<usize> = shape.iter().zip(&start).map(|(s, st)| next(s - st + 1)).collect();
+            let Ok(full) = d.read() else { continue };
+            let slice = d.read_slice(&start, &count).unwrap();
+            let expect = xr_core::Variable::from_typed((0..shape.len()).map(|i| format!("d{i}")), full).unwrap();
+            let idx: Vec<(String, xr_core::Indexer)> = start.iter().zip(&count).enumerate()
+                .map(|(i, (s, c))| (format!("d{i}"), xr_core::Indexer::Slice(xr_core::PySlice::new(Some(*s as isize), Some((s + c) as isize), None))))
+                .collect();
+            let cut = expect.isel(idx).unwrap();
+            let got = xr_core::Variable::from_typed((0..shape.len()).map(|i| format!("d{i}")), slice).unwrap();
+            // Compare values and shape (ndarray's Debug also prints strides, which differ for empty arrays).
+            let key = |t: String| t.split(", strides=").next().unwrap_or_default().to_string();
+            prop_assert_eq!(key(format!("{:?}", cut.typed())), key(format!("{:?}", got.typed())), "{} {:?}+{:?}", d.path(), start, count);
+        }
+    }
+}
