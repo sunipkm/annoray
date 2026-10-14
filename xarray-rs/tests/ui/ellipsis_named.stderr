@@ -1,0 +1,5 @@
+error: `..` is only valid in positional indexing
+ --> tests/ui/ellipsis_named.rs:4:28
+  |
+4 |     let _ = isel!(v[time = ..]);
+  |                            ^

@@ -1,0 +1,5 @@
+error: a slice has at most three parts: `start:stop:step`
+ --> tests/ui/too_many_parts.rs:4:21
+  |
+4 |     let _ = isel!(v[1:2:3:4]);
+  |                     ^

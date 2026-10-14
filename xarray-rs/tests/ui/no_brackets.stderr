@@ -1,0 +1,5 @@
+error: expected `receiver[indexers]`
+ --> tests/ui/no_brackets.rs:4:19
+  |
+4 |     let _ = isel!(v);
+  |                   ^

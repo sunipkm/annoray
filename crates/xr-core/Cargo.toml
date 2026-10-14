@@ -1,0 +1,16 @@
+[package]
+name = "xr-core"
+description = "Core data model for xarray-rs: named-dimension variables with owned, view and mutable-view storage"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+indexmap.workspace = true
+ndarray.workspace = true
+smallvec.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

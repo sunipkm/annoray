@@ -1,0 +1,17 @@
+[package]
+name = "xarray-rs"
+description = "A units-aware, xarray-like library for labelled n-dimensional arrays, with netCDF and HDF5 I/O"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+xr-core.workspace = true
+xr-macros.workspace = true
+
+[dev-dependencies]
+trybuild.workspace = true
+
+[lints]
+workspace = true

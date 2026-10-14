@@ -1,0 +1,5 @@
+error: cannot mix named (`dim = ...`) and positional indexers
+ --> tests/ui/mixed.rs:4:31
+  |
+4 |     let _ = isel!(v[time = 0, 1]);
+  |                               ^

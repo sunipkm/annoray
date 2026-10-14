@@ -1,0 +1,41 @@
+[workspace]
+resolver = "3"
+members = ["crates/xr-core", "crates/xr-macros", "xarray-rs"]
+
+[workspace.package]
+version = "0.0.1"
+edition = "2024"
+rust-version = "1.85"
+license = "MIT OR Apache-2.0"
+
+[workspace.dependencies]
+xr-core = { path = "crates/xr-core", version = "0.0.1" }
+xr-macros = { path = "crates/xr-macros", version = "0.0.1" }
+
+indexmap = "2"
+ndarray = "0.17"
+smallvec = "1"
+thiserror = "2"
+
+proc-macro2 = "1"
+quote = "1"
+syn = { version = "2", features = ["full"] }
+
+trybuild = "1"
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+missing_docs = "warn"
+
+[workspace.lints.clippy]
+# No panics in library code: every failure is propagated as a `Result` (PLAN.md §2a).
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+unreachable = "deny"
+indexing_slicing = "deny"
+unwrap_in_result = "deny"
+arithmetic_side_effects = "warn"
+missing_errors_doc = "warn"

@@ -1,0 +1,5 @@
+error: dimension `time` is indexed more than once
+ --> tests/ui/duplicate_dim.rs:4:31
+  |
+4 |     let _ = isel!(v[time = 0, time = 1]);
+  |                               ^^^^

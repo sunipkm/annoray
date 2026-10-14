@@ -1,0 +1,5 @@
+error: ambiguous `::` in an indexer: write `{a::b}` for a path, or `a: :b` for a slice with no stop
+ --> tests/ui/ambiguous_path.rs:4:22
+  |
+4 |     let _ = isel!(v[a::B]);
+  |                      ^

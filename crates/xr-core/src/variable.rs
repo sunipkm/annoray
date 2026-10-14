@@ -1,0 +1,591 @@
+//! [`VariableBase`]: an n-dimensional array with named dimensions and attributes.
+
+use std::borrow::Borrow;
+use std::fmt;
+
+use ndarray::{ArrayD, ArrayViewD, ArrayViewMutD};
+
+use crate::indexer::normalize_index;
+use crate::{
+    AttrValue, Attrs, CoreError, DType, Dims, Element, IndexError, Indexer, IntoIndexer, Name,
+    Owned, Repr, ReprMut, Result, TypedArray, View, ViewMut,
+};
+
+/// An n-dimensional array with named dimensions and attributes, in storage representation `S`.
+///
+/// Use the aliases [`Variable`], [`VariableView`] and [`VariableViewMut`].
+pub struct VariableBase<S: Repr> {
+    data: TypedArray<S>,
+    dims: Dims,
+    attrs: S::Attrs,
+}
+
+/// A variable that owns its data and attributes.
+pub type Variable = VariableBase<Owned>;
+/// A shared view of a variable.
+pub type VariableView<'a> = VariableBase<View<'a>>;
+/// A view of a variable whose element data can be modified. Dimensions and attributes are read-only.
+pub type VariableViewMut<'a> = VariableBase<ViewMut<'a>>;
+
+/// What an indexing operation does to one axis.
+#[derive(Debug, Clone, Copy)]
+enum AxisOp {
+    At(usize),
+    Slice(ndarray::Slice),
+}
+
+fn check_dims(dims: &Dims, ndim: usize) -> Result<()> {
+    if dims.len() != ndim {
+        return Err(CoreError::DimCountMismatch {
+            ndim,
+            names: dims.len(),
+        });
+    }
+    for (i, d) in dims.iter().enumerate() {
+        if dims.iter().take(i).any(|prev| prev == d) {
+            return Err(CoreError::DuplicateDim(d.clone()));
+        }
+    }
+    Ok(())
+}
+
+impl Variable {
+    /// Create a variable from dimension names and an array.
+    ///
+    /// # Errors
+    /// [`CoreError::DimCountMismatch`] if the number of names differs from `data.ndim()`;
+    /// [`CoreError::DuplicateDim`] if a name repeats.
+    pub fn new<T, D>(dims: D, data: ArrayD<T>) -> Result<Self>
+    where
+        T: Element,
+        D: IntoIterator,
+        D::Item: Into<Name>,
+    {
+        Self::from_typed(dims, T::wrap(data))
+    }
+
+    /// Create a variable from dimension names and a dtype-erased array.
+    ///
+    /// # Errors
+    /// As for [`Variable::new`].
+    pub fn from_typed<D>(dims: D, data: TypedArray<Owned>) -> Result<Self>
+    where
+        D: IntoIterator,
+        D::Item: Into<Name>,
+    {
+        let dims: Dims = dims.into_iter().map(Into::into).collect();
+        check_dims(&dims, data.ndim())?;
+        Ok(Self {
+            data,
+            dims,
+            attrs: Attrs::new(),
+        })
+    }
+
+    /// Add attributes, replacing any with the same names.
+    #[must_use]
+    pub fn with_attrs<K, V>(mut self, attrs: impl IntoIterator<Item = (K, V)>) -> Self
+    where
+        K: Into<Name>,
+        V: Into<AttrValue>,
+    {
+        self.attrs
+            .extend(attrs.into_iter().map(|(k, v)| (k.into(), v.into())));
+        self
+    }
+
+    /// Mutable access to the attributes.
+    pub fn attrs_mut(&mut self) -> &mut Attrs {
+        &mut self.attrs
+    }
+
+    /// Take the data out of the variable.
+    #[must_use]
+    pub fn into_typed(self) -> TypedArray<Owned> {
+        self.data
+    }
+}
+
+impl<S: Repr> VariableBase<S> {
+    /// Dimension names, in axis order.
+    #[must_use]
+    pub fn dims(&self) -> &[Name] {
+        &self.dims
+    }
+
+    /// Number of dimensions.
+    #[must_use]
+    pub fn ndim(&self) -> usize {
+        self.dims.len()
+    }
+
+    /// Length of each axis, in axis order.
+    #[must_use]
+    pub fn shape(&self) -> &[usize] {
+        self.data.shape()
+    }
+
+    /// `(name, length)` for each dimension, in axis order.
+    pub fn sizes(&self) -> impl Iterator<Item = (&Name, usize)> {
+        self.dims.iter().zip(self.shape().iter().copied())
+    }
+
+    /// Total number of elements.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.data.len()
+    }
+
+    /// Whether the variable has no elements.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.data.is_empty()
+    }
+
+    /// Element type.
+    #[must_use]
+    pub fn dtype(&self) -> DType {
+        self.data.dtype()
+    }
+
+    /// Attributes.
+    #[must_use]
+    pub fn attrs(&self) -> &Attrs {
+        self.attrs.borrow()
+    }
+
+    /// The dtype-erased data.
+    #[must_use]
+    pub fn typed(&self) -> &TypedArray<S> {
+        &self.data
+    }
+
+    /// Axis number of dimension `dim`.
+    ///
+    /// # Errors
+    /// [`CoreError::NoSuchDim`] if the variable has no such dimension.
+    pub fn axis(&self, dim: &str) -> Result<usize> {
+        self.dims
+            .iter()
+            .position(|d| d == dim)
+            .ok_or_else(|| CoreError::NoSuchDim(dim.into()))
+    }
+
+    /// Length of dimension `dim`.
+    ///
+    /// # Errors
+    /// [`CoreError::NoSuchDim`] if the variable has no such dimension.
+    pub fn len_of(&self, dim: &str) -> Result<usize> {
+        let axis = self.axis(dim)?;
+        self.shape()
+            .get(axis)
+            .copied()
+            .ok_or_else(|| CoreError::NoSuchDim(dim.into()))
+    }
+
+    /// The data as a typed ndarray view.
+    ///
+    /// # Errors
+    /// [`CoreError::DTypeMismatch`] if the data is not of element type `T`.
+    pub fn data<T: Element>(&self) -> Result<ArrayViewD<'_, T>> {
+        T::peek(&self.data)
+            .map(|a| a.view())
+            .ok_or(CoreError::DTypeMismatch {
+                expected: T::DTYPE,
+                found: self.dtype(),
+            })
+    }
+
+    /// A shared view of the whole variable.
+    #[must_use]
+    pub fn view(&self) -> VariableView<'_> {
+        VariableBase {
+            data: self.data.view(),
+            dims: self.dims.clone(),
+            attrs: self.attrs.borrow(),
+        }
+    }
+
+    /// Copy into an owned variable.
+    #[must_use]
+    pub fn to_owned(&self) -> Variable {
+        VariableBase {
+            data: self.data.to_owned(),
+            dims: self.dims.clone(),
+            attrs: self.attrs().clone(),
+        }
+    }
+
+    /// Select by dimension name, returning a view. Dimensions not named are kept whole.
+    ///
+    /// Integers drop the dimension; slices keep it. Semantics follow Python: negative values
+    /// count from the end, slice bounds are clamped, negative steps reverse.
+    ///
+    /// # Errors
+    /// [`CoreError::NoSuchDim`], or an [`IndexError`] for out-of-bounds integers, zero steps,
+    /// repeated dimensions or `..`.
+    pub fn isel<I, K, X>(&self, indexers: I) -> Result<VariableView<'_>>
+    where
+        I: IntoIterator<Item = (K, X)>,
+        K: AsRef<str>,
+        X: IntoIndexer,
+    {
+        self.view().isel_move(indexers)
+    }
+
+    /// Select by axis position, returning a view. Trailing axes not given are kept whole;
+    /// one [`Indexer::Ellipsis`] stands for as many whole axes as needed.
+    ///
+    /// # Errors
+    /// As for [`isel`](Self::isel), plus [`IndexError::TooManyIndexers`] and
+    /// [`IndexError::MultipleEllipsis`].
+    pub fn isel_pos<I>(&self, indexers: I) -> Result<VariableView<'_>>
+    where
+        I: IntoIterator,
+        I::Item: IntoIndexer,
+    {
+        self.view().isel_pos_move(indexers)
+    }
+
+    /// [`isel`](Self::isel), consuming `self` and keeping its representation.
+    ///
+    /// # Errors
+    /// As for [`isel`](Self::isel).
+    pub fn isel_move<I, K, X>(self, indexers: I) -> Result<Self>
+    where
+        I: IntoIterator<Item = (K, X)>,
+        K: AsRef<str>,
+        X: IntoIndexer,
+    {
+        let mut ops = vec![None; self.ndim()];
+        for (dim, ix) in indexers {
+            let axis = self.axis(dim.as_ref())?;
+            match ix.into_indexer()? {
+                Indexer::Ellipsis => return Err(IndexError::EllipsisInNamed.into()),
+                ix => self.set_op(&mut ops, axis, ix)?,
+            }
+        }
+        Ok(self.apply(&ops))
+    }
+
+    /// [`isel_pos`](Self::isel_pos), consuming `self` and keeping its representation.
+    ///
+    /// # Errors
+    /// As for [`isel_pos`](Self::isel_pos).
+    pub fn isel_pos_move<I>(self, indexers: I) -> Result<Self>
+    where
+        I: IntoIterator,
+        I::Item: IntoIndexer,
+    {
+        let items = indexers
+            .into_iter()
+            .map(IntoIndexer::into_indexer)
+            .collect::<Result<Vec<_>, IndexError>>()?;
+        let ndim = self.ndim();
+        let is_ellipsis = |ix: &Indexer| matches!(ix, Indexer::Ellipsis);
+        let n_ellipsis = items.iter().filter(|ix| is_ellipsis(ix)).count();
+        if n_ellipsis > 1 {
+            return Err(IndexError::MultipleEllipsis.into());
+        }
+        let given = items.len().saturating_sub(n_ellipsis);
+        if given > ndim {
+            return Err(IndexError::TooManyIndexers { given, ndim }.into());
+        }
+
+        let (head, tail) = match items.iter().position(is_ellipsis) {
+            Some(p) => {
+                let (head, rest) = items.split_at_checked(p).ok_or(IndexError::Overflow)?;
+                (head, rest.get(1..).unwrap_or_default())
+            }
+            None => (items.as_slice(), &[][..]),
+        };
+        let tail_start = ndim.checked_sub(tail.len()).ok_or(IndexError::Overflow)?;
+
+        let mut ops = vec![None; ndim];
+        let axes = (0..head.len()).chain(tail_start..ndim);
+        for (axis, ix) in axes.zip(head.iter().chain(tail)) {
+            self.set_op(&mut ops, axis, *ix)?;
+        }
+        Ok(self.apply(&ops))
+    }
+
+    /// Resolve `ix` against `axis` and record it in `ops`.
+    fn set_op(&self, ops: &mut [Option<AxisOp>], axis: usize, ix: Indexer) -> Result<()> {
+        let missing = || CoreError::DimCountMismatch {
+            ndim: self.data.ndim(),
+            names: self.dims.len(),
+        };
+        let dim = self.dims.get(axis).ok_or_else(missing)?;
+        let len = self.shape().get(axis).copied().ok_or_else(missing)?;
+        let slot = ops.get_mut(axis).ok_or_else(missing)?;
+        if slot.is_some() {
+            return Err(IndexError::DuplicateDim(dim.clone()).into());
+        }
+        *slot = Some(match ix {
+            Indexer::Int(i) => AxisOp::At(normalize_index(i, len, dim)?),
+            Indexer::Slice(s) => AxisOp::Slice(s.indices(len)?.to_ndarray()?),
+            Indexer::Ellipsis => return Err(IndexError::EllipsisInNamed.into()),
+        });
+        Ok(())
+    }
+
+    /// Apply validated per-axis operations.
+    fn apply(self, ops: &[Option<AxisOp>]) -> Self {
+        let Self {
+            mut data,
+            dims,
+            attrs,
+        } = self;
+        // Slices first: they keep axis numbering intact.
+        for (axis, op) in ops.iter().enumerate() {
+            if let Some(AxisOp::Slice(s)) = op {
+                data.slice_axis_inplace(axis, *s);
+            }
+        }
+        // Then drop integer-indexed axes from the highest down, so lower axis numbers stay valid.
+        for (axis, op) in ops.iter().enumerate().rev() {
+            if let Some(AxisOp::At(i)) = op {
+                data = data.index_axis_move(axis, *i);
+            }
+        }
+        let dims = dims
+            .into_iter()
+            .zip(ops)
+            .filter(|(_, op)| !matches!(op, Some(AxisOp::At(_))))
+            .map(|(d, _)| d)
+            .collect();
+        Self { data, dims, attrs }
+    }
+}
+
+impl<S: ReprMut> VariableBase<S> {
+    /// A mutable view of the whole variable.
+    #[must_use]
+    pub fn view_mut(&mut self) -> VariableViewMut<'_> {
+        VariableBase {
+            data: self.data.view_mut(),
+            dims: self.dims.clone(),
+            attrs: self.attrs.borrow(),
+        }
+    }
+
+    /// The data as a typed mutable ndarray view.
+    ///
+    /// # Errors
+    /// [`CoreError::DTypeMismatch`] if the data is not of element type `T`.
+    pub fn data_mut<T: Element>(&mut self) -> Result<ArrayViewMutD<'_, T>> {
+        let found = self.dtype();
+        T::peek_mut(&mut self.data)
+            .map(S::view_mut)
+            .ok_or(CoreError::DTypeMismatch {
+                expected: T::DTYPE,
+                found,
+            })
+    }
+
+    /// [`isel`](Self::isel) returning a mutable view.
+    ///
+    /// # Errors
+    /// As for [`isel`](Self::isel).
+    pub fn isel_mut<I, K, X>(&mut self, indexers: I) -> Result<VariableViewMut<'_>>
+    where
+        I: IntoIterator<Item = (K, X)>,
+        K: AsRef<str>,
+        X: IntoIndexer,
+    {
+        self.view_mut().isel_move(indexers)
+    }
+
+    /// [`isel_pos`](Self::isel_pos) returning a mutable view.
+    ///
+    /// # Errors
+    /// As for [`isel_pos`](Self::isel_pos).
+    pub fn isel_pos_mut<I>(&mut self, indexers: I) -> Result<VariableViewMut<'_>>
+    where
+        I: IntoIterator,
+        I::Item: IntoIndexer,
+    {
+        self.view_mut().isel_pos_move(indexers)
+    }
+}
+
+impl Clone for Variable {
+    fn clone(&self) -> Self {
+        Self {
+            data: self.data.clone(),
+            dims: self.dims.clone(),
+            attrs: self.attrs.clone(),
+        }
+    }
+}
+
+impl Clone for VariableView<'_> {
+    fn clone(&self) -> Self {
+        Self {
+            data: self.data.clone(),
+            dims: self.dims.clone(),
+            attrs: self.attrs,
+        }
+    }
+}
+
+impl<S: Repr> fmt::Debug for VariableBase<S> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Variable")
+            .field("dims", &self.dims)
+            .field("data", &self.data)
+            .field("attrs", self.attrs())
+            .finish()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use ndarray::{ArrayD, IxDyn};
+
+    use super::*;
+    use crate::PySlice;
+
+    fn var() -> Variable {
+        // time=2, lat=3, lon=4, values 0..24
+        let a =
+            ArrayD::from_shape_vec(IxDyn(&[2, 3, 4]), (0..24).map(f64::from).collect()).unwrap();
+        Variable::new(["time", "lat", "lon"], a)
+            .unwrap()
+            .with_attrs([("long_name", "test")])
+    }
+
+    #[test]
+    fn construction_errors() {
+        let a = ArrayD::<f64>::zeros(IxDyn(&[2, 2]));
+        assert_eq!(
+            Variable::new(["x"], a.clone()).unwrap_err(),
+            CoreError::DimCountMismatch { ndim: 2, names: 1 }
+        );
+        assert_eq!(
+            Variable::new(["x", "x"], a).unwrap_err(),
+            CoreError::DuplicateDim("x".into())
+        );
+    }
+
+    #[test]
+    fn named_isel() {
+        let v = var();
+        let s = v
+            .isel([
+                ("time", Indexer::Int(-1)),
+                ("lon", Indexer::Slice(PySlice::new(None, None, Some(-2)))),
+            ])
+            .unwrap();
+        assert_eq!(s.dims(), &["lat", "lon"]);
+        assert_eq!(s.shape(), &[3, 2]);
+        let d = s.data::<f64>().unwrap();
+        assert_eq!(
+            d.iter().copied().collect::<Vec<_>>(),
+            vec![15., 13., 19., 17., 23., 21.]
+        );
+        assert_eq!(s.attrs().get("long_name"), Some(&AttrValue::from("test")));
+    }
+
+    #[test]
+    fn positional_isel_with_ellipsis() {
+        let v = var();
+        let s = v.isel_pos([Indexer::Ellipsis, Indexer::Int(0)]).unwrap();
+        assert_eq!(s.dims(), &["time", "lat"]);
+        assert_eq!(s.data::<f64>().unwrap()[[1, 2]], 20.0);
+
+        let s = v
+            .isel_pos([
+                Indexer::Int(1),
+                Indexer::Ellipsis,
+                Indexer::Slice(PySlice::new(Some(1), Some(3), None)),
+            ])
+            .unwrap();
+        assert_eq!(s.dims(), &["lat", "lon"]);
+        assert_eq!(s.shape(), &[3, 2]);
+
+        // Ranges work as indexers too.
+        let s = v.isel_pos([0..1, 1..3]).unwrap();
+        assert_eq!(s.shape(), &[1, 2, 4]);
+    }
+
+    #[test]
+    fn isel_errors_do_not_panic() {
+        let v = var();
+        assert!(matches!(
+            v.isel([("time", 2)]),
+            Err(CoreError::Index(IndexError::OutOfBounds { .. }))
+        ));
+        assert_eq!(
+            v.isel([("depth", 0)]).unwrap_err(),
+            CoreError::NoSuchDim("depth".into())
+        );
+        assert_eq!(
+            v.isel([("lat", 0), ("lat", 1)]).unwrap_err(),
+            CoreError::Index(IndexError::DuplicateDim("lat".into()))
+        );
+        assert_eq!(
+            v.isel([("lat", Indexer::Slice(PySlice::new(None, None, Some(0))))])
+                .unwrap_err(),
+            CoreError::Index(IndexError::ZeroStep)
+        );
+        assert_eq!(
+            v.isel_pos([0, 0, 0, 0]).unwrap_err(),
+            CoreError::Index(IndexError::TooManyIndexers { given: 4, ndim: 3 })
+        );
+        assert_eq!(
+            v.isel_pos([Indexer::Ellipsis, Indexer::Ellipsis])
+                .unwrap_err(),
+            CoreError::Index(IndexError::MultipleEllipsis)
+        );
+        assert_eq!(
+            v.isel([("lat", Indexer::Ellipsis)]).unwrap_err(),
+            CoreError::Index(IndexError::EllipsisInNamed)
+        );
+        assert_eq!(
+            v.data::<i32>().unwrap_err(),
+            CoreError::DTypeMismatch {
+                expected: DType::I32,
+                found: DType::F64
+            }
+        );
+    }
+
+    #[test]
+    fn mutation_through_view_mut_reaches_owner() {
+        let mut v = var();
+        {
+            let mut s = v
+                .isel_mut([
+                    ("time", Indexer::Int(1)),
+                    ("lat", Indexer::Slice(PySlice::new(None, None, Some(-1)))),
+                ])
+                .unwrap();
+            // Nested isel on a mutable view, then write.
+            let mut corner = s.isel_mut([("lat", 0), ("lon", -1)]).unwrap();
+            assert_eq!(corner.ndim(), 0);
+            corner.data_mut::<f64>().unwrap().fill(-1.0);
+        }
+        // time=1, lat reversed → lat index 0 of the view is lat=2; lon=-1 is lon=3.
+        assert_eq!(v.data::<f64>().unwrap()[[1, 2, 3]], -1.0);
+        assert_eq!(
+            v.data::<f64>()
+                .unwrap()
+                .iter()
+                .filter(|x| **x < 0.0)
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn views_and_owned_round_trip() {
+        let v = var();
+        let s = v.isel([("lat", 1..3)]).unwrap();
+        let o = s.to_owned();
+        assert_eq!(o.shape(), &[2, 2, 4]);
+        assert_eq!(o.data::<f64>().unwrap(), s.data::<f64>().unwrap());
+        let s2 = s.clone().isel_move([("time", 0)]).unwrap();
+        assert_eq!(s2.dims(), &["lat", "lon"]);
+    }
+}
