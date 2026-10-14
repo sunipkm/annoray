@@ -91,3 +91,24 @@ fn compile_errors() {
     let t = trybuild::TestCases::new();
     t.compile_fail("tests/ui/*.rs");
 }
+
+#[test]
+fn receivers_auto_deref() {
+    fn through_ref(v: &Variable) -> usize {
+        isel!(v[0]).unwrap().ndim()
+    }
+    fn through_mut(v: &mut Variable) {
+        isel!(mut v[0, 0, 0])
+            .unwrap()
+            .data_mut::<i64>()
+            .unwrap()
+            .fill(9);
+    }
+    let mut v = var();
+    assert_eq!(through_ref(&v), 2);
+    through_mut(&mut v);
+    assert_eq!(v.data::<i64>().unwrap()[[0, 0, 0]], 9);
+    let mut boxed = Box::new(var());
+    assert_eq!(isel!(boxed[.., 1]).unwrap().shape(), &[2, 3]);
+    assert_eq!(isel!(mut boxed[1]).unwrap().shape(), &[3, 4]);
+}

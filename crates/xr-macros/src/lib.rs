@@ -70,17 +70,35 @@ fn expand_isel(input: TokenStream) -> syn::Result<TokenStream> {
 
     let named = items.iter().filter(|it| it.name.is_some()).count();
     let rt = quote!(::xarray_rs::__rt);
-    let target = if mutable {
-        quote!(&mut (#receiver))
+    // Method-call syntax so the receiver auto-derefs (`&Variable`, `&mut Variable`, `Box<_>`, …).
+    let call = |collect: TokenStream, method: TokenStream| {
+        let tr = if mutable {
+            quote!(IselMut)
+        } else {
+            quote!(Isel)
+        };
+        quote! {
+            match #rt::#collect(__xr_items) {
+                ::core::result::Result::Ok(__xr_items) => {
+                    use #rt::#tr as _;
+                    (#receiver).#method(__xr_items)
+                }
+                ::core::result::Result::Err(e) => ::core::result::Result::Err(e),
+            }
+        }
+    };
+    let (pos_method, named_method) = if mutable {
+        (quote!(__xr_isel_pos_mut), quote!(__xr_isel_named_mut))
     } else {
-        quote!(&(#receiver))
+        (quote!(__xr_isel_pos), quote!(__xr_isel_named))
     };
 
     if named == 0 {
         let terms = items.iter().map(|it| term_tokens(&it.term, &rt));
+        let pos_call = call(quote!(collect_pos), pos_method);
         return Ok(quote! {{
             #[allow(unused_braces)] let __xr_items = [#(#terms),*];
-            #rt::isel_pos(#target, __xr_items)
+            #pos_call
         }});
     }
     if named != items.len() {
@@ -115,9 +133,10 @@ fn expand_isel(input: TokenStream) -> syn::Result<TokenStream> {
         let term = term_tokens(&it.term, &rt);
         pairs.push(quote!((#key, #term)));
     }
+    let named_call = call(quote!(collect_named), named_method);
     Ok(quote! {{
         #[allow(unused_braces)] let __xr_items = [#(#pairs),*];
-        #rt::isel_named(#target, __xr_items)
+        #named_call
     }})
 }
 

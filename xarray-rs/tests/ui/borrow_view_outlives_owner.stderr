@@ -1,0 +1,8 @@
+error[E0515]: cannot return value referencing local variable `v`
+ --> tests/ui/borrow_view_outlives_owner.rs:7:5
+  |
+7 |     v.view()
+  |     -^^^^^^^
+  |     |
+  |     returns a value referencing data owned by the current function
+  |     `v` is borrowed here

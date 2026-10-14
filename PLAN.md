@@ -208,8 +208,28 @@ Planned, not required for v1:
   `degC`, `degrees_north`, `1`, `percent`, `psu`, plus `since` clauses.
 - **UCUM grammar,** which whippyunits uses: `kg.m2/s2`.
 - `Display` uses the stored label when there is one, and otherwise a canonical CF form.
-- **Unit tables:** generated at build time from the UDUNITS XML (prefixes, SI, accepted, common).
-  CI test: every unit string in the CF standard-name table parses.
+- **Unit tables:** generated from the UDUNITS XML by `tools/gen_unit_table.py` into a committed
+  `table.rs` (not at build time, so builds need no network or XML). Every one of the ~300 UDUNITS
+  definitions resolves, and every canonical unit in CF standard-name table v95 parses (tests).
+
+### Implementation notes (M1, as built)
+- **Negative scales are allowed:** UDUNITS defines `degree_west = -1 degree_east`. The sign lives
+  in `Scale`'s residual. Zero factors are rejected.
+- **Prefix lookup is permissive, like UDUNITS:** a prefix symbol may precede a unit name (`dbar`,
+  `mbar`). Exact matches always win (`min` is minutes, not milli-inches).
+- **Offsets inside products are dropped,** as UDUNITS does: `kg degree_C m-2` means kg K m-2. The
+  public `Unit::mul` on an affine unit is still an error. Call `.delta()` first.
+- **Logarithmic units** (`B`, `dB`, `dBZ`, `lg(re 1 mW)`) are `UnitKind::Log`. Prefixes scale them,
+  and they convert only between the same reference. No other arithmetic is allowed.
+- **Allowed epoch steps:** whole seconds (s … weeks) or exact divisors of a second (ms, µs, ns).
+  UDUNITS' `month` and `year` are fractional-second astronomical lengths, so `months since` is
+  rejected, as cftime does.
+- **Time semantics match cftime 1.6:** `standard`/`julian` have no year 0, while
+  `proleptic_gregorian` and the idealized calendars do. Float offsets round to the nearest µs (ties
+  to even). Reference-date time zones are applied. 5,040 cases checked against cftime.
+- **Checked arithmetic:** a crate-private `Ck` integer wrapper propagates overflow as `None`, and
+  `clippy.toml` allow-lists it (`arithmetic-side-effects-allowed = ["ck::Ck"]`; clippy matches the
+  crate-relative path).
 
 ### Time (chrono)
 

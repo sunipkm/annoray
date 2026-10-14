@@ -66,64 +66,89 @@ pub mod macro_support {
         Ok(Indexer::Ellipsis)
     }
 
-    /// Something `isel!` can be applied to. Implemented for `&C` (giving a view) and `&mut C`
-    /// (giving a mutable view) for each container `C`.
+    /// Shared selection for `isel!`. Called with method syntax so receivers auto-deref
+    /// (`Variable`, `&Variable`, `&mut Variable`, `Box<Variable>`, … all work).
     pub trait Isel {
         /// The resulting view type.
-        type Output;
+        type View<'a>
+        where
+            Self: 'a;
         /// Positional selection.
-        fn isel_pos_dyn(self, items: Vec<Indexer>) -> Result<Self::Output, CoreError>;
+        fn __xr_isel_pos(&self, items: Vec<Indexer>) -> Result<Self::View<'_>, CoreError>;
         /// Named selection.
-        fn isel_named_dyn(
-            self,
+        fn __xr_isel_named(
+            &self,
             items: Vec<(&'static str, Indexer)>,
-        ) -> Result<Self::Output, CoreError>;
+        ) -> Result<Self::View<'_>, CoreError>;
     }
 
-    impl<'a, S: Repr> Isel for &'a VariableBase<S> {
-        type Output = crate::VariableView<'a>;
-        fn isel_pos_dyn(self, items: Vec<Indexer>) -> Result<Self::Output, CoreError> {
+    /// Mutable selection for `isel!(mut ...)`.
+    pub trait IselMut {
+        /// The resulting mutable view type.
+        type ViewMut<'a>
+        where
+            Self: 'a;
+        /// Positional selection.
+        fn __xr_isel_pos_mut(
+            &mut self,
+            items: Vec<Indexer>,
+        ) -> Result<Self::ViewMut<'_>, CoreError>;
+        /// Named selection.
+        fn __xr_isel_named_mut(
+            &mut self,
+            items: Vec<(&'static str, Indexer)>,
+        ) -> Result<Self::ViewMut<'_>, CoreError>;
+    }
+
+    impl<S: Repr> Isel for VariableBase<S> {
+        type View<'a>
+            = crate::VariableView<'a>
+        where
+            Self: 'a;
+        fn __xr_isel_pos(&self, items: Vec<Indexer>) -> Result<Self::View<'_>, CoreError> {
             self.isel_pos(items)
         }
-        fn isel_named_dyn(
-            self,
+        fn __xr_isel_named(
+            &self,
             items: Vec<(&'static str, Indexer)>,
-        ) -> Result<Self::Output, CoreError> {
+        ) -> Result<Self::View<'_>, CoreError> {
             self.isel(items)
         }
     }
 
-    impl<'a, S: ReprMut> Isel for &'a mut VariableBase<S> {
-        type Output = crate::VariableViewMut<'a>;
-        fn isel_pos_dyn(self, items: Vec<Indexer>) -> Result<Self::Output, CoreError> {
+    impl<S: ReprMut> IselMut for VariableBase<S> {
+        type ViewMut<'a>
+            = crate::VariableViewMut<'a>
+        where
+            Self: 'a;
+        fn __xr_isel_pos_mut(
+            &mut self,
+            items: Vec<Indexer>,
+        ) -> Result<Self::ViewMut<'_>, CoreError> {
             self.isel_pos_mut(items)
         }
-        fn isel_named_dyn(
-            self,
+        fn __xr_isel_named_mut(
+            &mut self,
             items: Vec<(&'static str, Indexer)>,
-        ) -> Result<Self::Output, CoreError> {
+        ) -> Result<Self::ViewMut<'_>, CoreError> {
             self.isel_mut(items)
         }
     }
 
-    /// Entry point for positional `isel!`.
-    pub fn isel_pos<T: Isel, const N: usize>(
-        target: T,
+    /// Collect positional indexers, stopping at the first error.
+    pub fn collect_pos<const N: usize>(
         items: [Result<Indexer, IndexError>; N],
-    ) -> Result<T::Output, CoreError> {
-        let items = items.into_iter().collect::<Result<Vec<_>, _>>()?;
-        target.isel_pos_dyn(items)
+    ) -> Result<Vec<Indexer>, CoreError> {
+        Ok(items.into_iter().collect::<Result<Vec<_>, _>>()?)
     }
 
-    /// Entry point for named `isel!`.
-    pub fn isel_named<T: Isel, const N: usize>(
-        target: T,
+    /// Collect named indexers, stopping at the first error.
+    pub fn collect_named<const N: usize>(
         items: [(&'static str, Result<Indexer, IndexError>); N],
-    ) -> Result<T::Output, CoreError> {
-        let items = items
+    ) -> Result<Vec<(&'static str, Indexer)>, CoreError> {
+        Ok(items
             .into_iter()
             .map(|(name, ix)| ix.map(|ix| (name, ix)))
-            .collect::<Result<Vec<_>, _>>()?;
-        target.isel_named_dyn(items)
+            .collect::<Result<Vec<_>, _>>()?)
     }
 }

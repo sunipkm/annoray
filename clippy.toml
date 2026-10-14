@@ -3,3 +3,5 @@ allow-unwrap-in-tests = true
 allow-expect-in-tests = true
 allow-panic-in-tests = true
 allow-indexing-slicing-in-tests = true
+# Checked-integer wrapper: its operators propagate overflow as `None` instead of panicking.
+arithmetic-side-effects-allowed = ["ck::Ck"]

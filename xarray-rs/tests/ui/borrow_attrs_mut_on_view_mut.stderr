@@ -1,0 +1,11 @@
+error[E0599]: no method named `attrs_mut` found for struct `VariableBase<ViewMut<'_>>` in the current scope
+ --> tests/ui/borrow_attrs_mut_on_view_mut.rs:5:15
+  |
+5 |     let _ = v.attrs_mut();
+  |               ^^^^^^^^^
+  |
+help: there is a method `attrs` with a similar name
+  |
+5 -     let _ = v.attrs_mut();
+5 +     let _ = v.attrs();
+  |

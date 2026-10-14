@@ -1,0 +1,11 @@
+error[E0502]: cannot borrow `*v` as mutable because it is also borrowed as immutable
+ --> tests/ui/borrow_shared_while_mut.rs:6:14
+  |
+5 |     let shared = isel!(v[0]).unwrap();
+  |                  ----------- immutable borrow occurs here
+6 |     let _m = isel!(mut v[1]).unwrap();
+  |              ^^^^^^^^^^^^^^^ mutable borrow occurs here
+7 |     drop(shared);
+  |          ------ immutable borrow later used here
+  |
+  = note: this error originates in the macro `isel` (in Nightly builds, run with -Z macro-backtrace for more info)

@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/xr-core", "crates/xr-macros", "xarray-rs"]
+members = ["crates/xr-core", "crates/xr-macros", "crates/xr-units", "xarray-rs"]
 
 [workspace.package]
 version = "0.0.1"
@@ -11,7 +11,9 @@ license = "MIT OR Apache-2.0"
 [workspace.dependencies]
 xr-core = { path = "crates/xr-core", version = "0.0.1" }
 xr-macros = { path = "crates/xr-macros", version = "0.0.1" }
+xr-units = { path = "crates/xr-units", version = "0.0.1" }
 
+chrono = { version = "0.4", default-features = false, features = ["std"] }
 indexmap = "2"
 ndarray = "0.17"
 smallvec = "1"
@@ -21,6 +23,7 @@ proc-macro2 = "1"
 quote = "1"
 syn = { version = "2", features = ["full"] }
 
+proptest = "1"
 trybuild = "1"
 
 [workspace.lints.rust]

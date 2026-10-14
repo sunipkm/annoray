@@ -1,0 +1,9 @@
+error[E0499]: cannot borrow `*v` as mutable more than once at a time
+ --> tests/ui/borrow_two_view_mut.rs:6:13
+  |
+5 |     let a = v.view_mut();
+  |             - first mutable borrow occurs here
+6 |     let b = v.view_mut();
+  |             ^ second mutable borrow occurs here
+7 |     drop((a, b));
+  |           - first borrow later used here

@@ -9,6 +9,7 @@ license.workspace = true
 [dependencies]
 xr-core.workspace = true
 xr-macros.workspace = true
+xr-units.workspace = true
 
 [dev-dependencies]
 trybuild.workspace = true
