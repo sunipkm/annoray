@@ -5,7 +5,7 @@ use std::fmt::{self, Display, Write as _};
 use crate::array::typed_dispatch;
 use crate::dataarray::DataArrayBase;
 use crate::dataset::DatasetBase;
-use crate::{Attrs, DType, Element, Name, Repr, TypedArray, VariableBase};
+use crate::{Attrs, DType, Element, NaT, Name, Repr, TypedArray, VariableBase};
 
 const PREVIEW: usize = 6;
 
@@ -30,8 +30,26 @@ fn nbytes<S: Repr>(v: &VariableBase<S>) -> usize {
 
 /// The values, or xarray's placeholder for data not read yet.
 fn body<S: Repr>(v: &VariableBase<S>) -> String {
+    /// Times as text, with NaT spelled out.
+    fn times<T: NaT + Display, D: ndarray::Data<Elem = T>>(
+        x: &ndarray::ArrayBase<D, ndarray::IxDyn>,
+    ) -> String {
+        let text = x.map(|t| {
+            if t.is_nat() {
+                "NaT".to_owned()
+            } else {
+                t.to_string()
+            }
+        });
+        format!("{text}")
+    }
     match v.typed() {
-        Ok(t) if !v.is_lazy() => typed_dispatch!(&t, x => format!("{x}")),
+        Ok(t) if !v.is_lazy() => match &t {
+            TypedArray::DateTime(x) => times(x),
+            TypedArray::TimeDelta(x) => times(x),
+            TypedArray::CfDate(x) => times(x),
+            _ => typed_dispatch!(&t, x => format!("{x}")),
+        },
         _ => format!("[{} values with dtype={}]", v.len(), v.dtype()),
     }
 }
@@ -78,8 +96,33 @@ fn preview<S: Repr>(a: &TypedArray<S>) -> String {
         }
         out
     }
+    fn times<T: Element + NaT, D: ndarray::Data<Elem = T>>(
+        x: &ndarray::ArrayBase<D, ndarray::IxDyn>,
+    ) -> String {
+        let mut out = String::new();
+        for (i, v) in x.iter().enumerate() {
+            if i >= PREVIEW {
+                out.push_str(" ...");
+                break;
+            }
+            if i > 0 {
+                out.push(' ');
+            }
+            let _ = if v.is_nat() {
+                write!(out, "NaT")
+            } else {
+                write!(out, "{v}")
+            };
+        }
+        out
+    }
     let quote = a.dtype() == DType::Str;
-    typed_dispatch!(a, x => go(x, quote))
+    match a {
+        TypedArray::DateTime(x) => times(x),
+        TypedArray::TimeDelta(x) => times(x),
+        TypedArray::CfDate(x) => times(x),
+        _ => typed_dispatch!(a, x => go(x, quote)),
+    }
 }
 
 fn dims_tuple(dims: &[Name]) -> String {

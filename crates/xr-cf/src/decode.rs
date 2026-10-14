@@ -3,11 +3,12 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use chrono::NaiveDateTime;
+use chrono::{NaiveDateTime, TimeDelta};
 use ndarray::{ArrayD, Axis, IxDyn};
 use xr_core::xr_units::{Calendar, CfDate, Unit, UnitKind};
 use xr_core::{
-    AttrValue, DType, Dataset, Encoding, LazyArray, LazySource, Name, Owned, TypedArray, Variable,
+    AttrValue, DType, Dataset, Encoding, LazyArray, LazySource, NaT, Name, Owned, TypedArray,
+    Variable,
 };
 use xr_io::{RawData, RawDataset, RawVariable};
 
@@ -124,63 +125,177 @@ fn str_attr(a: Option<&AttrValue>) -> Option<&str> {
     }
 }
 
-/// Dates from numbers in an epoch unit.
-fn decode_times(
-    data: &TypedArray<Owned>,
-    unit: &Unit,
-    calendar: Calendar,
-    var: &str,
-) -> Result<TypedArray<Owned>> {
-    let codec = unit.epoch_codec(calendar)?;
-    let dates: Vec<CfDate> = match data {
-        TypedArray::F32(a) => a
-            .iter()
-            .map(|v| codec.decode_float(f64::from(*v)))
-            .collect::<std::result::Result<_, _>>()?,
-        TypedArray::F64(a) => a
-            .iter()
-            .map(|v| codec.decode_float(*v))
-            .collect::<std::result::Result<_, _>>()?,
-        other => {
-            let ints = to_f64(other).ok_or_else(|| invalid(var, "time values are not numeric"))?;
-            // Integer data: decode exactly.
-            match other {
-                TypedArray::I64(a) => a
-                    .iter()
-                    .map(|v| codec.decode_int(*v))
-                    .collect::<std::result::Result<_, _>>()?,
-                TypedArray::U64(a) => a
-                    .iter()
-                    .map(|v| {
-                        codec.decode_int(
-                            i64::try_from(*v)
-                                .map_err(|_| xr_core::xr_units::UnitError::Overflow)?,
-                        )
-                    })
-                    .collect::<std::result::Result<_, _>>()?,
-                #[allow(clippy::cast_possible_truncation)] // these widen losslessly to i64 via f64
-                _ => ints
-                    .iter()
-                    .map(|v| codec.decode_int(*v as i64))
-                    .collect::<std::result::Result<_, _>>()?,
-            }
-        }
-    };
-    let shape = data.shape().to_vec();
-    if calendar.is_real_world() {
-        let chrono: Option<Vec<NaiveDateTime>> = dates
-            .iter()
-            .map(|d| NaiveDateTime::try_from(*d).ok())
-            .collect();
-        if let Some(c) = chrono {
-            return Ok(TypedArray::DateTime(
-                ArrayD::from_shape_vec(IxDyn(&shape), c).map_err(shape_err(var))?,
-            ));
+/// How to turn stored numbers into times. Integer data is masked here, exactly, rather than
+/// through floats (which would round nanosecond timestamps); float data arrives already masked
+/// (NaN).
+#[derive(Debug, Clone)]
+enum TimeStep {
+    /// `<unit> since <date>` in a calendar.
+    Dates {
+        unit: Unit,
+        calendar: Calendar,
+        masks: Vec<i128>,
+    },
+    /// Durations (xarray marks them `dtype = "timedelta64[…]"`), `step_ns` nanoseconds per unit.
+    Durations { step_ns: i128, masks: Vec<i128> },
+}
+
+impl TimeStep {
+    /// The element type the step produces (fixed, as lazy data needs).
+    fn dtype(&self) -> DType {
+        match self {
+            Self::Dates { calendar, .. } if calendar.is_real_world() => DType::DateTime,
+            Self::Dates { .. } => DType::CfDate,
+            Self::Durations { .. } => DType::TimeDelta,
         }
     }
-    Ok(TypedArray::CfDate(
-        ArrayD::from_shape_vec(IxDyn(&shape), dates).map_err(shape_err(var))?,
-    ))
+}
+
+/// A stored time value: missing (NaT), an exact integer, or a float.
+enum Num {
+    I(i128),
+    F(f64),
+}
+
+/// The values of `data`, with NaN, `i64::MIN` (xarray's NaT) and `masks` as missing.
+fn time_values(data: &TypedArray<Owned>, masks: &[i128], var: &str) -> Result<Vec<Option<Num>>> {
+    let int = |v: i128| (v != i128::from(i64::MIN) && !masks.contains(&v)).then_some(Num::I(v));
+    let float = |v: f64| (!v.is_nan()).then_some(Num::F(v));
+    Ok(match data {
+        TypedArray::F32(a) => a.iter().map(|v| float(f64::from(*v))).collect(),
+        TypedArray::F64(a) => a.iter().map(|v| float(*v)).collect(),
+        TypedArray::I8(a) => a.iter().map(|v| int(i128::from(*v))).collect(),
+        TypedArray::I16(a) => a.iter().map(|v| int(i128::from(*v))).collect(),
+        TypedArray::I32(a) => a.iter().map(|v| int(i128::from(*v))).collect(),
+        TypedArray::I64(a) => a.iter().map(|v| int(i128::from(*v))).collect(),
+        TypedArray::U8(a) => a.iter().map(|v| int(i128::from(*v))).collect(),
+        TypedArray::U16(a) => a.iter().map(|v| int(i128::from(*v))).collect(),
+        TypedArray::U32(a) => a.iter().map(|v| int(i128::from(*v))).collect(),
+        TypedArray::U64(a) => a.iter().map(|v| int(i128::from(*v))).collect(),
+        _ => return Err(invalid(var, "time values are not numeric")),
+    })
+}
+
+/// Integer fill values, exactly (an `f64` copy would round 64-bit ones).
+fn int_masks(attrs: &[&AttrValue]) -> Vec<i128> {
+    let mut out = Vec::new();
+    for a in attrs {
+        match a {
+            AttrValue::I8(v) => out.extend(v.iter().map(|x| i128::from(*x))),
+            AttrValue::I16(v) => out.extend(v.iter().map(|x| i128::from(*x))),
+            AttrValue::I32(v) => out.extend(v.iter().map(|x| i128::from(*x))),
+            AttrValue::I64(v) => out.extend(v.iter().map(|x| i128::from(*x))),
+            AttrValue::U8(v) => out.extend(v.iter().map(|x| i128::from(*x))),
+            AttrValue::U16(v) => out.extend(v.iter().map(|x| i128::from(*x))),
+            AttrValue::U32(v) => out.extend(v.iter().map(|x| i128::from(*x))),
+            AttrValue::U64(v) => out.extend(v.iter().map(|x| i128::from(*x))),
+            #[allow(clippy::cast_possible_truncation)] // integral and in range, checked
+            other => out.extend(
+                attr_f64s(other)
+                    .into_iter()
+                    .filter(|x| x.fract() == 0.0 && x.abs() < 1.7e38)
+                    .map(|x| x as i128),
+            ),
+        }
+    }
+    out
+}
+
+fn td_from_ns(ns: i128) -> Option<TimeDelta> {
+    let secs = i64::try_from(ns.div_euclid(1_000_000_000)).ok()?;
+    let nanos = u32::try_from(ns.rem_euclid(1_000_000_000)).ok()?;
+    TimeDelta::new(secs, nanos).filter(|t| !t.is_nat())
+}
+
+/// Nanoseconds per `unit`, for a time unit that is a whole number of nanoseconds.
+fn duration_step_ns(unit: &Unit) -> Option<i128> {
+    if !matches!(unit.kind(), UnitKind::Linear) {
+        return None;
+    }
+    let ns = "ns".parse::<Unit>().ok()?;
+    let f = unit.converter_to(&ns).ok()?.factor();
+    let r = f.round();
+    #[allow(clippy::cast_possible_truncation)] // integral and in range, checked
+    ((r - f).abs() <= 1e-9 * f.abs() && (1.0..1e30).contains(&r)).then_some(r as i128)
+}
+
+/// Decode times. With `strict` (lazy data, whose type is fixed in advance), dates of a
+/// real-world calendar outside chrono's range are an error rather than `CfDate`s.
+fn decode_times(
+    data: &TypedArray<Owned>,
+    step: &TimeStep,
+    strict: bool,
+    var: &str,
+) -> Result<TypedArray<Owned>> {
+    let shape = IxDyn(data.shape());
+    match step {
+        TimeStep::Dates {
+            unit,
+            calendar,
+            masks,
+        } => {
+            let codec = unit.epoch_codec(*calendar)?;
+            let dates = time_values(data, masks, var)?
+                .into_iter()
+                .map(|v| match v {
+                    None => Ok(CfDate::NAT),
+                    Some(Num::I(i)) => i64::try_from(i)
+                        .map_err(|_| xr_core::xr_units::UnitError::Overflow)
+                        .and_then(|i| codec.decode_int(i)),
+                    Some(Num::F(f)) => codec.decode_float(f),
+                })
+                .collect::<std::result::Result<Vec<CfDate>, _>>()?;
+            if calendar.is_real_world() {
+                let chrono: Option<Vec<NaiveDateTime>> = dates
+                    .iter()
+                    .map(|d| {
+                        if d.is_nat() {
+                            Some(NaiveDateTime::NAT)
+                        } else {
+                            NaiveDateTime::try_from(*d).ok()
+                        }
+                    })
+                    .collect();
+                match chrono {
+                    Some(c) => {
+                        return Ok(TypedArray::DateTime(
+                            ArrayD::from_shape_vec(shape, c).map_err(shape_err(var))?,
+                        ));
+                    }
+                    None if strict => return Err(invalid(var, "dates outside chrono's range")),
+                    None => {}
+                }
+            }
+            Ok(TypedArray::CfDate(
+                ArrayD::from_shape_vec(shape, dates).map_err(shape_err(var))?,
+            ))
+        }
+        TimeStep::Durations { step_ns, masks } => {
+            let range = || invalid(var, "duration out of range");
+            let deltas = time_values(data, masks, var)?
+                .into_iter()
+                .map(|v| match v {
+                    None => Ok(TimeDelta::NAT),
+                    Some(Num::I(i)) => i
+                        .checked_mul(*step_ns)
+                        .and_then(td_from_ns)
+                        .ok_or_else(range),
+                    #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
+                    Some(Num::F(f)) => {
+                        let ns = (f * *step_ns as f64).round();
+                        if ns.is_finite() && ns.abs() < 1e30 {
+                            td_from_ns(ns as i128).ok_or_else(range)
+                        } else {
+                            Err(range())
+                        }
+                    }
+                })
+                .collect::<Result<Vec<TimeDelta>>>()?;
+            Ok(TypedArray::TimeDelta(
+                ArrayD::from_shape_vec(shape, deltas).map_err(shape_err(var))?,
+            ))
+        }
+    }
 }
 
 /// The float type xarray picks for masked or unpacked data.
@@ -221,7 +336,8 @@ enum Step {
 /// How to decode a variable, worked out from its attributes and on-disk dtype alone.
 struct Plan {
     steps: Vec<Step>,
-    times: Option<(Unit, Calendar, String, Option<String>)>,
+    /// Time decoding, with the `units` and `calendar` strings to keep in the encoding.
+    times: Option<(TimeStep, String, Option<String>)>,
     dims: Vec<Name>,
     attrs: xr_core::Attrs,
     enc: Encoding,
@@ -286,6 +402,44 @@ fn plan(name: &str, raw: &RawVariable, opts: &DecodeOptions, warnings: &mut Vec<
         attrs.shift_remove("dtype");
     }
 
+    // Times: dates (`<unit> since <date>`) and durations, decided before masking because
+    // integer times are masked exactly by the time step.
+    let units = str_attr(attrs.get("units")).map(str::to_owned);
+    let parsed = units.as_deref().map(str::parse::<Unit>);
+    let mut pending: Option<TimeStep> = None;
+    let mut cal_name = None;
+    if opts.decode_times {
+        match &parsed {
+            Some(Ok(u)) if matches!(u.kind(), UnitKind::Epoch(_)) => {
+                cal_name = str_attr(attrs.get("calendar")).map(str::to_owned);
+                match cal_name
+                    .as_deref()
+                    .map_or(Ok(Calendar::Standard), str::parse::<Calendar>)
+                {
+                    Ok(calendar) => {
+                        pending = Some(TimeStep::Dates {
+                            unit: u.clone(),
+                            calendar,
+                            masks: Vec::new(),
+                        });
+                    }
+                    Err(e) => warnings.push(format!("{name}: times left undecoded: {e}")),
+                }
+            }
+            Some(Ok(u))
+                if str_attr(attrs.get("dtype")).is_some_and(|d| d.starts_with("timedelta64")) =>
+            {
+                if let Some(step_ns) = duration_step_ns(u) {
+                    pending = Some(TimeStep::Durations {
+                        step_ns,
+                        masks: Vec::new(),
+                    });
+                }
+            }
+            _ => {}
+        }
+    }
+
     // Masking and packing.
     if opts.mask_and_scale && (is_int(dtype) || is_float(dtype)) {
         let fill = attrs.shift_remove("_FillValue");
@@ -297,7 +451,16 @@ fn plan(name: &str, raw: &RawVariable, opts: &DecodeOptions, warnings: &mut Vec<
             .chain(missing.iter())
             .flat_map(attr_f64s)
             .collect();
-        if !masks.is_empty() || scale.is_some() || offset.is_some() {
+        let exact_time = pending.is_some() && is_int(dtype) && scale.is_none() && offset.is_none();
+        if exact_time {
+            let fills: Vec<&AttrValue> = fill.iter().chain(missing.iter()).collect();
+            let exact = int_masks(&fills);
+            if let Some(TimeStep::Dates { masks, .. } | TimeStep::Durations { masks, .. }) =
+                pending.as_mut()
+            {
+                *masks = exact;
+            }
+        } else if !masks.is_empty() || scale.is_some() || offset.is_some() {
             let target = float_dtype(dtype, scale.as_ref(), offset.as_ref());
             steps.push(Step::MaskScale {
                 masks,
@@ -314,30 +477,24 @@ fn plan(name: &str, raw: &RawVariable, opts: &DecodeOptions, warnings: &mut Vec<
     }
 
     let mut unit = None;
-    let mut times = None;
-    if let Some(units) = str_attr(attrs.get("units")).map(str::to_owned) {
-        match units.parse::<Unit>() {
-            Ok(u) if matches!(u.kind(), UnitKind::Epoch(_)) && opts.decode_times => {
-                let cal_name = str_attr(attrs.get("calendar")).map(str::to_owned);
-                match cal_name
-                    .as_deref()
-                    .map_or(Ok(Calendar::Standard), str::parse::<Calendar>)
+    let times = match (pending, units) {
+        (Some(step), Some(units)) => Some((step, units, cal_name)),
+        (_, units) => {
+            match (parsed, units) {
+                (Some(Ok(u)), Some(_))
+                    if opts.decode_units && !matches!(u.kind(), UnitKind::Epoch(_)) =>
                 {
-                    Ok(cal) => times = Some((u, cal, units, cal_name)),
-                    Err(e) => warnings.push(format!("{name}: times left undecoded: {e}")),
+                    unit = Some(u);
+                    attrs.shift_remove("units");
                 }
+                (Some(Err(e)), Some(units)) if opts.decode_units => {
+                    warnings.push(format!("{name}: units {units:?} kept as an attribute: {e}"));
+                }
+                _ => {}
             }
-            Ok(u) if opts.decode_units && !matches!(u.kind(), UnitKind::Epoch(_)) => {
-                unit = Some(u);
-                attrs.shift_remove("units");
-            }
-            Ok(_) => {}
-            Err(e) if opts.decode_units => {
-                warnings.push(format!("{name}: units {units:?} kept as an attribute: {e}"))
-            }
-            Err(_) => {}
+            None
         }
-    }
+    };
     Plan {
         steps,
         times,
@@ -385,30 +542,12 @@ fn apply(steps: &[Step], mut data: TypedArray<Owned>, name: &str) -> Result<Type
     Ok(data)
 }
 
-/// Time decoding with a fixed output type (needed for lazy data): chrono datetimes for
-/// real-world calendars, `CfDate` otherwise. Missing values (NaN) are an error.
-fn decode_times_strict(
-    data: &TypedArray<Owned>,
-    unit: &Unit,
-    cal: Calendar,
-    name: &str,
-) -> Result<TypedArray<Owned>> {
-    if to_f64(data).is_some_and(|a| a.iter().any(|v| v.is_nan())) {
-        return Err(invalid(name, "missing times (NaT) are not supported yet"));
-    }
-    let decoded = decode_times(data, unit, cal, name)?;
-    match (cal.is_real_world(), decoded) {
-        (true, TypedArray::CfDate(_)) => Err(invalid(name, "dates outside chrono's range")),
-        (_, d) => Ok(d),
-    }
-}
-
 /// A lazily decoded variable: reads raw slices and decodes them.
 #[derive(Debug)]
 struct CfSource {
     inner: Arc<dyn LazySource>,
     steps: Vec<Step>,
-    times: Option<(Unit, Calendar)>,
+    times: Option<TimeStep>,
     chars: bool,
     dtype: DType,
     shape: Vec<usize>,
@@ -435,9 +574,18 @@ impl LazySource for CfSource {
         let raw = self.inner.read_slice(&start, &count)?;
         let data = apply(&self.steps, raw, &self.name).map_err(err)?;
         match &self.times {
-            Some((u, cal)) => decode_times_strict(&data, u, *cal, &self.name).map_err(err),
+            Some(step) => decode_times(&data, step, true, &self.name).map_err(err),
             None => Ok(data),
         }
+    }
+}
+
+/// Move the time attributes into the encoding once times are decoded.
+fn times_decoded(p: &mut Plan, units: String, cal_name: Option<String>) {
+    p.enc.time_units = Some(units);
+    p.enc.calendar = cal_name;
+    for key in ["units", "calendar", "dtype"] {
+        p.attrs.shift_remove(key);
     }
 }
 
@@ -454,17 +602,10 @@ fn decode_var(
         (RawData::Lazy(src), true) => {
             let mut times = None;
             let mut dtype = p.dtype;
-            if let Some((u, cal, units, cal_name)) = p.times.take() {
-                dtype = if cal.is_real_world() {
-                    DType::DateTime
-                } else {
-                    DType::CfDate
-                };
-                times = Some((u, cal));
-                p.enc.time_units = Some(units);
-                p.enc.calendar = cal_name;
-                p.attrs.shift_remove("units");
-                p.attrs.shift_remove("calendar");
+            if let Some((step, units, cal_name)) = p.times.take() {
+                dtype = step.dtype();
+                times = Some(step);
+                times_decoded(&mut p, units, cal_name);
             }
             let lazy = if p.steps.is_empty() && times.is_none() {
                 LazyArray::new(src.clone())
@@ -483,23 +624,13 @@ fn decode_var(
         }
         _ => {
             let mut data = apply(&p.steps, raw.data.values()?.into_owned(), name)?;
-            if let Some((u, cal, units, cal_name)) = p.times.take() {
-                let has_nan = to_f64(&data).is_some_and(|a| a.iter().any(|v| v.is_nan()));
-                if has_nan {
-                    warnings.push(format!(
-                        "{name}: times left undecoded: missing values (NaT) are not supported yet"
-                    ));
-                } else {
-                    match decode_times(&data, &u, cal, name) {
-                        Ok(t) => {
-                            data = t;
-                            p.enc.time_units = Some(units);
-                            p.enc.calendar = cal_name;
-                            p.attrs.shift_remove("units");
-                            p.attrs.shift_remove("calendar");
-                        }
-                        Err(e) => warnings.push(format!("{name}: times left undecoded: {e}")),
+            if let Some((step, units, cal_name)) = p.times.take() {
+                match decode_times(&data, &step, false, name) {
+                    Ok(t) => {
+                        data = t;
+                        times_decoded(&mut p, units, cal_name);
                     }
+                    Err(e) => warnings.push(format!("{name}: times left undecoded: {e}")),
                 }
             }
             Variable::from_typed(p.dims.clone(), data)?

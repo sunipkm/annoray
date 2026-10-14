@@ -267,6 +267,25 @@ pub struct CfDate {
 }
 
 impl CfDate {
+    /// "Not a time": a missing date (numpy's `NaT`). It belongs to no calendar; check with
+    /// [`is_nat`](Self::is_nat) before doing date arithmetic, which rejects it.
+    pub const NAT: Self = Self {
+        calendar: Calendar::Standard,
+        year: i64::MIN,
+        month: 1,
+        day: 1,
+        hour: 0,
+        minute: 0,
+        second: 0,
+        nanosecond: 0,
+    };
+
+    /// Whether this is [`NAT`](Self::NAT).
+    #[must_use]
+    pub const fn is_nat(&self) -> bool {
+        self.year == i64::MIN
+    }
+
     /// Midnight on the given day.
     ///
     /// # Errors
@@ -282,9 +301,11 @@ impl CfDate {
             second: 0,
             nanosecond: 0,
         };
-        let valid = calendar
-            .days_in_month(year, month)
-            .is_some_and(|n| (1..=n).contains(&day))
+        // The year of `NAT` is reserved.
+        let valid = year != i64::MIN
+            && calendar
+                .days_in_month(year, month)
+                .is_some_and(|n| (1..=n).contains(&day))
             && !(calendar == Calendar::Standard
                 && year == 1582
                 && month == 10
@@ -528,6 +549,9 @@ impl TryFrom<CfDate> for NaiveDateTime {
 
 impl fmt::Display for CfDate {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.is_nat() {
+            return f.write_str("NaT");
+        }
         if self.year < 0 {
             write!(f, "-{:04}", self.year.unsigned_abs())?;
         } else {

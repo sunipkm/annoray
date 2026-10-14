@@ -3,7 +3,9 @@
 use chrono::{NaiveDateTime, TimeDelta};
 use ndarray::{ArrayD, IxDyn};
 use xr_core::xr_units::{Calendar, CfDate, Unit};
-use xr_core::{AttrValue, Attrs, DType, DatasetBase, Name, Owned, Repr, TypedArray, VariableBase};
+use xr_core::{
+    AttrValue, Attrs, DType, DatasetBase, NaT, Name, Owned, Repr, TypedArray, VariableBase,
+};
 use xr_io::{Format, RawDataset, RawDim, RawVariable, Storage};
 
 use crate::num::{attr_f64, attr_of, f64_to_int, flip_sign, is_float, is_int, to_f64};
@@ -69,20 +71,22 @@ fn encode_times(
     var: &str,
     enc: &xr_core::Encoding,
     attrs: &mut Attrs,
+    int64_ok: bool,
 ) -> Result<TypedArray<Owned>> {
-    let calendar = dates
-        .first()
+    // NaT is skipped when choosing units and written as `i64::MIN` (NaN in floats), as
+    // xarray does.
+    let real = || dates.iter().filter(|d| !d.is_nat());
+    let calendar = real()
+        .next()
         .map_or(Calendar::ProlepticGregorian, CfDate::calendar);
     let units = match &enc.time_units {
         Some(u) => u.clone(),
         None => {
-            let first = dates.first().copied();
-            let reference = match first {
-                Some(f) => f,
+            let reference = match real().next() {
+                Some(f) => *f,
                 None => CfDate::from_ymd(calendar, 1970, 1, 1)?,
             };
-            let offsets = dates
-                .iter()
+            let offsets = real()
                 .map(|d| d.nanos_since(&reference))
                 .collect::<std::result::Result<Vec<_>, _>>()?;
             let (step, _) = coarsest_step(&offsets);
@@ -93,16 +97,33 @@ fn encode_times(
     let shape = IxDyn(shape);
     let out = match dates
         .iter()
-        .map(|d| codec.encode_int(d))
+        .map(|d| {
+            if d.is_nat() {
+                Ok(i64::MIN)
+            } else {
+                codec.encode_int(d)
+            }
+        })
         .collect::<std::result::Result<Vec<i64>, _>>()
     {
-        Ok(ints) if enc.dtype.is_none_or(is_int) => TypedArray::I64(
-            ArrayD::from_shape_vec(shape, ints).map_err(|e| invalid(var, e.to_string()))?,
-        ),
+        // Without 64-bit integers (netCDF-3), NaT needs floats (NaN), as in xarray.
+        Ok(ints)
+            if enc.dtype.is_none_or(is_int) && (int64_ok || !dates.iter().any(CfDate::is_nat)) =>
+        {
+            TypedArray::I64(
+                ArrayD::from_shape_vec(shape, ints).map_err(|e| invalid(var, e.to_string()))?,
+            )
+        }
         _ => {
             let floats = dates
                 .iter()
-                .map(|d| codec.encode_float(d))
+                .map(|d| {
+                    if d.is_nat() {
+                        Ok(f64::NAN)
+                    } else {
+                        codec.encode_float(d)
+                    }
+                })
                 .collect::<std::result::Result<Vec<f64>, _>>()?;
             TypedArray::F64(
                 ArrayD::from_shape_vec(shape, floats).map_err(|e| invalid(var, e.to_string()))?,
@@ -126,23 +147,46 @@ fn encode_durations(
     a: &ArrayD<TimeDelta>,
     var: &str,
     attrs: &mut Attrs,
+    int64_ok: bool,
 ) -> Result<TypedArray<Owned>> {
-    let ns: Vec<i128> = a
+    // NaT is written as `i64::MIN`, as xarray does.
+    let ns: Vec<Option<i128>> = a
         .iter()
         .map(|t| {
+            if t.is_nat() {
+                return Some(None);
+            }
             i128::from(t.num_seconds())
                 .checked_mul(1_000_000_000)
                 .and_then(|s| s.checked_add(i128::from(t.subsec_nanos())))
+                .map(Some)
         })
         .collect::<Option<_>>()
         .ok_or_else(|| invalid(var, "duration out of range"))?;
-    let (step, step_ns) = coarsest_step(&ns);
+    let real: Vec<i128> = ns.iter().flatten().copied().collect();
+    let (step, step_ns) = coarsest_step(&real);
+    attrs.insert("units".into(), AttrValue::from(step));
+    // How xarray recognises durations when reading.
+    attrs.insert("dtype".into(), AttrValue::from("timedelta64[ns]"));
+    if !int64_ok && ns.iter().any(Option::is_none) {
+        // Without 64-bit integers (netCDF-3), NaT needs floats (NaN), as in xarray.
+        #[allow(clippy::cast_precision_loss)] // whole steps, exact up to 2^53
+        let floats: Vec<f64> = ns
+            .iter()
+            .map(|n| n.map_or(f64::NAN, |n| n.checked_div(step_ns).unwrap_or(0) as f64))
+            .collect();
+        return Ok(TypedArray::F64(
+            ArrayD::from_shape_vec(a.raw_dim(), floats).map_err(|e| invalid(var, e.to_string()))?,
+        ));
+    }
     let ints = ns
         .iter()
-        .map(|n| n.checked_div(step_ns).and_then(|q| i64::try_from(q).ok()))
+        .map(|n| match n {
+            None => Some(i64::MIN),
+            Some(n) => n.checked_div(step_ns).and_then(|q| i64::try_from(q).ok()),
+        })
         .collect::<Option<Vec<i64>>>()
         .ok_or_else(|| invalid(var, "duration out of range"))?;
-    attrs.insert("units".into(), AttrValue::from(step));
     Ok(TypedArray::I64(
         ArrayD::from_shape_vec(a.raw_dim(), ints).map_err(|e| invalid(var, e.to_string()))?,
     ))
@@ -244,6 +288,11 @@ fn encode_var<R: Repr>(name: &str, v: &VariableBase<R>, format: Format) -> Resul
         attrs.insert("units".into(), AttrValue::Str(u.to_string()));
     }
 
+    let int64_ok = format.supports(DType::I64);
+    let was_time = matches!(
+        data.dtype(),
+        DType::DateTime | DType::CfDate | DType::TimeDelta
+    );
     data = match data {
         TypedArray::DateTime(a) => {
             let cal = enc
@@ -254,9 +303,15 @@ fn encode_var<R: Repr>(name: &str, v: &VariableBase<R>, format: Format) -> Resul
                 .unwrap_or(Calendar::ProlepticGregorian);
             let dates = a
                 .iter()
-                .map(|d: &NaiveDateTime| CfDate::from_chrono(*d, cal))
+                .map(|d: &NaiveDateTime| {
+                    if d.is_nat() {
+                        Ok(CfDate::NAT)
+                    } else {
+                        CfDate::from_chrono(*d, cal)
+                    }
+                })
                 .collect::<std::result::Result<Vec<_>, _>>()?;
-            encode_times(dates, a.shape(), name, enc, &mut attrs)?
+            encode_times(dates, a.shape(), name, enc, &mut attrs, int64_ok)?
         }
         TypedArray::CfDate(a) => encode_times(
             a.iter().copied().collect(),
@@ -264,8 +319,9 @@ fn encode_var<R: Repr>(name: &str, v: &VariableBase<R>, format: Format) -> Resul
             name,
             enc,
             &mut attrs,
+            int64_ok,
         )?,
-        TypedArray::TimeDelta(a) => encode_durations(&a, name, &mut attrs)?,
+        TypedArray::TimeDelta(a) => encode_durations(&a, name, &mut attrs, int64_ok)?,
         TypedArray::Bool(a) => {
             attrs.insert("dtype".into(), AttrValue::from("bool"));
             TypedArray::I8(a.mapv(i8::from))
@@ -289,7 +345,8 @@ fn encode_var<R: Repr>(name: &str, v: &VariableBase<R>, format: Format) -> Resul
     // Masking and packing back to the on-disk type.
     if is_float(data.dtype()) {
         let fill = enc.fill_value.as_ref().and_then(attr_f64);
-        let target = enc.dtype.filter(|d| is_int(*d));
+        // Times already chose their stored type (floats only when NaT needs NaN).
+        let target = enc.dtype.filter(|d| is_int(*d) && !was_time);
         let packed = enc.scale_factor.is_some() || enc.add_offset.is_some();
         if packed || target.is_some() {
             let s = enc.scale_factor.as_ref().and_then(attr_f64).unwrap_or(1.0);

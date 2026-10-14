@@ -11,7 +11,7 @@ use xr_units::{Calendar, CfDate, Unit, UnitKind};
 
 use crate::label::{PartialDate, Resolution, parse_partial_date};
 use crate::{
-    CoreError, Indexer, Label, LabelIndexer, Method, Name, PySlice, Repr, Result, TypedArray,
+    CoreError, Indexer, Label, LabelIndexer, Method, NaT, Name, PySlice, Repr, Result, TypedArray,
     VariableBase,
 };
 
@@ -169,16 +169,35 @@ fn keys_of<S: Repr>(coord: &VariableBase<S>, ctx: &Ctx<'_>) -> Result<Keys> {
         TypedArray::U32(a) => num(&mut a.iter().map(|v| f64::from(*v))),
         TypedArray::U64(a) => num(&mut a.iter().map(|v| *v as f64)),
         TypedArray::Str(a) => Keys::Str(a.iter().cloned().collect()),
+        // NaT sorts first and matches only NaT.
         TypedArray::DateTime(a) => Keys::Ns(
             a.iter()
-                .map(datetime_ns)
+                .map(|d| {
+                    if d.is_nat() {
+                        Some(i128::MIN)
+                    } else {
+                        datetime_ns(d)
+                    }
+                })
                 .collect::<Option<_>>()
                 .ok_or_else(|| ctx.overflow())?,
             TimeKind::DateTime,
         ),
         TypedArray::CfDate(a) => {
-            let cal = a.iter().next().map_or(Calendar::Standard, CfDate::calendar);
-            let ns = a.iter().map(|d| cf_ns(d, cal)).collect::<Option<_>>();
+            let cal = a
+                .iter()
+                .find(|d| !d.is_nat())
+                .map_or(Calendar::Standard, CfDate::calendar);
+            let ns = a
+                .iter()
+                .map(|d| {
+                    if d.is_nat() {
+                        Some(i128::MIN)
+                    } else {
+                        cf_ns(d, cal)
+                    }
+                })
+                .collect::<Option<_>>();
             Keys::Ns(
                 ns.ok_or_else(|| ctx.invalid("mixed calendars in coordinate"))?,
                 TimeKind::Cf(cal),
@@ -186,7 +205,13 @@ fn keys_of<S: Repr>(coord: &VariableBase<S>, ctx: &Ctx<'_>) -> Result<Keys> {
         }
         TypedArray::TimeDelta(a) => Keys::Ns(
             a.iter()
-                .map(delta_ns)
+                .map(|d| {
+                    if d.is_nat() {
+                        Some(i128::MIN)
+                    } else {
+                        delta_ns(d)
+                    }
+                })
                 .collect::<Option<_>>()
                 .ok_or_else(|| ctx.overflow())?,
             TimeKind::Delta,

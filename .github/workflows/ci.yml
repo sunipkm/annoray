@@ -44,6 +44,7 @@ jobs:
           pip install xarray netCDF4 cftime h5py
           cargo test -p xarray-rs --features netcdf-c --test netcdf_io -- --ignored python
           cargo test -p xr-hdf5 --test write_round_trip -- --ignored
+          cargo test -p xarray-rs --test nat -- --ignored
 
   msrv:
     runs-on: ubuntu-latest

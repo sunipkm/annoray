@@ -2,8 +2,8 @@
 //!
 //! For each dimension with a coordinate, the objects' labels are joined (intersection, union,
 //! first, last, or required equal) and every object is reindexed onto the result. Labels
-//! missing from an object become NaN: integer data turns into `f64`; types without NaN
-//! (strings, booleans, dates) cannot be filled and give an error. Objects whose labels already
+//! missing from an object become NaN (integer data turns into `f64`) or, for times, NaT;
+//! strings and booleans have no missing value and give an error. Objects whose labels already
 //! match are not touched (lazy data stays unread).
 //!
 //! Ordering follows pandas: an inner join keeps the first object's order, an outer join sorts
@@ -21,7 +21,7 @@ use crate::dataarray::DataArrayBase;
 use crate::lookup::{Keys, index_keys};
 use crate::ops::to_f64;
 use crate::{
-    CoreError, DType, DataArray, Dataset, DatasetBase, Element, Name, Owned, Repr, Result,
+    CoreError, DType, DataArray, Dataset, DatasetBase, Element, NaT, Name, Owned, Repr, Result,
     TypedArray, Variable, VariableBase, VariableView,
 };
 
@@ -377,7 +377,7 @@ fn reindex<S: Repr>(v: &VariableBase<S>, dim: &str, pos: &[Option<usize>]) -> Re
         return v.take(dim, &idx);
     }
     let unsupported = || CoreError::UnsupportedDType {
-        op: "reindexing with missing labels (needs NaN)",
+        op: "reindexing with missing labels (needs NaN or NaT)",
         dtype: v.dtype(),
     };
     let mut shape = v.shape().to_vec();
@@ -391,6 +391,9 @@ fn reindex<S: Repr>(v: &VariableBase<S>, dim: &str, pos: &[Option<usize>]) -> Re
             d if d == DType::F64 || is_int(d) => {
                 TypedArray::F64(ArrayD::from_elem(IxDyn(&shape), f64::NAN))
             }
+            DType::DateTime => TypedArray::DateTime(ArrayD::from_elem(IxDyn(&shape), NaT::NAT)),
+            DType::TimeDelta => TypedArray::TimeDelta(ArrayD::from_elem(IxDyn(&shape), NaT::NAT)),
+            DType::CfDate => TypedArray::CfDate(ArrayD::from_elem(IxDyn(&shape), NaT::NAT)),
             _ => return Err(unsupported()),
         }
     } else {
@@ -400,12 +403,18 @@ fn reindex<S: Repr>(v: &VariableBase<S>, dim: &str, pos: &[Option<usize>]) -> Re
             TypedArray::F32(a) => TypedArray::F32(a.to_owned()),
             TypedArray::F64(a) => TypedArray::F64(a.to_owned()),
             t if is_int(t.dtype()) => TypedArray::F64(to_f64(t, None)?),
+            TypedArray::DateTime(a) => TypedArray::DateTime(a.to_owned()),
+            TypedArray::TimeDelta(a) => TypedArray::TimeDelta(a.to_owned()),
+            TypedArray::CfDate(a) => TypedArray::CfDate(a.to_owned()),
             _ => return Err(unsupported()),
         };
         for i in &missing {
             match &mut data {
                 TypedArray::F32(a) => a.index_axis_mut(Axis(axis), *i).fill(f32::NAN),
                 TypedArray::F64(a) => a.index_axis_mut(Axis(axis), *i).fill(f64::NAN),
+                TypedArray::DateTime(a) => a.index_axis_mut(Axis(axis), *i).fill(NaT::NAT),
+                TypedArray::TimeDelta(a) => a.index_axis_mut(Axis(axis), *i).fill(NaT::NAT),
+                TypedArray::CfDate(a) => a.index_axis_mut(Axis(axis), *i).fill(NaT::NAT),
                 _ => {}
             }
         }

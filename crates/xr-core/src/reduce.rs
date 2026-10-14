@@ -3,7 +3,9 @@
 //!
 //! - **Missing values**: with `skipna` (the default) NaNs are ignored, as numpy's `nan*`
 //!   functions do: an all-NaN sum is 0, an all-NaN mean is NaN. Without it any NaN gives NaN.
-//!   Only floats can be missing.
+//!   Floats can be missing (NaN), and so can times (NaT, see [`NaT`](crate::NaT)), which are
+//!   skipped the same way. (Unlike xarray, whose `min`/`max` of dates do not skip NaT by
+//!   default while its `mean` does.)
 //! - **Element types**: integer and boolean sums and products are exact (checked) and give
 //!   `i64` (`u64` for unsigned input); means, medians and spreads of integers are `f64`;
 //!   `f32` stays `f32`. `count`, `argmin` and `argmax` give `i64`; `any` and `all` give `bool`.
@@ -24,7 +26,7 @@ use xr_units::{CfDate, Unit, UnitPolicy};
 use crate::dataarray::DataArrayBase;
 use crate::ops::{td_from_ns, td_ns};
 use crate::{
-    CoreError, DType, DataArray, Dataset, DatasetBase, Element, Name, Owned, Repr, Result,
+    CoreError, DType, DataArray, Dataset, DatasetBase, Element, NaT, Name, Owned, Repr, Result,
     TypedArray, Variable, VariableBase, View,
 };
 
@@ -275,9 +277,26 @@ macro_rules! red_ord {
         }
     )*};
 }
-red_ord!(String, NaiveDateTime, TimeDelta);
+red_ord!(String);
+
+macro_rules! red_time {
+    ($($t:ty),*) => {$(
+        impl RedElem for $t {
+            fn missing(&self) -> bool {
+                self.is_nat()
+            }
+            fn order(&self, other: &Self) -> Ordering {
+                self.cmp(other)
+            }
+        }
+    )*};
+}
+red_time!(NaiveDateTime, TimeDelta);
 
 impl RedElem for CfDate {
+    fn missing(&self) -> bool {
+        self.is_nat()
+    }
     fn order(&self, other: &Self) -> Ordering {
         self.nanos_since(other)
             .map_or(Ordering::Equal, |d| d.cmp(&0))
@@ -509,10 +528,11 @@ fn int_stats<T: RedElem>(
 }
 
 /// Statistics of dates and durations, on nanosecond offsets (`key`/`back` convert).
-fn time_stats<T: RedElem>(
+fn time_stats<T: RedElem + NaT>(
     a: &ArrayViewD<'_, T>,
     axes: &[usize],
     op: Reduction,
+    skipna: bool,
     key: impl Fn(&T) -> Option<i128>,
     back: impl Fn(i128) -> Option<T>,
 ) -> Result<ArrayD<T>> {
@@ -521,11 +541,21 @@ fn time_stats<T: RedElem>(
     map_lanes(a, axes, |lane| {
         keys.clear();
         for v in &lane {
+            if v.is_nat() {
+                if !skipna {
+                    return Ok(T::NAT);
+                }
+                continue;
+            }
             keys.push(key(v).ok_or_else(overflow)?);
         }
         let n = i128::try_from(keys.len()).map_err(|_| overflow())?;
         if n == 0 {
-            return Err(CoreError::EmptyReduction(op.name()));
+            // Like NaN for floats: an empty sum is zero, any other statistic is missing.
+            return match op {
+                Reduction::Sum => back(0).ok_or_else(overflow),
+                _ => Ok(T::NAT),
+            };
         }
         let ns = match op {
             Reduction::Sum => keys
@@ -602,20 +632,25 @@ fn stats(
             x,
             axes,
             op,
+            skipna,
             |v| td_ns(&v.signed_duration_since(epoch())),
             |ns| epoch().checked_add_signed(td_from_ns(ns)?),
         )?),
         TypedArray::TimeDelta(x) => {
-            TypedArray::TimeDelta(time_stats(x, axes, op, td_ns, td_from_ns)?)
+            TypedArray::TimeDelta(time_stats(x, axes, op, skipna, td_ns, td_from_ns)?)
         }
         TypedArray::CfDate(x) => {
-            let Some(base) = x.iter().next().copied() else {
-                return Err(CoreError::EmptyReduction(op.name()));
-            };
+            // Offsets from the first real date (with none, every lane is NaT).
+            let base = x
+                .iter()
+                .find(|d| !d.is_nat())
+                .copied()
+                .unwrap_or(CfDate::NAT);
             TypedArray::CfDate(time_stats(
                 x,
                 axes,
                 op,
+                skipna,
                 |v| v.nanos_since(&base).ok(),
                 |ns| base.checked_add_nanos(ns).ok(),
             )?)

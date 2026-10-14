@@ -24,8 +24,8 @@ use xr_units::{CfDate, Converter, Unit, UnitPolicy};
 use crate::array::typed_dispatch;
 use crate::dataarray::DataArrayBase;
 use crate::{
-    CoreError, DType, DataArray, Element, Name, Repr, Result, TypedArray, Variable, VariableBase,
-    View,
+    CoreError, DType, DataArray, Element, NaT, Name, Repr, Result, TypedArray, Variable,
+    VariableBase, View,
 };
 
 /// An arithmetic operation.
@@ -306,43 +306,85 @@ fn time_op(
             )?
         };
     }
+    // NaT in either operand gives NaT.
+    macro_rules! nat {
+        ($out:ty, |$p:ident: $pt:ty, $q:ident: $qt:ty| $body:expr) => {
+            |$p: $pt, $q: $qt| -> Option<$out> {
+                if $p.is_nat() || $q.is_nat() {
+                    Some(<$out as NaT>::NAT)
+                } else {
+                    $body
+                }
+            }
+        };
+    }
     Ok(match (a, b, op) {
         (TypedArray::DateTime(x), TypedArray::DateTime(y), BinOp::Sub) => {
-            TypedArray::TimeDelta(go!(x, y, |p: &NaiveDateTime, q: &NaiveDateTime| Some(
-                p.signed_duration_since(*q)
-            )))
+            TypedArray::TimeDelta(go!(
+                x,
+                y,
+                nat!(TimeDelta, |p: &NaiveDateTime, q: &NaiveDateTime| Some(
+                    p.signed_duration_since(*q)
+                ))
+            ))
         }
         (TypedArray::DateTime(x), TypedArray::TimeDelta(y), BinOp::Add) => {
-            TypedArray::DateTime(go!(x, y, |p: &NaiveDateTime, q: &TimeDelta| p
-                .checked_add_signed(*q)))
+            TypedArray::DateTime(go!(
+                x,
+                y,
+                nat!(NaiveDateTime, |p: &NaiveDateTime, q: &TimeDelta| p
+                    .checked_add_signed(*q))
+            ))
         }
         (TypedArray::DateTime(x), TypedArray::TimeDelta(y), BinOp::Sub) => {
-            TypedArray::DateTime(go!(x, y, |p: &NaiveDateTime, q: &TimeDelta| p
-                .checked_sub_signed(*q)))
+            TypedArray::DateTime(go!(
+                x,
+                y,
+                nat!(NaiveDateTime, |p: &NaiveDateTime, q: &TimeDelta| p
+                    .checked_sub_signed(*q))
+            ))
         }
         (TypedArray::TimeDelta(x), TypedArray::DateTime(y), BinOp::Add) => {
-            TypedArray::DateTime(go!(x, y, |p: &TimeDelta, q: &NaiveDateTime| q
-                .checked_add_signed(*p)))
+            TypedArray::DateTime(go!(
+                x,
+                y,
+                nat!(NaiveDateTime, |p: &TimeDelta, q: &NaiveDateTime| q
+                    .checked_add_signed(*p))
+            ))
         }
         (TypedArray::TimeDelta(x), TypedArray::TimeDelta(y), BinOp::Add) => {
-            TypedArray::TimeDelta(go!(x, y, |p: &TimeDelta, q: &TimeDelta| p.checked_add(q)))
+            TypedArray::TimeDelta(go!(
+                x,
+                y,
+                nat!(TimeDelta, |p: &TimeDelta, q: &TimeDelta| p.checked_add(q))
+            ))
         }
         (TypedArray::TimeDelta(x), TypedArray::TimeDelta(y), BinOp::Sub) => {
-            TypedArray::TimeDelta(go!(x, y, |p: &TimeDelta, q: &TimeDelta| p.checked_sub(q)))
+            TypedArray::TimeDelta(go!(
+                x,
+                y,
+                nat!(TimeDelta, |p: &TimeDelta, q: &TimeDelta| p.checked_sub(q))
+            ))
         }
-        (TypedArray::CfDate(x), TypedArray::CfDate(y), BinOp::Sub) => {
-            TypedArray::TimeDelta(go!(x, y, |p: &CfDate, q: &CfDate| p
+        (TypedArray::CfDate(x), TypedArray::CfDate(y), BinOp::Sub) => TypedArray::TimeDelta(go!(
+            x,
+            y,
+            nat!(TimeDelta, |p: &CfDate, q: &CfDate| p
                 .nanos_since(q)
                 .ok()
-                .and_then(td_from_ns)))
-        }
+                .and_then(td_from_ns))
+        )),
         (TypedArray::CfDate(x), TypedArray::TimeDelta(y), BinOp::Add | BinOp::Sub) => {
             let sub = op == BinOp::Sub;
-            TypedArray::CfDate(go!(x, y, |p: &CfDate, q: &TimeDelta| {
-                let ns = td_ns(q)?;
-                p.checked_add_nanos(if sub { ns.checked_neg()? } else { ns })
-                    .ok()
-            }))
+            TypedArray::CfDate(go!(
+                x,
+                y,
+                nat!(CfDate, |p: &CfDate, q: &TimeDelta| {
+                    let ns = td_ns(q)?;
+                    p.checked_add_nanos(if sub { ns.checked_neg()? } else { ns })
+                        .ok()
+                })
+            ))
         }
         (x, y, _) => {
             let dtype = if is_time(x.dtype()) {
