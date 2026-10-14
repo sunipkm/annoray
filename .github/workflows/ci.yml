@@ -48,6 +48,22 @@ jobs:
           cargo test -p xarray-rs --test tree -- --ignored
           cargo test -p xr-hdf5 --all-features --test write_codecs -- --ignored
 
+  python:
+    # rarray (M9): the xarray engine and writer, tested against xarray's own engines.
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install "./rarray[test]" dask
+      - run: pytest rarray/tests
+
   msrv:
     runs-on: ubuntu-latest
     steps:

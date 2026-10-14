@@ -1,0 +1,25 @@
+[package]
+name = "rarray"
+description = "rarray: xarray-rs for Python — a units-aware, safer and faster xarray companion"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+name = "_rarray"
+crate-type = ["cdylib", "rlib"]
+# Tested from Python (tests/, pytest): the extension module needs a Python to load into.
+test = false
+doctest = false
+
+[dependencies]
+chrono.workspace = true
+ndarray.workspace = true
+numpy.workspace = true
+pyo3 = { workspace = true, features = ["multiple-pymethods"] }
+xarray-rs.workspace = true
+
+[lints]
+workspace = true

@@ -10,7 +10,7 @@
 //! [`construct`](DataArrayRolling::construct) exposes the windows themselves as a new
 //! trailing dimension, NaN-padded at the edges (which does take window-size times the memory).
 
-use ndarray::{ArrayD, ArrayViewD, Axis, IxDyn, Slice};
+use ndarray::{ArrayD, ArrayView1, ArrayViewD, ArrayViewMut1, Axis, IxDyn, Slice};
 
 use crate::dataarray::DataArrayBase;
 use crate::ops::to_f64;
@@ -145,6 +145,64 @@ fn windowed<S: Repr>(
     Ok(out)
 }
 
+/// One lane of a rolling reduction: each window is a slice of the lane (no copying of the
+/// lane, no per-window seeking).
+fn roll_lane(
+    lane: ArrayView1<'_, f64>,
+    mut dst: ArrayViewMut1<'_, f64>,
+    window: usize,
+    back: usize,
+    min_periods: usize,
+    op: Reduction,
+) {
+    let n = lane.len();
+    let ropts = ReduceOptions::default().skipna(true);
+    let mut buf: Vec<f64> = Vec::with_capacity(window);
+    for (i, slot) in dst.iter_mut().enumerate() {
+        // The window covers padded positions `i - back ..`, of which `lo..hi` exist.
+        let lo = i.saturating_sub(back);
+        let hi = i.saturating_add(window).saturating_sub(back).min(n);
+        let pad = back.saturating_sub(i);
+        buf.clear();
+        buf.extend(lane.slice(ndarray::s![lo..hi.max(lo)]).iter().copied());
+        let valid = buf.iter().filter(|x| !x.is_nan()).count();
+        if valid < min_periods || valid == 0 {
+            continue;
+        }
+        *slot = match op {
+            #[allow(clippy::cast_precision_loss)] // counts within a window
+            Reduction::Count => valid as f64,
+            Reduction::Min => buf
+                .iter()
+                .copied()
+                .filter(|x| !x.is_nan())
+                .fold(f64::INFINITY, f64::min),
+            Reduction::Max => buf
+                .iter()
+                .copied()
+                .filter(|x| !x.is_nan())
+                .fold(f64::NEG_INFINITY, f64::max),
+            Reduction::ArgMin | Reduction::ArgMax => {
+                let want_max = op == Reduction::ArgMax;
+                let mut best: Option<(usize, f64)> = None;
+                for (j, x) in buf.iter().enumerate() {
+                    if x.is_nan() {
+                        continue;
+                    }
+                    let better = best.is_none_or(|(_, b)| if want_max { *x > b } else { *x < b });
+                    if better {
+                        best = Some((j, *x));
+                    }
+                }
+                // Positions count from the window's (padded) start.
+                #[allow(clippy::cast_precision_loss)] // positions within a window
+                best.map_or(f64::NAN, |(j, _)| j.saturating_add(pad) as f64)
+            }
+            _ => crate::reduce::float_stat(op, &mut buf, true, &ropts),
+        };
+    }
+}
+
 /// Reduce a variable over moving windows, one window at a time (memory stays that of the
 /// input and output; [`windowed`] is only for `construct`).
 fn rolling_reduce<S: Repr>(
@@ -167,68 +225,23 @@ fn rolling_reduce<S: Repr>(
             dtype,
         });
     }
-    let data = to_f64(&typed, None)?;
-    let n = data.len_of(Axis(axis));
-    let back = back(window, opts.center);
-    let ropts = ReduceOptions::default().skipna(true);
-    let mut out = ArrayD::from_elem(data.raw_dim(), f64::NAN);
-    let mut buf: Vec<f64> = Vec::with_capacity(window);
-    for (lane, mut dst) in data
-        .lanes(Axis(axis))
-        .into_iter()
-        .zip(out.lanes_mut(Axis(axis)))
-    {
-        for (i, slot) in dst.iter_mut().enumerate() {
-            // The window covers padded positions `i - back ..`, of which `lo..hi` exist.
-            let lo = i.saturating_sub(back);
-            let hi = i.saturating_add(window).saturating_sub(back).min(n);
-            let pad = back.saturating_sub(i);
-            buf.clear();
-            buf.extend(lane.iter().skip(lo).take(hi.saturating_sub(lo)).copied());
-            let valid = buf.iter().filter(|x| !x.is_nan()).count();
-            if valid < min_periods || valid == 0 {
-                continue;
-            }
-            *slot = match op {
-                #[allow(clippy::cast_precision_loss)] // counts within a window
-                Reduction::Count => valid as f64,
-                Reduction::Min => buf
-                    .iter()
-                    .copied()
-                    .filter(|x| !x.is_nan())
-                    .fold(f64::INFINITY, f64::min),
-                Reduction::Max => buf
-                    .iter()
-                    .copied()
-                    .filter(|x| !x.is_nan())
-                    .fold(f64::NEG_INFINITY, f64::max),
-                Reduction::ArgMin | Reduction::ArgMax => {
-                    let want_max = op == Reduction::ArgMax;
-                    let mut best: Option<(usize, f64)> = None;
-                    for (j, x) in buf.iter().enumerate() {
-                        if x.is_nan() {
-                            continue;
-                        }
-                        let better =
-                            best.is_none_or(|(_, b)| if want_max { *x > b } else { *x < b });
-                        if better {
-                            best = Some((j, *x));
-                        }
-                    }
-                    // Positions count from the window's (padded) start.
-                    #[allow(clippy::cast_precision_loss)] // positions within a window
-                    best.map_or(f64::NAN, |(j, _)| j.saturating_add(pad) as f64)
-                }
-                Reduction::Any | Reduction::All => {
-                    return Err(CoreError::UnsupportedDType {
-                        op: op.name(),
-                        dtype,
-                    });
-                }
-                _ => crate::reduce::float_stat(op, &mut buf, true, &ropts),
-            };
-        }
+    if matches!(op, Reduction::Any | Reduction::All) {
+        return Err(CoreError::UnsupportedDType {
+            op: op.name(),
+            dtype,
+        });
     }
+    let data = to_f64(&typed, None)?;
+    let back = back(window, opts.center);
+    let mut out = ArrayD::from_elem(data.raw_dim(), f64::NAN);
+    let zip = ndarray::Zip::from(data.lanes(Axis(axis))).and(out.lanes_mut(Axis(axis)));
+    let each = |lane: ArrayView1<'_, f64>, dst: ArrayViewMut1<'_, f64>| {
+        roll_lane(lane, dst, window, back, min_periods, op);
+    };
+    #[cfg(feature = "rayon")]
+    zip.par_for_each(each);
+    #[cfg(not(feature = "rayon"))]
+    zip.for_each(each);
     // Integer results (count, argmin, argmax) are floats here, to hold NaN.
     let keeps_type = !matches!(op, Reduction::Count | Reduction::ArgMin | Reduction::ArgMax);
     #[allow(clippy::cast_possible_truncation)] // f32 data stays f32

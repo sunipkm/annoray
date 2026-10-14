@@ -11,6 +11,7 @@ members = [
     "crates/xr-netcdf4",
     "crates/xr-units",
     "xarray-rs",
+    "rarray",
 ]
 
 [workspace.package]
@@ -20,6 +21,7 @@ rust-version = "1.97"
 license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
+xarray-rs = { path = "xarray-rs", version = "0.0.1" }
 xr-core = { path = "crates/xr-core", version = "0.0.1" }
 xr-macros = { path = "crates/xr-macros", version = "0.0.1" }
 xr-units = { path = "crates/xr-units", version = "0.0.1" }
@@ -35,6 +37,8 @@ indexmap = "2"
 memmap2 = "0.9"
 miniz_oxide = "0.8"
 glob = "0.3"
+numpy = "0.29"
+pyo3 = "0.29"
 rayon = "1.10"
 ruzstd = { version = "0.9", default-features = false, features = ["std"] }
 lz4_flex = { version = "0.14", default-features = false, features = ["safe-decode", "safe-encode", "std"] }

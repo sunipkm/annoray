@@ -879,7 +879,8 @@ let v = isel!(da[time = i:i + n, lat = {cfg.lat_range()}])?;
 | M6 | **xr-netcdf4** read and write | Files we write open in netCDF-C/`ncdump` and Python xarray with no warnings, and the reverse also holds. Real files (ERA5, CMIP6, GOES) open |
 | M7 | Alignment, reductions, concat/merge, lazy chunked reads, `rayon` | Ported subset of xarray's test suite |
 | M8 | groupby/resample/rolling (chrono-based time bins), DataTree, more filters; also NaT, where/fillna/dropna/reindex | Oracle tests against xarray for each |
-| M9 | **`uom` and `whippyunits` features** (last, once everything else is done): `StaticUnit` impls, `to_typed`, `view_typed`, `from_typed`, typed `sel` | Feature-powerset CI. Typed round-trip tests for each feature |
+| M9 | **Python bindings: `rarray`** (PyO3 + maturin), see §9: (1) an xarray backend engine, `xr.open_dataset(path, engine="rarray")`, plus writing; (2) native unit-aware `Dataset`/`DataArray`/`Variable` with xarray's method names, zero-copy numpy, `to_xarray`/`from_xarray`, pint interop; (3) differential tests against xarray | Engine reads every fixture identically to xarray's own engines. Ported subset of xarray's test suite passes, deviations listed |
+| M10 | **`uom` and `whippyunits` features** (last, once everything else is done): `StaticUnit` impls, `to_typed`, `view_typed`, `from_typed`, typed `sel` | Feature-powerset CI. Typed round-trip tests for each feature |
 
 At M6 the C backend becomes optional (`default-features = false` gives a fully pure-Rust build). It stays enabled in CI as the oracle.
 
@@ -904,3 +905,63 @@ At M6 the C backend becomes optional (`default-features = false` gives a fully p
 | Strict scale policy feeling painful for exploratory use | `UnitPolicy::AutoRescale`, set per operation or globally |
 | chrono only supports proleptic Gregorian (no Julian part of `standard`, no 360_day) | `CfDate` handles those calendars, with explicit fallible conversion to chrono. Never coerce silently |
 | uom / whippyunits internals (type parameter layout, `repr`) aren't stable public API | Keep each bridge inside one feature-gated module, pin minor versions, and fall back to copying when zero-copy can't be proven sound |
+
+## 9. Python bindings (M9)
+
+**rarray**: a Python package (`import rarray`; crate `rarray` in `rarray/`, PyO3 + maturin;
+one wheel per Python version, since rust-numpy does not support abi3) that brings the Rust implementation to Python users, named in the spirit of
+xarray. It aims to be **safer** and, where it counts,
+**faster** than xarray:
+- **Safer:** unit errors fail loudly. The strict defaults hold (exact joins, checked integer
+  overflow, no silent NaN-filling), the documented xarray quirks are not copied, and files are
+  parsed in memory-safe Rust instead of the netCDF-C/HDF5 C libraries.
+- **Faster where it is real:** memory-mapped lazy I/O, parallel decompression, groupby,
+  resample and rolling, label lookups and alignment, with the GIL released during work.
+  Single elementwise operations are numpy's C loops either way.
+
+**Interoperability is the main constraint:** Python users depend on numpy, pandas, dask and
+plotting, so nothing may be a dead end.
+
+Stages:
+1. **xarray backend engine.** An `xarray.backends` entry point (`engine="rarray"`) built
+   on our lazy readers (a `BackendArray` reading slices), and a writer
+   (`rarray.to_netcdf(ds, path)`). Users keep xarray's API and get our I/O: every codec,
+   NaT, DataTree groups and `open_mfdataset`. This stage proves out packaging, numpy
+   conversion and GIL handling.
+2. **Native objects.** `Dataset`, `DataArray` and `Variable` mirror xarray's method names and
+   signatures (drop-in where possible), with units through our `Unit` (strings in, pint
+   quantities by request). Values are zero-copy numpy views (`.values`), and `to_xarray()` /
+   `from_xarray()` convert both ways. Dates map to `datetime64[ns]`; non-standard calendars
+   map to cftime objects on conversion. Our stricter defaults are documented differences, not
+   different method names.
+3. **Differential tests** from Python against xarray, porting a subset of xarray's own tests,
+   with the deviation list kept in one place.
+
+**Stage 1 implementation notes (done):**
+- Rust side (`rarray/src/lib.rs`, module `rarray._rarray`): `RawGroup` opens a file with
+  `read_lazy` and serves **raw** variables (dims, attributes, storage details, and `read(name,
+  start, count)` for one box). `write(...)` builds an xarray-rs `Dataset` from values the
+  Python side prepared (numbers, ns-since-epoch datetimes and timedeltas with `i64::MIN` as
+  NaT, strings, cftime dates as components) and writes it with our CF encoder. The GIL is
+  released for every read and write. `MemorySource` became public for in-memory slices.
+- Python side (`rarray/python/rarray/`): `backend.py` holds the entry point (`engine="rarray"`,
+  `open_dataset`, `open_groups_as_dict`, `open_datatree`, and `guess_can_open` by magic
+  number). Raw variables go through xarray's own `StoreBackendEntrypoint`, so xarray's decoder
+  runs on top and the results are xarray's own. Arrays support basic indexing: only the
+  bounding box is read, and steps and negative steps are applied in numpy. No lock is used,
+  since reads are thread-safe, and dask chunks work. `writer.py` holds `rarray.to_netcdf`,
+  which takes netCDF4-python encoding names (zlib, complevel, shuffle, chunksizes, dtype,
+  packing, fill, time units and calendar, and the compression codecs).
+- Tests (`rarray/tests/`, 41 tests): reads must be `identical` to `engine="netcdf4"` on every
+  fixture, decoded and raw, and under 9 kinds of selection, dask and 8 threads. A variable
+  xarray cannot decode (a masked noleap time) must fail the same way. Files written by rarray
+  in all five formats must read back identical with netcdf4 and match xarray's own output.
+  Packing, time encodings, unlimited dimensions and every codec are covered.
+- **Found upstream:** re-opening a file at a second group with `engine="netcdf4"` (after
+  `open_datatree`) segfaults inside netCDF4-python (xarray 2026.9). The group test uses
+  h5netcdf as its reference.
+- **Speed** (200×500×500 float64, zlib level 4 with shuffle, 10×250×250 chunks, Apple
+  M-series): full read 0.47 s vs 1.9 s (netcdf4 and h5netcdf), a 100×100 slice 28 ms vs
+  97 ms, and writing 2.9 s vs 10 s. The writer now builds and compresses chunks in parallel
+  (rayon), in batches bounded to 256 MB, and writes them in order, so files are
+  byte-identical to the serial writer.

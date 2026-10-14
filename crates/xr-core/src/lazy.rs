@@ -289,9 +289,9 @@ impl LazySource for ViewSource {
     }
 }
 
-/// Data already in memory, as a source.
+/// Data already in memory, as a source (slices are copied out of it).
 #[derive(Debug)]
-pub(crate) struct MemorySource(pub(crate) TypedArray<Owned>);
+pub struct MemorySource(pub TypedArray<Owned>);
 
 fn slice_as<T: crate::Element>(
     a: &TypedArray<Owned>,

@@ -246,26 +246,44 @@ fn compute(
             broadcast_to_dims(x.view(), ad, od),
             broadcast_to_dims(y.view(), bd, od),
         );
-        return Ok(TypedArray::F32(zip_map(
-            &x,
-            &y,
-            shape,
-            |p, q| Some(float_op(op, *p, *q)),
-            op.name(),
-        )?));
+        return Ok(TypedArray::F32(float_zip(&x, &y, shape, op)?));
+    }
+    if !converting && let (TypedArray::F64(x), TypedArray::F64(y)) = (a, b) {
+        let (x, y) = (
+            broadcast_to_dims(x.view(), ad, od),
+            broadcast_to_dims(y.view(), bd, od),
+        );
+        return Ok(TypedArray::F64(float_zip(&x, &y, shape, op)?));
     }
     let (x, y) = (to_f64(a, ac)?, to_f64(b, bc)?);
     let (x, y) = (
         broadcast_to_dims(x.view(), ad, od),
         broadcast_to_dims(y.view(), bd, od),
     );
-    Ok(TypedArray::F64(zip_map(
-        &x,
-        &y,
-        shape,
-        |p, q| Some(float_op(op, *p, *q)),
-        op.name(),
-    )?))
+    Ok(TypedArray::F64(float_zip(&x, &y, shape, op)?))
+}
+
+/// Elements above which elementwise float arithmetic is split across threads.
+#[cfg(feature = "rayon")]
+const PAR_ELEMENTS: usize = 1 << 16;
+
+/// Elementwise float arithmetic, broadcasting both operands to `shape`.
+fn float_zip<F: num_like::Float + Send + Sync>(
+    x: &ArrayViewD<'_, F>,
+    y: &ArrayViewD<'_, F>,
+    shape: &[usize],
+    op: BinOp,
+) -> Result<ArrayD<F>> {
+    let bad = || CoreError::ArithmeticOverflow(op.name());
+    let xb = x.broadcast(IxDyn(shape)).ok_or_else(bad)?;
+    let yb = y.broadcast(IxDyn(shape)).ok_or_else(bad)?;
+    let zip = ndarray::Zip::from(&xb).and(&yb);
+    let f = |p: &F, q: &F| float_op(op, *p, *q);
+    #[cfg(feature = "rayon")]
+    if xb.len() > PAR_ELEMENTS {
+        return Ok(zip.par_map_collect(f));
+    }
+    Ok(zip.map_collect(f))
 }
 
 fn float_op<F: num_like::Float>(op: BinOp, p: F, q: F) -> F {

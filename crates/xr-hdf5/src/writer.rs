@@ -638,9 +638,7 @@ impl Plan<'_> {
             Some(f) if f.len() == esize => f.clone(),
             _ => vec![0; esize],
         };
-        // Leaf entries: (chunk offset, stored size, where the chunk is).
-        let mut leaves: Vec<(Vec<u64>, u32, Target)> = Vec::with_capacity(total);
-        for ci in 0..total {
+        let make = |ci: usize| -> Result<(Vec<usize>, Bytes), IoError> {
             // Chunk coordinates (row-major).
             let mut idx = vec![0usize; rank];
             let mut rem = ci;
@@ -744,13 +742,47 @@ impl Plan<'_> {
             if let Some(c) = ds.compression {
                 chunk.data = compress(c, &chunk.data, esize)?;
             }
-            let size = u32_of(chunk.data.len(), "chunk")?;
-            let place = if chunk.fixups.is_empty() {
-                Target::Abs(self.put_data(&chunk.data)?)
-            } else {
-                Target::Block(self.block(chunk, false))
+            Ok((origin, chunk))
+        };
+        // Filtering dominates writing: chunks are built and compressed in parallel, a batch at
+        // a time (bounded memory), then written in order.
+        #[cfg(feature = "rayon")]
+        let batch = if filtered {
+            let chunk_bytes = chunk_elems.saturating_mul(esize).max(1);
+            rayon::current_num_threads()
+                .saturating_mul(2)
+                .min((256usize << 20).checked_div(chunk_bytes).unwrap_or(1))
+                .max(1)
+        } else {
+            1
+        };
+        #[cfg(not(feature = "rayon"))]
+        let batch = 1usize;
+        // Leaf entries: (chunk offset, stored size, where the chunk is).
+        let mut leaves: Vec<(Vec<u64>, u32, Target)> = Vec::with_capacity(total);
+        let mut next = 0usize;
+        while next < total {
+            let end = next.saturating_add(batch).min(total);
+            #[cfg(feature = "rayon")]
+            let built = {
+                use rayon::prelude::*;
+                (next..end)
+                    .into_par_iter()
+                    .map(make)
+                    .collect::<Result<Vec<_>, IoError>>()?
             };
-            leaves.push((origin.iter().map(|o| *o as u64).collect(), size, place));
+            #[cfg(not(feature = "rayon"))]
+            let built = (next..end).map(make).collect::<Result<Vec<_>, IoError>>()?;
+            for (origin, chunk) in built {
+                let size = u32_of(chunk.data.len(), "chunk")?;
+                let place = if chunk.fixups.is_empty() {
+                    Target::Abs(self.put_data(&chunk.data)?)
+                } else {
+                    Target::Block(self.block(chunk, false))
+                };
+                leaves.push((origin.iter().map(|o| *o as u64).collect(), size, place));
+            }
+            next = end;
         }
         // Upper bound key: the dataset extent rounded up to whole chunks.
         let bound: Vec<u64> = nchunks

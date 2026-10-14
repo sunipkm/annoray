@@ -549,7 +549,7 @@ macro_rules! common {
         /// # Errors
         /// [`CoreError::InvalidReduction`] if every group is empty.
         pub fn first(&self) -> Result<$out> {
-            pick_groups(&self.g, |idx| self.get(idx), false)
+            self.finish(pick_groups(&self.g, |idx| self.get(idx), false)?)
         }
 
         /// The last element of each group.
@@ -557,7 +557,7 @@ macro_rules! common {
         /// # Errors
         /// [`CoreError::InvalidReduction`] if every group is empty.
         pub fn last(&self) -> Result<$out> {
-            pick_groups(&self.g, |idx| self.get(idx), true)
+            self.finish(pick_groups(&self.g, |idx| self.get(idx), true)?)
         }
 
         /// Apply `f` to each group and combine: results that keep the grouped dimension are
@@ -612,7 +612,39 @@ impl<'a, S: Repr> DataArrayGroupBy<'a, S> {
     }
 
     fn reduce_impl(&self, op: Reduction, opts: &ReduceOptions) -> Result<DataArray> {
-        reduce_groups(&self.g, |idx| self.get(idx), op, opts)
+        self.finish(reduce_groups(&self.g, |idx| self.get(idx), op, opts)?)
+    }
+
+    /// The group dimension where the grouped one was, as xarray does for data arrays
+    /// (datasets put it first, also as xarray does).
+    fn finish(&self, out: DataArray) -> Result<DataArray> {
+        let mut order: Vec<&str> = self
+            .obj
+            .dims()
+            .iter()
+            .map(|d| {
+                if *d == self.g.dim {
+                    self.g.name.as_str()
+                } else {
+                    d.as_str()
+                }
+            })
+            .filter(|d| out.dims().iter().any(|x| x == d))
+            .collect();
+        for d in out.dims() {
+            if !order.contains(&d.as_str()) {
+                order.push(d.as_str());
+            }
+        }
+        if out
+            .dims()
+            .iter()
+            .map(Name::as_str)
+            .eq(order.iter().copied())
+        {
+            return Ok(out);
+        }
+        out.transpose(&order)
     }
 
     common!(DataArray);
@@ -679,6 +711,11 @@ impl<'a, S: Repr> DatasetGroupBy<'a, S> {
 
     fn get(&self, idx: &[usize]) -> Result<Dataset> {
         self.obj.take(&self.g.dim, &to_isize(idx)?)
+    }
+
+    #[allow(clippy::unnecessary_wraps, clippy::unused_self)]
+    fn finish(&self, out: Dataset) -> Result<Dataset> {
+        Ok(out)
     }
 
     fn reduce_impl(&self, op: Reduction, opts: &ReduceOptions) -> Result<Dataset> {

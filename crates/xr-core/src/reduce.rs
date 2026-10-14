@@ -337,6 +337,55 @@ fn map_lanes<T: Clone, O>(
         .map_err(|_| CoreError::ArithmeticOverflow("reduction shape"))
 }
 
+/// Lanes above which [`map_lanes_with`] splits the work across threads.
+#[cfg(feature = "rayon")]
+const PAR_ELEMENTS: usize = 1 << 16;
+
+/// [`map_lanes`] with per-thread scratch state from `init`; lanes run in parallel with the
+/// `rayon` feature (for large inputs). Results are in lane order either way.
+fn map_lanes_with<T: Clone + Sync, O: Send, W>(
+    a: &ArrayViewD<'_, T>,
+    axes: &[usize],
+    init: impl Fn() -> W + Sync + Send,
+    f: impl Fn(&mut W, ArrayView1<'_, T>) -> Result<O> + Sync + Send,
+) -> Result<ArrayD<O>> {
+    let shape = a.shape();
+    let len = |i: &usize| shape.get(*i).copied().unwrap_or(0);
+    let keep: Vec<usize> = (0..a.ndim()).filter(|i| !axes.contains(i)).collect();
+    let out_shape: Vec<usize> = keep.iter().map(len).collect();
+    let outer = product(out_shape.iter().copied())?;
+    let inner = product(axes.iter().map(len))?;
+    let order: Vec<usize> = keep.iter().chain(axes).copied().collect();
+    let p = a.view().permuted_axes(IxDyn(&order));
+    let m = p
+        .to_shape((outer, inner))
+        .map_err(|_| CoreError::ArithmeticOverflow("reduction shape"))?;
+    #[cfg(feature = "rayon")]
+    let values = if a.len() > PAR_ELEMENTS && outer > 1 {
+        use rayon::prelude::*;
+        m.axis_iter(ndarray::Axis(0))
+            .into_par_iter()
+            .map_init(&init, |w, lane| f(w, lane))
+            .collect::<Result<Vec<O>>>()?
+    } else {
+        let mut w = init();
+        m.rows()
+            .into_iter()
+            .map(|lane| f(&mut w, lane))
+            .collect::<Result<Vec<O>>>()?
+    };
+    #[cfg(not(feature = "rayon"))]
+    let values = {
+        let mut w = init();
+        m.rows()
+            .into_iter()
+            .map(|lane| f(&mut w, lane))
+            .collect::<Result<Vec<O>>>()?
+    };
+    ArrayD::from_shape_vec(IxDyn(&out_shape), values)
+        .map_err(|_| CoreError::ArithmeticOverflow("reduction shape"))
+}
+
 /// Position of the first extreme (`Less` for the minimum), or of the first missing value
 /// when not skipping them. `None` if there is no valid value.
 fn extreme<T: RedElem>(lane: &ArrayView1<'_, T>, want: Ordering, skipna: bool) -> Option<usize> {
@@ -501,13 +550,12 @@ fn float_stats<T: RedElem>(
         op: op.name(),
         dtype: T::DTYPE,
     };
-    let mut buf = Vec::new();
-    map_lanes(a, axes, |lane| {
+    map_lanes_with(a, axes, Vec::new, |buf: &mut Vec<f64>, lane| {
         buf.clear();
         for v in &lane {
             buf.push(v.as_f64().ok_or_else(unsupported)?);
         }
-        Ok(float_stat(op, &mut buf, skipna, opts))
+        Ok(float_stat(op, buf, skipna, opts))
     })
 }
 

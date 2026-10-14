@@ -3,7 +3,7 @@
 use std::borrow::Borrow;
 use std::fmt;
 
-use ndarray::{ArrayD, ArrayViewD, ArrayViewMutD};
+use ndarray::{ArrayD, ArrayViewD, ArrayViewMutD, IxDyn};
 use std::sync::Arc;
 
 use xr_units::Unit;
@@ -677,6 +677,156 @@ impl<S: Repr> fmt::Debug for VariableBase<S> {
             .field("unit", &self.unit)
             .field("attrs", self.attrs())
             .finish()
+    }
+}
+
+fn permuted_as<T: crate::Element, S: Repr>(
+    a: &TypedArray<S>,
+    order: &[usize],
+    _: crate::array::Marker<T>,
+) -> Option<TypedArray<Owned>> {
+    let x = T::peek(a)?;
+    Some(T::wrap(
+        x.view()
+            .permuted_axes(IxDyn(order))
+            .as_standard_layout()
+            .into_owned(),
+    ))
+}
+
+/// Positions in `dims` of each of `order`, which must name every dimension exactly once
+/// (`"..."` stands for the dimensions not named, in their current order).
+pub(crate) fn permutation(dims: &[Name], order: &[&str]) -> Result<Vec<usize>> {
+    let named: Vec<&str> = order.iter().copied().filter(|d| *d != "...").collect();
+    for d in &named {
+        if !dims.iter().any(|x| x == d) {
+            return Err(CoreError::NoSuchDim(Name::from(*d)));
+        }
+    }
+    let mut out = Vec::with_capacity(dims.len());
+    for d in order {
+        if *d == "..." {
+            out.extend(
+                dims.iter()
+                    .enumerate()
+                    .filter(|(_, x)| !named.iter().any(|n| *x == *n))
+                    .map(|(i, _)| i),
+            );
+        } else if let Some(i) = dims.iter().position(|x| x == d) {
+            if out.contains(&i) {
+                return Err(CoreError::DuplicateDim(Name::from(*d)));
+            }
+            out.push(i);
+        }
+    }
+    if out.len() != dims.len() {
+        return Err(CoreError::DimCountMismatch {
+            ndim: dims.len(),
+            names: out.len(),
+        });
+    }
+    Ok(out)
+}
+
+impl<S: Repr> VariableBase<S> {
+    /// The variable with its dimensions in `order` (data copied in the new layout). `"..."`
+    /// stands for the dimensions not named; an empty `order` reverses them, as in xarray.
+    ///
+    /// # Errors
+    /// [`CoreError::NoSuchDim`], [`CoreError::DuplicateDim`], or
+    /// [`CoreError::DimCountMismatch`] if `order` leaves dimensions out (without `"..."`);
+    /// [`CoreError::Read`] if lazy data cannot be read.
+    pub fn transpose(&self, order: &[&str]) -> Result<Variable> {
+        let rev: Vec<&str>;
+        let order = if order.is_empty() {
+            rev = self.dims().iter().rev().map(Name::as_str).collect();
+            &rev[..]
+        } else {
+            order
+        };
+        let perm = permutation(self.dims(), order)?;
+        let dims: Vec<Name> = perm
+            .iter()
+            .filter_map(|i| self.dims().get(*i).cloned())
+            .collect();
+        let typed = self.typed()?;
+        let data = crate::array::typed_dispatch!(&typed, x => permuted_as(&typed, &perm, crate::array::marker(x)))
+            .ok_or_else(|| CoreError::Read("transpose".into()))?;
+        Ok(VariableBase {
+            data: Data::Loaded(data),
+            dims: dims.into(),
+            unit: self.unit.clone(),
+            encoding: self.encoding.clone(),
+            attrs: self.attrs().clone(),
+        })
+    }
+}
+
+/// `order` resolved against `dims` (`"..."` expanded, empty reversed), as names.
+fn resolved<'a>(dims: &'a [Name], order: &[&str]) -> Result<Vec<&'a str>> {
+    if order.is_empty() {
+        return Ok(dims.iter().rev().map(Name::as_str).collect());
+    }
+    Ok(permutation(dims, order)?
+        .into_iter()
+        .filter_map(|i| dims.get(i).map(Name::as_str))
+        .collect())
+}
+
+/// `variable` transposed into the relative order its dimensions have in `order`.
+fn transposed_like<S: Repr>(v: &VariableBase<S>, order: &[&str]) -> Result<Variable> {
+    let mine: Vec<&str> = order
+        .iter()
+        .copied()
+        .filter(|d| v.dims().iter().any(|x| x == d))
+        .collect();
+    if v.dims().iter().map(Name::as_str).eq(mine.iter().copied()) {
+        return Ok(v.to_owned());
+    }
+    v.transpose(&mine)
+}
+
+impl<S: Repr> crate::DataArrayBase<S> {
+    /// The array with its dimensions in `order` (`"..."` for the rest; empty reverses).
+    /// Multi-dimensional coordinates are transposed to match, as in xarray.
+    ///
+    /// # Errors
+    /// As for [`VariableBase::transpose`].
+    pub fn transpose(&self, order: &[&str]) -> Result<crate::DataArray> {
+        let order = resolved(self.dims(), order)?;
+        let var = self.variable().transpose(&order)?;
+        let coords = self
+            .coords()
+            .iter()
+            .map(|(k, c)| Ok((k.clone(), transposed_like(c, &order)?)))
+            .collect::<Result<_>>()?;
+        Ok(crate::DataArrayBase::from_parts(
+            self.name().cloned(),
+            var,
+            coords,
+        ))
+    }
+}
+
+impl<S: Repr> crate::DatasetBase<S> {
+    /// Every variable with its dimensions in the relative order they have in `order`
+    /// (`"..."` for the rest; empty reverses the dataset's dimensions).
+    ///
+    /// # Errors
+    /// As for [`VariableBase::transpose`].
+    pub fn transpose(&self, order: &[&str]) -> Result<crate::Dataset> {
+        let dims = self.dims();
+        let order = resolved(&dims, order)?;
+        let mut out = crate::Dataset::new();
+        for (k, c) in self.coords() {
+            out.add_coord(k.clone(), transposed_like(c, &order)?)?;
+        }
+        for (k, v) in self.data_vars() {
+            out.add_var(k.clone(), transposed_like(v, &order)?)?;
+        }
+        *out.attrs_mut() = self.attrs().clone();
+        *out.encoding_mut() = self.encoding().clone();
+        Ok(out)
     }
 }
 

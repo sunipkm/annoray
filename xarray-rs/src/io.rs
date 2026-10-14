@@ -16,7 +16,7 @@
 use std::path::Path;
 
 pub use xr_cf::{DecodeOptions, EncodeOptions};
-pub use xr_io::{Backend, Format, RawDataset, WriteOptions};
+pub use xr_io::{Backend, Format, RawData, RawDataset, RawDim, RawVariable, Storage, WriteOptions};
 
 use crate::{DataTree, Dataset, DatasetBase, Error, Repr};
 

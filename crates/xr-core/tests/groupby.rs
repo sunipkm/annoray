@@ -328,3 +328,91 @@ fn dt_accessor() {
         [1, 32]
     );
 }
+
+/// xarray puts a data array's group dimension where the grouped dimension was (datasets put
+/// it first).
+#[test]
+fn group_dim_keeps_its_position() {
+    let data = ArrayD::from_shape_fn(IxDyn(&[2, 3]), |ix| (ix[0] * 3 + ix[1]) as f64);
+    let da = DataArray::from_array(["y", "x"], data)
+        .unwrap()
+        .with_coord(
+            "lab",
+            Variable::new(
+                ["x"],
+                array!["a", "b", "a"].map(|s| s.to_string()).into_dyn(),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    let out = da.groupby("lab").unwrap().sum().unwrap();
+    assert_eq!(out.dims(), [Name::from("y"), Name::from("lab")]);
+    assert_eq!(
+        out.data::<f64>().unwrap(),
+        array![[2.0, 1.0], [8.0, 4.0]].into_dyn()
+    );
+    let first = da.groupby("lab").unwrap().first().unwrap();
+    assert_eq!(first.dims(), [Name::from("y"), Name::from("lab")]);
+    let mut ds = Dataset::new();
+    ds.add_array("v", da).unwrap();
+    let out = ds.groupby("lab").unwrap().sum().unwrap();
+    assert_eq!(
+        out.data_vars()["v"].dims(),
+        [Name::from("lab"), Name::from("y")]
+    );
+}
+
+#[test]
+fn transpose() {
+    let data = ArrayD::from_shape_fn(IxDyn(&[2, 3, 4]), |ix| {
+        (ix[0] * 100 + ix[1] * 10 + ix[2]) as f64
+    });
+    let da = DataArray::from_array(["a", "b", "c"], data)
+        .unwrap()
+        .with_coord(
+            "ab",
+            Variable::new(
+                ["a", "b"],
+                ArrayD::from_shape_fn(IxDyn(&[2, 3]), |ix| (ix[0] * 10 + ix[1]) as i64),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    let t = da.transpose(&["c", "a", "b"]).unwrap();
+    assert_eq!(
+        t.dims(),
+        [Name::from("c"), Name::from("a"), Name::from("b")]
+    );
+    assert_eq!(t.data::<f64>().unwrap()[[3, 1, 2]], 123.0);
+    let r = da.transpose(&[]).unwrap();
+    assert_eq!(
+        r.dims(),
+        [Name::from("c"), Name::from("b"), Name::from("a")]
+    );
+    assert_eq!(r.coords()["ab"].dims(), [Name::from("b"), Name::from("a")]);
+    assert_eq!(r.coords()["ab"].data::<i64>().unwrap()[[2, 1]], 12);
+    let e = da.transpose(&["b", "..."]).unwrap();
+    assert_eq!(
+        e.dims(),
+        [Name::from("b"), Name::from("a"), Name::from("c")]
+    );
+    assert!(matches!(
+        da.transpose(&["a", "b"]),
+        Err(CoreError::DimCountMismatch { .. })
+    ));
+    assert!(matches!(
+        da.transpose(&["a", "b", "z"]),
+        Err(CoreError::NoSuchDim(_))
+    ));
+    assert!(matches!(
+        da.transpose(&["a", "a", "b"]),
+        Err(CoreError::DuplicateDim(_))
+    ));
+    let mut ds = Dataset::new();
+    ds.add_array("v", da).unwrap();
+    let t = ds.transpose(&["c", "..."]).unwrap();
+    assert_eq!(
+        t.data_vars()["v"].dims(),
+        [Name::from("c"), Name::from("a"), Name::from("b")]
+    );
+}

@@ -13,6 +13,11 @@ indexmap.workspace = true
 ndarray.workspace = true
 smallvec.workspace = true
 thiserror.workspace = true
+rayon = { workspace = true, optional = true }
+
+[features]
+# Run rolling windows, reductions and elementwise arithmetic on several threads.
+rayon = ["dep:rayon", "ndarray/rayon"]
 
 [lints]
 workspace = true

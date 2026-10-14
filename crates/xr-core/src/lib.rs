@@ -55,7 +55,7 @@ pub use groupby::{BinOptions, DataArrayGroupBy, DatasetGroupBy};
 pub use indexer::{Indexer, IntoIndexer, PySlice, SliceIndices, normalize_index};
 pub use interp::InterpMethod;
 pub use label::{IntoLabelIndexer, Label, LabelIndexer, Method};
-pub use lazy::{LazyArray, LazySource};
+pub use lazy::{LazyArray, LazySource, MemorySource};
 pub use missing::How;
 pub use name::{Dims, Name};
 pub use nat::NaT;
