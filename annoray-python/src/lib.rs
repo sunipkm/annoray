@@ -9,6 +9,7 @@
 #![deny(missing_docs)]
 
 mod alloc;
+mod calculus;
 mod convert;
 mod native;
 mod raw;
@@ -48,6 +49,7 @@ fn _annoray(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(native::from_xarray, m)?)?;
     m.add_function(wrap_pyfunction!(native::set_stream_bytes, m)?)?;
     m.add_function(wrap_pyfunction!(native::stream_bytes, m)?)?;
+    m.add_function(wrap_pyfunction!(calculus::polyval, m)?)?;
     m.add("UnitError", m.py().get_type::<convert::UnitError>())?;
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     Ok(())

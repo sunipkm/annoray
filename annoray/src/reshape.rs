@@ -487,7 +487,7 @@ impl<S: Repr> VariableBase<S> {
 
 /// Apply a DataArray operation to every data variable of a dataset that has `dim`, keeping
 /// the others; coordinates come from the results (or are kept).
-fn per_variable<S: Repr>(
+pub(crate) fn per_variable<S: Repr>(
     ds: &DatasetBase<S>,
     dim: &str,
     f: impl Fn(&DataArrayBase<crate::View<'_>>) -> Result<DataArray>,

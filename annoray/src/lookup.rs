@@ -79,6 +79,16 @@ fn datetime_ns(dt: &NaiveDateTime) -> Option<i128> {
     days.checked_mul(NS_PER_DAY)?.checked_add(tod)
 }
 
+/// 1970-01-01 on the nanosecond scale of `kind`'s keys (time deltas: zero).
+pub(crate) fn unix_origin_ns(kind: &TimeKind) -> Option<i128> {
+    match kind {
+        TimeKind::DateTime => {
+            datetime_ns(&chrono::NaiveDate::from_ymd_opt(1970, 1, 1)?.and_hms_opt(0, 0, 0)?)
+        }
+        TimeKind::Cf(_) | TimeKind::Delta => Some(0),
+    }
+}
+
 fn cf_epoch(cal: Calendar) -> Option<CfDate> {
     CfDate::from_ymd(cal, 1970, 1, 1).ok()
 }

@@ -38,6 +38,7 @@ from annoray._annoray import (
     open_dataset,
     open_datatree,
     open_mfdataset,
+    polyval,
     set_stream_bytes,
     stream_bytes,
 )
@@ -71,6 +72,7 @@ __all__ = [
     "open_dataset",
     "open_datatree",
     "open_mfdataset",
+    "polyval",
     "set_stream_bytes",
     "stream_bytes",
     "to_astropy",

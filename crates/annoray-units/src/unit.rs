@@ -280,12 +280,12 @@ impl Unit {
         }
     }
 
-    /// For an affine unit, the corresponding difference unit (°C → a kelvin-sized step).
-    /// Other units are returned unchanged.
+    /// For an affine or epoch unit, the corresponding difference unit (°C → a kelvin-sized
+    /// step; `days since 2000-01-01` → `d`). Other units are returned unchanged.
     #[must_use]
     pub fn delta(&self) -> Self {
         match self.kind {
-            UnitKind::Affine { .. } => Self::linear(self.dim, self.scale),
+            UnitKind::Affine { .. } | UnitKind::Epoch(_) => Self::linear(self.dim, self.scale),
             _ => self.clone(),
         }
     }
