@@ -88,7 +88,7 @@ pub use encoding::{DatasetEncoding, Encoding};
 pub use error::{CoreError, IndexError, Result};
 pub use groupby::{BinOptions, DataArrayGroupBy, DatasetGroupBy};
 pub use indexer::{Indexer, IntoIndexer, PySlice, SliceIndices, normalize_index};
-pub use interp::InterpMethod;
+pub use interp::{Extrapolate, InterpMethod, InterpOptions};
 pub use label::{IntoLabelIndexer, Label, LabelIndexer, Method};
 pub use lazy::{LazyArray, LazySource, MemorySource};
 pub use missing::How;

@@ -681,3 +681,42 @@ def test_checked_functions():
         wrong(Length(1, "m"))
     with pytest.raises(ar.UnitError, match="argument 'd'"):
         wrong(Time(1, "s"))
+
+
+def test_log_interpolation():
+    energy = np.array([1.0, 10.0, 100.0])
+    sigma = ar.DataArray(energy**2, dims="e", coords={"e": energy}, units="cm2")
+    out = sigma.interp(e=[3.0, 50.0], method="loglog")
+    np.testing.assert_allclose(out.values, [9.0, 2500.0])
+    assert out.units == "cm2"
+    z = np.array([0.0, 10.0, 30.0])
+    n = ar.DataArray(np.exp(-z / 10), dims="z", coords={"z": z}, units="cm-3")
+    np.testing.assert_allclose(n.interp(z=[5.0], method="log_value").values, [np.exp(-0.5)])
+    p = ar.DataArray(np.array([0.0, 2.0]), dims="p", coords={"p": [1.0, 100.0]})
+    np.testing.assert_allclose(p.interp(p=[10.0], method="log_coord").values, [1.0])
+    with pytest.raises(ValueError, match="log_coord"):
+        p.interp(p=[10.0], method="cubic")  # pyright: ignore[reportArgumentType]
+
+
+def test_interp_extrapolation():
+    x = np.array([0.0, 1.0, 2.0])
+    a = ar.DataArray(np.array([0.0, 10.0, 20.0]), dims="x", coords={"x": x}, units="m")
+    assert np.isnan(a.interp(x=[3.0]).values).all()
+    np.testing.assert_allclose(a.interp(x=[-1.0, 3.0], extrapolate="extend").values, [-10, 30])
+    np.testing.assert_allclose(a.interp(x=[-1.0, 3.0], extrapolate="edge").values, [0, 20])
+    both = a.interp(x=[-1.0, 3.0], extrapolate=("edge", "extend"))
+    np.testing.assert_allclose(both.values, [0, 30])
+    e = np.array([10.0, 100.0])
+    s = ar.DataArray(e**-0.8, dims="e", coords={"e": e})
+    out = s.interp(e=[1000.0], method="loglog", extrapolate=(None, "extend"))
+    np.testing.assert_allclose(out.values, [1000.0**-0.8])
+    with pytest.raises(ValueError, match="extrapolate"):
+        a.interp(x=[3.0], extrapolate="clamp")  # pyright: ignore[reportArgumentType]
+
+
+def test_interp_power_law_extrapolation():
+    e = np.array([10.0, 100.0, 1000.0])
+    s = ar.DataArray(np.array([3e-16, 2e-16, 9e-17]), dims="e", coords={"e": e}, units="cm2")
+    out = s.interp(e=[5.0, 2000.0], method="loglog", extrapolate=("edge", -1.7))
+    np.testing.assert_allclose(out.values, [3e-16, 9e-17 * 0.5**1.7])
+    assert out.units == "cm2"

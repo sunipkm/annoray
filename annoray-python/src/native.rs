@@ -10,9 +10,9 @@ use annoray::io::{
     DecodeOptions, MfOptions, OpenOptions, ToNetcdf, WriteOptions, open_dataset_with,
 };
 use annoray::{
-    BinOp, BinOptions, ConcatOptions, DataArray, Dataset, How, InterpMethod, Join, LabelIndexer,
-    MergeOptions, Name, ReduceOptions, Reduction, Repr, RollingOptions, TypedArray, Unit,
-    UnitPolicy, Variable, VariableBase,
+    BinOp, BinOptions, ConcatOptions, DataArray, Dataset, Extrapolate, How, InterpMethod,
+    InterpOptions, Join, LabelIndexer, MergeOptions, Name, ReduceOptions, Reduction, Repr,
+    RollingOptions, TypedArray, Unit, UnitPolicy, Variable, VariableBase,
 };
 use numpy::PyArrayDyn;
 use pyo3::exceptions::{PyKeyError, PyTypeError, PyValueError};
@@ -861,15 +861,18 @@ impl PyDataArray {
     }
 
     /// Interpolate along dimensions: `da.interp(x=[0.5, 1.5], method="linear")`.
-    #[pyo3(signature = (coords=None, method="linear", **kwargs))]
+    /// `extrapolate` is `None` (NaN outside the coordinates), `"edge"`, `"extend"`, a number
+    /// `k` (a power law `y_edge * (x / x_edge)**k`), or a `(below, above)` pair of those.
+    #[pyo3(signature = (coords=None, method="linear", extrapolate=None, **kwargs))]
     fn interp(
         &self,
         py: Python<'_>,
         coords: Option<&Bound<'_, PyAny>>,
         method: &str,
+        extrapolate: Option<&Bound<'_, PyAny>>,
         kwargs: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Py<PyDataArray>> {
-        let m = interp_method(method)?;
+        let m = interp_options(method, extrapolate)?;
         let mut out = self.inner.clone();
         for (dim, v) in merge_kwargs(coords, kwargs)? {
             let at = labels_var(py, &dim, &v)?;
@@ -1292,15 +1295,16 @@ impl PyDataset {
         new_ds(py, out)
     }
 
-    #[pyo3(signature = (coords=None, method="linear", **kwargs))]
+    #[pyo3(signature = (coords=None, method="linear", extrapolate=None, **kwargs))]
     fn interp(
         &self,
         py: Python<'_>,
         coords: Option<&Bound<'_, PyAny>>,
         method: &str,
+        extrapolate: Option<&Bound<'_, PyAny>>,
         kwargs: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Py<PyDataset>> {
-        let m = interp_method(method)?;
+        let m = interp_options(method, extrapolate)?;
         let mut out = self.inner.clone();
         for (dim, v) in merge_kwargs(coords, kwargs)? {
             let at = labels_var(py, &dim, &v)?;
@@ -1484,10 +1488,45 @@ fn interp_method(m: &str) -> PyResult<InterpMethod> {
     match m {
         "linear" => Ok(InterpMethod::Linear),
         "nearest" => Ok(InterpMethod::Nearest),
+        "log_coord" => Ok(InterpMethod::LogCoord),
+        "log_value" => Ok(InterpMethod::LogValue),
+        "loglog" | "log_log" => Ok(InterpMethod::LogLog),
         other => Err(PyValueError::new_err(format!(
-            "method must be \"linear\" or \"nearest\", not {other:?}"
+            "method must be \"linear\", \"nearest\", \"log_coord\", \"log_value\" or \"loglog\", \
+             not {other:?}"
         ))),
     }
+}
+
+fn extrapolation(e: Option<&Bound<'_, PyAny>>) -> PyResult<Extrapolate> {
+    let Some(e) = e.filter(|e| !e.is_none()) else {
+        return Ok(Extrapolate::Nan);
+    };
+    if !e.is_instance_of::<PyString>() {
+        // A number: a power law with that exponent from the edge point.
+        return Ok(Extrapolate::PowerLaw(e.extract::<f64>()?));
+    }
+    match e.extract::<String>()?.as_str() {
+        "nan" => Ok(Extrapolate::Nan),
+        "edge" => Ok(Extrapolate::Edge),
+        "extend" => Ok(Extrapolate::Extend),
+        other => Err(PyValueError::new_err(format!(
+            "extrapolate must be None, \"edge\", \"extend\" or a power-law exponent (or a \
+             (below, above) pair), not {other:?}"
+        ))),
+    }
+}
+
+fn interp_options(method: &str, extrapolate: Option<&Bound<'_, PyAny>>) -> PyResult<InterpOptions> {
+    let opts = InterpOptions::new(interp_method(method)?);
+    Ok(match extrapolate {
+        Some(e) if e.is_instance_of::<PyTuple>() => {
+            let (below, above): (Bound<'_, PyAny>, Bound<'_, PyAny>) = e.extract()?;
+            opts.below(extrapolation(Some(&below))?)
+                .above(extrapolation(Some(&above))?)
+        }
+        e => opts.extrapolate(extrapolation(e)?),
+    })
 }
 
 fn rolling_opts(center: bool, min_periods: Option<usize>) -> RollingOptions {

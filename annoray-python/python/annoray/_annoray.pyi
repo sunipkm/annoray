@@ -19,6 +19,10 @@ _D = TypeVar("_D")
 
 __version__: str
 
+_InterpMethod: TypeAlias = Literal[
+    "linear", "nearest", "log_coord", "log_value", "loglog", "log_log"
+]
+_Extrapolate: TypeAlias = Literal["nan", "edge", "extend"] | float | None
 _Path: TypeAlias = str | os.PathLike[str]
 _Dims: TypeAlias = str | Sequence[str] | None
 _Reduction: TypeAlias = Literal[
@@ -333,7 +337,11 @@ class DataArray(_Reductions, Generic[_D]):
         self, indexers: Mapping[str, Any] | None = None, **kwargs: Any
     ) -> DataArray[_D]: ...
     def interp(
-        self, coords: Mapping[str, Any] | None = None, method: str = "linear", **kwargs: Any
+        self,
+        coords: Mapping[str, Any] | None = None,
+        method: _InterpMethod = "linear",
+        extrapolate: _Extrapolate | tuple[_Extrapolate, _Extrapolate] = None,
+        **kwargs: Any,
     ) -> DataArray[_D]: ...
     def groupby(self, group: str) -> GroupBy: ...
     def groupby_bins(
@@ -406,7 +414,11 @@ class Dataset(_Reductions):
     def dropna(self, dim: str, how: Literal["any", "all"] = "any") -> Dataset: ...
     def reindex(self, indexers: Mapping[str, Any] | None = None, **kwargs: Any) -> Dataset: ...
     def interp(
-        self, coords: Mapping[str, Any] | None = None, method: str = "linear", **kwargs: Any
+        self,
+        coords: Mapping[str, Any] | None = None,
+        method: _InterpMethod = "linear",
+        extrapolate: _Extrapolate | tuple[_Extrapolate, _Extrapolate] = None,
+        **kwargs: Any,
     ) -> Dataset: ...
     def groupby(self, group: str) -> GroupBy: ...
     def groupby_bins(
