@@ -9,22 +9,25 @@ members = [
 ]
 
 [workspace.package]
-version = "0.0.1"
+version = "0.0.0"
+authors = ["Sunip K. Mukherjee <sunipkmukherjee@gmail.com>"]
 edition = "2024"
 rust-version = "1.97"
 license = "MIT OR Apache-2.0"
+repository = "https://github.com/sunipkm/annoray"
+homepage = "https://github.com/sunipkm/annoray"
 
 [workspace.dependencies]
 libc = "0.2"
-annoray = { path = "annoray", version = "0.0.1" }
-annoray-macros = { path = "crates/annoray-macros", version = "0.0.1" }
-annoray-units = { path = "crates/annoray-units", version = "0.0.1" }
-annoray-hdf5 = { path = "crates/annoray-hdf5", version = "0.0.1" }
+annoray = { path = "annoray", version = "=0.0.0" }
+annoray-macros = { path = "crates/annoray-macros", version = "=0.0.0" }
+annoray-units = { path = "crates/annoray-units", version = "=0.0.0" }
+annoray-hdf5 = { path = "crates/annoray-hdf5", version = "=0.0.0" }
 
 chrono = { version = "0.4", default-features = false, features = ["std"] }
 indexmap = "2"
 memmap2 = "0.9"
-miniz_oxide = "0.8"
+miniz_oxide = "0.9"
 glob = "0.3"
 numpy = "0.29"
 pyo3 = "0.29"
@@ -49,7 +52,6 @@ unsafe_code = "deny"
 missing_docs = "warn"
 
 [workspace.lints.clippy]
-# No panics in library code: every failure is propagated as a `Result` (PLAN.md §2a).
 unwrap_used = "deny"
 expect_used = "deny"
 panic = "deny"

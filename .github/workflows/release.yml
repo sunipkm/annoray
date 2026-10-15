@@ -1,0 +1,87 @@
+name: Release
+
+# Pushing a tag vX.Y.Z (or vX.Y.Z-preN) publishes that version: the Rust crates to crates.io
+# and the Python package to PyPI. The version comes from the tag (tools/version.py).
+#
+# Needs: a CARGO_REGISTRY_TOKEN secret, and this workflow registered as a trusted publisher
+# for the `annoray` project on PyPI (environment `pypi`).
+
+on:
+  push:
+    tags: ["v[0-9]*"]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  crates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - run: python3 tools/version.py --release
+      # In dependency order; each waits until the previous one is available.
+      - run: cargo publish --workspace --allow-dirty --exclude annoray-python
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+  wheels:
+    strategy:
+      matrix:
+        include:
+          - { os: ubuntu-latest, target: x86_64 }
+          - { os: ubuntu-24.04-arm, target: aarch64 }
+          - { os: macos-latest, target: aarch64 }
+          - { os: macos-13, target: x86_64 }
+          - { os: windows-latest, target: x64 }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: python tools/version.py --release
+      - uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          args: --release --out dist --find-interpreter
+          working-directory: annoray-python
+          manylinux: auto
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.os }}-${{ matrix.target }}
+          path: annoray-python/dist
+
+  sdist:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: python3 tools/version.py --release
+      - uses: PyO3/maturin-action@v1
+        with:
+          command: sdist
+          args: --out dist
+          working-directory: annoray-python
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdist
+          path: annoray-python/dist
+
+  pypi:
+    needs: [wheels, sdist]
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - uses: pypa/gh-action-pypi-publish@release/v1

@@ -27,6 +27,11 @@
 
 #![deny(missing_docs)]
 
+// The README's examples run as doctests.
+#[cfg(doctest)]
+#[doc = include_str!("../README.md")]
+struct ReadmeDoctests;
+
 mod array;
 mod bytes;
 mod checksum;

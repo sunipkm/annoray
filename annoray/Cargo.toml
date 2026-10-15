@@ -1,10 +1,17 @@
 [package]
 name = "annoray"
-description = "A units-aware, xarray-like library for labelled n-dimensional arrays, with netCDF and HDF5 I/O"
+description = "A units-aware, xarray-like library for labelled n-dimensional arrays, with pure-Rust netCDF and HDF5 I/O"
 version.workspace = true
+authors.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/annoray"
+readme = "README.md"
+keywords = ["xarray", "netcdf", "hdf5", "units", "ndarray"]
+categories = ["science", "science::geo", "data-structures"]
 
 [dependencies]
 annoray-hdf5.workspace = true

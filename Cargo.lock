@@ -19,7 +19,7 @@ dependencies = [
 
 [[package]]
 name = "annoray"
-version = "0.0.1"
+version = "0.0.0"
 dependencies = [
  "annoray-hdf5",
  "annoray-macros",
@@ -38,7 +38,7 @@ dependencies = [
 
 [[package]]
 name = "annoray-hdf5"
-version = "0.0.1"
+version = "0.0.0"
 dependencies = [
  "lz4_flex",
  "memmap2",
@@ -52,7 +52,7 @@ dependencies = [
 
 [[package]]
 name = "annoray-macros"
-version = "0.0.1"
+version = "0.0.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -61,7 +61,7 @@ dependencies = [
 
 [[package]]
 name = "annoray-python"
-version = "0.0.1"
+version = "0.0.0"
 dependencies = [
  "annoray",
  "chrono",
@@ -73,7 +73,7 @@ dependencies = [
 
 [[package]]
 name = "annoray-units"
-version = "0.0.1"
+version = "0.0.0"
 dependencies = [
  "chrono",
  "proptest",
@@ -392,9 +392,9 @@ dependencies = [
 
 [[package]]
 name = "miniz_oxide"
-version = "0.8.9"
+version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1fa76a2c86f704bdb222d66965fb3d63269ce38518b83cb0575fca855ebb6316"
+checksum = "b63fbc4a50860e98e7b2aa7804ded1db5cbc3aff9193adaff57a6931bf7c4b4c"
 dependencies = [
  "adler2",
 ]

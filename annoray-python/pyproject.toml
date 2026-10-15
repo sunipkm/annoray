@@ -1,19 +1,43 @@
 [build-system]
-requires = ["maturin>=1.7,<2"]
+requires = ["maturin>=1.9,<2"]
 build-backend = "maturin"
 
 [project]
 name = "annoray"
 description = "Annotated arrays: labelled, units-aware N-dimensional arrays with netCDF and HDF5 I/O, in Rust"
+readme = "README.md"
+authors = [{ name = "Sunip K. Mukherjee", email = "sunipkmukherjee@gmail.com" }]
 requires-python = ">=3.11"
-license = { text = "MIT OR Apache-2.0" }
+license = "MIT OR Apache-2.0"
+license-files = ["LICENSE-MIT", "LICENSE-APACHE"]
 dependencies = ["numpy>=1.26"]
 dynamic = ["version"]
+keywords = ["xarray", "netcdf", "hdf5", "units", "labelled arrays", "climate", "cf-conventions"]
 classifiers = [
-    "Programming Language :: Rust",
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Rust",
     "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Atmospheric Science",
+    "Topic :: Scientific/Engineering :: Physics",
+    "Typing :: Typed",
 ]
+
+[project.urls]
+Homepage = "https://github.com/sunipkm/annoray"
+Repository = "https://github.com/sunipkm/annoray"
+Issues = "https://github.com/sunipkm/annoray/issues"
+Changelog = "https://github.com/sunipkm/annoray/releases"
 
 [project.optional-dependencies]
 # Interoperability with xarray (engine="annoray", to_xarray/from_xarray).

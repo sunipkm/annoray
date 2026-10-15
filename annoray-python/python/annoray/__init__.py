@@ -15,6 +15,8 @@ and ``ar.to_netcdf(xr_dataset, path)`` writes an xarray dataset with annoray's w
 
 from __future__ import annotations
 
+from importlib.metadata import version as _version
+
 from annoray import dims
 from annoray._annoray import (
     DataArray,
@@ -26,7 +28,6 @@ from annoray._annoray import (
     Rolling,
     Unit,
     UnitError,
-    __version__,
     align,
     concat,
     date_range,
@@ -39,6 +40,9 @@ from annoray._annoray import (
     stream_bytes,
 )
 from annoray.dims import dimension
+
+# As pip reports it (PEP 440: 0.2.1.dev7, not Cargo's 0.2.1-dev.7); see tools/version.py.
+__version__ = _version("annoray")
 
 __all__ = [
     "DataArray",

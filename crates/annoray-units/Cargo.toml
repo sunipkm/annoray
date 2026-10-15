@@ -1,10 +1,17 @@
 [package]
 name = "annoray-units"
-description = "Runtime units for annoray: exact prime-factorised scales, UDUNITS/CF parsing, CF calendars"
+description = "Physical units with exact scales: UDUNITS-2/CF parsing, conversion, CF calendars and dimension-typed quantities"
 version.workspace = true
+authors.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/annoray-units"
+readme = "README.md"
+keywords = ["units", "udunits", "dimensional-analysis", "cf-conventions", "calendar"]
+categories = ["science", "date-and-time", "mathematics"]
 
 [dependencies]
 chrono = { workspace = true }

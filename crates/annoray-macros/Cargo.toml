@@ -2,9 +2,16 @@
 name = "annoray-macros"
 description = "Procedural macros for annoray: isel!/sel! with Python-style slices"
 version.workspace = true
+authors.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/annoray-macros"
+readme = "README.md"
+keywords = ["xarray", "slicing", "indexing", "macro"]
+categories = ["science"]
 
 [lib]
 proc-macro = true

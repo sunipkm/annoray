@@ -1,10 +1,17 @@
 [package]
 name = "annoray-hdf5"
-description = "Pure-Rust HDF5 reader and writer: every layout, chunk index and common filter, untrusted input safe"
+description = "Pure-Rust HDF5 reader and writer: every layout and chunk index, common compression filters, safe on untrusted files"
 version.workspace = true
+authors.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/annoray-hdf5"
+readme = "README.md"
+keywords = ["hdf5", "netcdf", "scientific", "file-format", "compression"]
+categories = ["science", "encoding", "parser-implementations"]
 
 [dependencies]
 lz4_flex = { workspace = true, optional = true }

@@ -26,6 +26,11 @@
 
 #![deny(missing_docs)]
 
+// The README's examples run as doctests.
+#[cfg(doctest)]
+#[doc = include_str!("../README.md")]
+struct ReadmeDoctests;
+
 mod ck;
 mod dimension;
 pub mod dims;
