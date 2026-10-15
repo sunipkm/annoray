@@ -53,8 +53,8 @@ def test_properties():
 def test_units_from_attrs_and_quantities():
     a = ar.DataArray([1.0, 2.0], dims="x", attrs={"units": "m s-1", "long_name": "speed"})
     assert a.units is not None and "units" not in a.attrs and a.attrs["long_name"] == "speed"
-    q = ar.DataArray(ar.Quantity(np.array([1.0, 2.0]), "km"), dims="x")
-    assert q.units == "km"
+    q = ar.DataArray(2.0 * ar.Unit("km"))  # a scalar quantity: a 0-d array
+    assert q.units == "km" and q.ndim == 0 and float(q.values) == 2.0
     with pytest.warns(UserWarning, match="kept as an attribute"):
         b = ar.DataArray([1.0], dims="x", attrs={"units": "not a unit at all"})
     assert b.units is None and b.attrs["units"] == "not a unit at all"
@@ -534,3 +534,60 @@ def test_datatree_build_write_and_convert(tmp_path):
     assert isinstance(x, xr.DataTree) and x["a/b"].p.attrs["units"] == "Pa"
     again = ar.from_xarray(x)
     assert isinstance(again, ar.DataTree) and again.paths == tree.paths
+
+
+# ----- Unit and Quantity -----
+
+
+def test_units_are_parsed_once_and_compose():
+    km, s = ar.Unit("km"), ar.Unit("s")
+    assert str(km / s) == "km s-1" and str(km**2) == "km2"
+    assert km / s == ar.Unit("1000 m/s")  # equal whatever the spelling
+    assert hash(km) == hash(ar.Unit("km")) and km != ar.Unit("m")
+    assert km.is_convertible("m") and not km.is_convertible(s)
+    assert ar.Unit("%").dimensionless and not km.dimensionless
+    with pytest.raises(ar.UnitError):
+        ar.Unit("not a unit!!")
+
+
+def test_quantity_arithmetic_and_conversion():
+    d = 2.5 * ar.Unit("km")
+    assert isinstance(d, ar.Quantity) and d.magnitude == 2.5 and d.units == "km"
+    assert f"{d:.1f}" == "2.5 km" and repr(d) == 'Quantity(2.5, "km")'
+    v = d / ar.Quantity(30, "min")
+    assert v.units == "km min-1"
+    assert abs(v.to("m/s").magnitude - 2500 / 1800) < 1e-12
+    assert (d**2).units == "km2" and (-d).magnitude == -2.5 and abs(-d) == d
+    with pytest.raises(ar.UnitError, match="convert one first"):
+        d + ar.Quantity(1, "m")
+    assert (d + ar.Quantity(1, "m").to("km")).magnitude == pytest.approx(2.501)
+    with pytest.raises(ar.UnitError):
+        d + 1.0  # a plain number is dimensionless
+    assert float(ar.Quantity(5, "%")) == pytest.approx(0.05)
+    with pytest.raises(ar.UnitError):
+        float(d)
+    # Temperatures: absolute minus absolute is a difference.
+    diff = ar.Quantity(20, "degC") - ar.Quantity(10, "degC")
+    assert diff.magnitude == pytest.approx(10.0)
+    assert ar.Quantity(20, "degC").to("degF").magnitude == pytest.approx(68.0)
+
+
+def test_quantity_comparisons_convert():
+    assert ar.Quantity(1, "km") == ar.Quantity(1000, "m")
+    assert ar.Quantity(1, "km") > ar.Quantity(999, "m")
+    assert ar.Quantity(1, "km") != ar.Quantity(1, "s")
+    with pytest.raises(ar.UnitError):
+        ar.Quantity(1, "km") < ar.Quantity(1, "s")
+
+
+def test_quantities_with_data_arrays():
+    km = ar.Unit("km")
+    x = ar.DataArray([0.0, 1000.0], dims="x", units=ar.Unit("m"))
+    da = ar.DataArray([1.0, 2.0], dims="x", coords={"x": x}, units=km)
+    assert da.unit == km and da.units == "km"
+    np.testing.assert_allclose((da + 1 * km).values, [2.0, 3.0])
+    assert (da * ar.Quantity(2, "s")).units == "km s"
+    np.testing.assert_allclose(da.to(ar.Unit("m")).values, [1000.0, 2000.0])
+    assert da.sel(x=1 * km).values == 2.0
+    with pytest.raises(ar.UnitError):
+        da + ar.Quantity(1, "s")

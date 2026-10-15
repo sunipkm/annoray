@@ -157,14 +157,9 @@ impl<T> OrPy<T> for Result<T, annoray::UnitError> {
     }
 }
 
-/// A unit error, with Python advice where the Rust message names Rust API.
+/// A unit error as `annoray.UnitError`.
 pub(crate) fn unit_error(e: &annoray::UnitError) -> PyErr {
-    match e {
-        annoray::UnitError::ScaleMismatch { lhs, rhs } => UnitError::new_err(format!(
-            "units {lhs} and {rhs} differ in scale; convert one first, e.g. b.to(\"{lhs}\")"
-        )),
-        other => UnitError::new_err(other.to_string()),
-    }
+    UnitError::new_err(e.to_string())
 }
 
 // ----- values: Python → Rust -----
@@ -173,6 +168,11 @@ pub(crate) fn unit_error(e: &annoray::UnitError) -> PyErr {
 pub(crate) fn quantity_parts<'py>(
     v: &Bound<'py, PyAny>,
 ) -> PyResult<Option<(Bound<'py, PyAny>, String)>> {
+    if let Ok(q) = v.cast::<crate::units::PyQuantity>() {
+        let q = &q.get().inner;
+        let m = pyo3::types::PyFloat::new(v.py(), q.value()).into_any();
+        return Ok(Some((m, q.unit().to_string())));
+    }
     if !(v.hasattr("magnitude")? && v.hasattr("units")?) {
         return Ok(None);
     }

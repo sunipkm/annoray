@@ -255,6 +255,42 @@ chrono only knows the proleptic Gregorian calendar, while CF files also use othe
   dimension, so units still apply. `da.to_timedelta()` converts them to `TimeDelta` on request.
   Subtracting two datetimes gives `TimeDelta`. Converting a `TimeDelta` array back to a quantity gives `s`.
 
+### Typed quantities (`Quantity<D>`, `dims`, `dimension!`)
+
+Quantities in Rust follow physics. Dimensions are the exponents of the eight base quantities
+(the seven SI ones plus angle), and users compose derived dimensions from them; there are no
+new base dimensions.
+- **Dimensions as types:** `dims::Dim<M, L, T, I, Θ, N, J, A>` holds the exponents as
+  type-level integers (`typenum`). Multiplying and dividing add and subtract exponents, and
+  `Pow` multiplies them, so the compiler computes each result's dimension. A named dimension
+  is a type alias. `Length / Time` *is* `Velocity`, and another crate's `Speed` is the same
+  type, so composition works across crates. (A first design generated operator impls per
+  named dimension; the orphan rule would have stopped user crates relating annoray's own
+  dimension types.)
+- **`dimension!`** declares aliases: `pub Jerk = Length / Time^3;`, `pub Snap = Jerk /
+  Time;`, `pub Momentum = Mass * Velocity;`. Powers run from -9 to 9.
+- **`dims`** provides the base quantities and common derived ones (area, volume, velocity,
+  acceleration, force, momentum, energy, power, pressure, density, charge, voltage,
+  resistance, frequency, angular velocity, concentration), declared with the same macro.
+- **`Quantity<D>`** is an `f64` with a runtime `Unit`.
+  - The unit's dimension is checked against `D` once, at construction. After that, `*`/`/`
+    are typed by the compiler. Adding different dimensions is a compile error, with a custom
+    `#[diagnostic::on_unimplemented]` message ("quantities of different dimensions do not
+    add or subtract"); there is a trybuild test.
+  - Units stay values, as for arrays: `km + m` (strict scales) and absolute temperatures
+    are runtime `UnitError`s, so the operators return `Result`. They work on owned and
+    borrowed operands.
+  - Also: `to`, `cast::<D>()`, `dynamic()`, `powi`/`root` (dimension checked at run time),
+    `as_number`, comparisons with conversion, and `Display` (`{:.2}` formats the number).
+- **`Quantity<Dyn>`** (the default) checks dimensions at run time, for units only known then
+  (files). Typed×dynamic products are dynamic, and `cast` brings them back.
+- **Python** `annoray.Quantity` wraps `Quantity<Dyn>`: one implementation. Quantities are
+  `sel` labels in Rust too (`From<Quantity<K>> for Label`).
+- **Examples:** `annoray/examples/quantities.rs` (typed) and its Python twin (runtime) print
+  the same lines.
+- The scale-mismatch message no longer names Rust API ("convert one first"), so both
+  languages report it alike.
+
 ### Interop with typed unit libraries (features `uom`, `whippyunits`)
 
 A shared bridge trait in `annoray-units`, implemented by each feature:
@@ -1057,6 +1093,26 @@ through it.
   is generated deterministically (no random numbers), following numpy's evaluation order.
 - Unit errors name operands in their order (`incompatible units: m and s`). They had come
   out reversed for addition and subtraction.
+
+**Native `Unit` and `Quantity` (M9).** These replace the Python dataclass `Quantity`, whose
+unit was an unchecked string.
+- **`annoray.Unit`** wraps the Rust `Unit`. It is parsed and checked when made, multiplies,
+  divides and takes integer powers, and compares and hashes exactly (whatever the
+  spelling). It also has `is_convertible`, `dimensionless` and `canonical`.
+- **`annoray.Quantity`** is a float with a `Unit` (`2.5 * Unit("km")` makes one).
+  - Arithmetic follows the array rules: `+`/`-` need the same unit under the strict policy,
+    `*`/`/` combine, and `**` takes integer powers.
+  - Comparisons convert compatible units; incompatible ones are unequal, and ordering them
+    is an error.
+  - `.to()`; `float()` only for dimensionless quantities; `f"{q:.2f}"` formats the
+    magnitude and appends the unit.
+- **Integration:** quantities are data-array operands and `sel` labels;
+  `DataArray(..., units=Unit)`, `.to(Unit)`, and `DataArray.unit` (with `.units` as text).
+- **Readable derived units** (`annoray-units`): `mul`/`div`/`powi`/`recip`/`root` compose
+  the operands' spellings UDUNITS-style (`km s-1`, `km2`, `kg m2 s-3`; `km/min × min` is
+  `km`). A composed spelling is kept only if it parses back to exactly the computed unit;
+  otherwise the canonical form is shown. Array arithmetic now keeps these spellings (it had
+  dropped them).
 
 **Stage 1 implementation notes (done):**
 - Rust side (`annoray-python/src/lib.rs`, module `annoray._annoray`): `RawGroup` opens a file with

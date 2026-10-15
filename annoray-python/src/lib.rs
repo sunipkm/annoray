@@ -2,6 +2,7 @@
 //!
 //! - [`native`]: units-aware `DataArray` and `Dataset` backed by annoray.
 //! - [`tree`]: `DataTree`, a tree of datasets (netCDF-4 groups).
+//! - [`units`]: `Unit` and `Quantity`, the Rust unit system in Python.
 //! - [`raw`]: raw file access and writing for the xarray backend engine (`engine="annoray"`).
 //! - [`convert`]: values, labels, indexers and errors between Python and Rust.
 
@@ -10,6 +11,7 @@ mod convert;
 mod native;
 mod raw;
 mod tree;
+mod units;
 
 use pyo3::prelude::*;
 
@@ -27,6 +29,8 @@ fn _annoray(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<native::PyRolling>()?;
     m.add_class::<native::PyDt>()?;
     m.add_class::<tree::PyDataTree>()?;
+    m.add_class::<units::PyUnit>()?;
+    m.add_class::<units::PyQuantity>()?;
     m.add_function(wrap_pyfunction!(tree::open_datatree, m)?)?;
     m.add_function(wrap_pyfunction!(native::open_dataset, m)?)?;
     m.add_function(wrap_pyfunction!(native::open_mfdataset, m)?)?;

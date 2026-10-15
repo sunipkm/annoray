@@ -538,9 +538,12 @@ impl PyDataArray {
         coords: Option<&Bound<'_, PyAny>>,
         name: Option<String>,
         attrs: Option<&Bound<'_, PyDict>>,
-        units: Option<&str>,
+        units: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<Self> {
-        let var = variable_from_py(py, dims, data, attrs, units)?;
+        let units = units
+            .map(|u| crate::units::unit_from_py(u).map(|u| u.to_string()))
+            .transpose()?;
+        let var = variable_from_py(py, dims, data, attrs, units.as_deref())?;
         let mut inner = DataArray::new(var);
         if let Some(n) = name {
             inner = inner.with_name(n);
@@ -555,6 +558,14 @@ impl PyDataArray {
     #[getter]
     fn name(&self) -> Option<String> {
         self.inner.name().map(ToString::to_string)
+    }
+
+    /// The unit as an `annoray.Unit` (`None` for unitless data); `units` gives it as text.
+    #[getter]
+    fn unit(&self) -> Option<crate::units::PyUnit> {
+        self.inner
+            .unit()
+            .map(|u| crate::units::PyUnit { inner: u.clone() })
     }
 
     /// Dimension names.
@@ -674,8 +685,8 @@ impl PyDataArray {
     }
 
     /// The data converted to another unit (as float64).
-    fn to(&self, py: Python<'_>, units: &str) -> PyResult<Py<PyDataArray>> {
-        let u = parse_unit(units)?;
+    fn to(&self, py: Python<'_>, units: &Bound<'_, PyAny>) -> PyResult<Py<PyDataArray>> {
+        let u = crate::units::unit_from_py(units)?;
         new_da(py, py.detach(|| self.inner.to_unit(&u)).py_err()?)
     }
 

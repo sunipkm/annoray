@@ -26,8 +26,10 @@
 
 mod ck;
 mod dimension;
+pub mod dims;
 mod error;
 mod parse;
+mod quantity;
 mod registry;
 mod scale;
 mod static_unit;
@@ -39,6 +41,7 @@ use std::str::FromStr;
 
 pub use dimension::{BaseDim, Dimension};
 pub use error::UnitError;
+pub use quantity::{Dyn, IntoUnit, Kind, Quantity, SameDimension};
 pub use scale::{Rational, Scale};
 pub use static_unit::StaticUnit;
 pub use time::{Calendar, CfDate, EpochCodec, RefDate};

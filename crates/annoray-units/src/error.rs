@@ -26,9 +26,7 @@ pub enum UnitError {
         rhs: String,
     },
     /// Same dimension, different scale, under the strict policy. Rescale explicitly.
-    #[error(
-        "units {lhs} and {rhs} differ in scale; rescale one explicitly (or use UnitPolicy::AutoRescale)"
-    )]
+    #[error("units {lhs} and {rhs} differ in scale; convert one first")]
     ScaleMismatch {
         /// Left-hand unit.
         lhs: String,

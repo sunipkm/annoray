@@ -1,0 +1,9 @@
+error[E0277]: quantities of different dimensions do not add or subtract
+ --> tests/ui/quantity_dimension_mismatch.rs:8:15
+  |
+8 |     let _ = d + t;
+  |               ^ this has a different dimension from the other operand
+  |
+  = help: the trait `SameDimension<annoray::dims::Dim<Z0, Z0, PInt<UInt<UTerm, B1>>, Z0, Z0, Z0, Z0, Z0>>` is not implemented for `annoray::dims::Dim<Z0, PInt<UInt<UTerm, B1>>, Z0, Z0, Z0, Z0, Z0, Z0>`
+  = note: the dimensions are `annoray::dims::Dim<Z0, PInt<UInt<UTerm, B1>>, Z0, Z0, Z0, Z0, Z0, Z0>` and `annoray::dims::Dim<Z0, Z0, PInt<UInt<UTerm, B1>>, Z0, Z0, Z0, Z0, Z0>` (exponents of kg, m, s, A, K, mol, cd, rad)
+  = note: required for `annoray::Quantity<annoray::dims::Dim<Z0, PInt<UInt<UTerm, B1>>, Z0, Z0, Z0, Z0, Z0, Z0>>` to implement `std::ops::Add<annoray::Quantity<annoray::dims::Dim<Z0, Z0, PInt<UInt<UTerm, B1>>, Z0, Z0, Z0, Z0, Z0>>>`

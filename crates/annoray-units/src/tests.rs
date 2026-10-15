@@ -389,3 +389,26 @@ mod properties {
         }
     }
 }
+
+/// Arithmetic keeps readable spellings (UDUNITS style) where the operands have them, and
+/// falls back to the canonical form where it cannot; the units themselves are unaffected.
+#[test]
+fn labels_follow_arithmetic() {
+    let show = |r: Result<Unit, UnitError>| r.unwrap().to_string();
+    assert_eq!(show(u("km").div(&u("s"))), "km s-1");
+    assert_eq!(show(u("km").powi(2)), "km2");
+    assert_eq!(show(u("km/min").mul(&u("min"))), "km");
+    assert_eq!(show(u("m/s").div(&u("s"))), "m s-2");
+    assert_eq!(show(u("kg m2 s-2").div(&u("s"))), "kg m2 s-3");
+    assert_eq!(show(u("m2 s-2").root(2)), "m s-1");
+    assert_eq!(show(u("m").recip()), "m-1");
+    // Same unit, whatever the spelling.
+    assert_eq!(u("km").div(&u("s")).unwrap(), u("1000 m/s"));
+    // No readable spelling to build on: canonical.
+    assert_eq!(
+        show(u("1000 m").mul(&u("s"))),
+        u("1000 m").mul(&u("s")).unwrap().canonical()
+    );
+    // Everything cancels: the canonical (dimensionless) form.
+    assert_eq!(u("m").div(&u("m")).unwrap(), Unit::one());
+}

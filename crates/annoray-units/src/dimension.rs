@@ -59,6 +59,19 @@ impl Dimension {
     /// Dimensionless.
     pub const NONE: Self = Self([0; 8]);
 
+    /// From the exponents of the base quantities, in [`BaseDim::ALL`] order (mass, length,
+    /// time, current, temperature, amount, luminosity, angle).
+    #[must_use]
+    pub const fn from_exponents(exponents: [i8; 8]) -> Self {
+        Self(exponents)
+    }
+
+    /// The exponents of the base quantities, in [`BaseDim::ALL`] order.
+    #[must_use]
+    pub const fn exponents(&self) -> [i8; 8] {
+        self.0
+    }
+
     /// A single base quantity to the first power.
     #[must_use]
     pub fn of(base: BaseDim) -> Self {

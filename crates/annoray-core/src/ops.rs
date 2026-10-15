@@ -631,13 +631,12 @@ impl<S: Repr> DataArrayBase<S> {
         rhs_name: Option<&Name>,
         rhs_coords: impl Iterator<Item = (&'a Name, Variable)>,
     ) -> DataArray {
-        var.set_unit(
-            unit.map(Unit::without_label)
-                .map(|u| match (self.unit(), &u) {
-                    (Some(l), u) if l == u => l.clone(),
-                    _ => u,
-                }),
-        );
+        // Composed spellings (`km s-1`) are verified when made; an unchanged unit keeps the
+        // left operand's spelling.
+        var.set_unit(unit.map(|u| match (self.unit(), &u) {
+            (Some(l), u) if l == u => l.clone(),
+            _ => u,
+        }));
         let mut coords: IndexMap<Name, Variable> = self
             .coords
             .iter()

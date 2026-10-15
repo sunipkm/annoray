@@ -15,14 +15,14 @@ and ``ar.to_netcdf(xr_dataset, path)`` writes an xarray dataset with annoray's w
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-
 from annoray._annoray import (
     DataArray,
     Dataset,
     DataTree,
     GroupBy,
+    Quantity,
     Rolling,
+    Unit,
     UnitError,
     __version__,
     align,
@@ -44,6 +44,7 @@ __all__ = [
     "GroupBy",
     "Quantity",
     "Rolling",
+    "Unit",
     "UnitError",
     "__version__",
     "align",
@@ -58,15 +59,6 @@ __all__ = [
     "stream_bytes",
     "to_netcdf",
 ]
-
-
-@dataclass(frozen=True)
-class Quantity:
-    """A number with a unit, for arithmetic and labels: ``da + Quantity(2, "km")``,
-    ``da.sel(x=Quantity(500, "m"))``. pint quantities work the same way."""
-
-    magnitude: float
-    units: str
 
 
 def to_netcdf(obj, path, **kwargs) -> None:

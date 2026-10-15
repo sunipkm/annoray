@@ -46,6 +46,7 @@ lz4_flex = { version = "0.14", default-features = false, features = ["safe-decod
 ndarray = "0.17"
 smallvec = "1"
 thiserror = "2"
+typenum = "1.18"
 
 proc-macro2 = "1"
 quote = "1"

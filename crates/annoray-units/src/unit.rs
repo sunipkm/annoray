@@ -309,9 +309,12 @@ impl Unit {
     /// first); [`UnitError::Overflow`].
     pub fn mul(&self, rhs: &Self) -> Result<Self, UnitError> {
         match (&self.kind, &rhs.kind) {
-            (UnitKind::Linear, UnitKind::Linear) => Ok(Self::linear(
-                self.dim.checked_mul(rhs.dim)?,
-                self.scale.checked_mul(rhs.scale)?,
+            (UnitKind::Linear, UnitKind::Linear) => Ok(labelled(
+                Self::linear(
+                    self.dim.checked_mul(rhs.dim)?,
+                    self.scale.checked_mul(rhs.scale)?,
+                ),
+                combine(self.factors(), rhs.factors(), 1),
             )),
             (UnitKind::Log(_), UnitKind::Linear) if rhs.dim.is_none() => self.scaled(rhs.scale),
             (UnitKind::Linear, UnitKind::Log(_)) if self.dim.is_none() => rhs.scaled(self.scale),
@@ -347,8 +350,12 @@ impl Unit {
     /// [`UnitError::UnsupportedOp`] for non-linear units; [`UnitError::Overflow`].
     pub fn powi(&self, n: i32) -> Result<Self, UnitError> {
         match self.kind {
-            _ if n == 1 => Ok(self.clone().without_label()),
-            UnitKind::Linear => Ok(Self::linear(self.dim.powi(n)?, self.scale.powi(n)?)),
+            _ if n == 1 => Ok(self.clone()),
+            UnitKind::Linear => Ok(labelled(
+                Self::linear(self.dim.powi(n)?, self.scale.powi(n)?),
+                self.factors()
+                    .and_then(|f| scaled_exps(f, |e| e.checked_mul(n))),
+            )),
             _ => Err(self.unsupported("exponentiation")),
         }
     }
@@ -366,10 +373,25 @@ impl Unit {
             n,
             unit: self.to_string(),
         };
-        Ok(Self::linear(
-            self.dim.root(n).ok_or_else(inexact)?,
-            self.scale.root(n).ok_or_else(inexact)?,
+        Ok(labelled(
+            Self::linear(
+                self.dim.root(n).ok_or_else(inexact)?,
+                self.scale.root(n).ok_or_else(inexact)?,
+            ),
+            self.factors().and_then(|f| {
+                scaled_exps(f, |e| {
+                    (e.checked_rem(n) == Some(0))
+                        .then(|| e.checked_div(n))
+                        .flatten()
+                })
+            }),
         ))
+    }
+
+    /// The label as factors with exponents, when it is a plain product (`km`, `m s-1`,
+    /// `km/min`, `kg m2 s-2`).
+    fn factors(&self) -> Option<Factors> {
+        factors(self.label.as_deref()?)
     }
 
     /// Fold angle into dimensionless (whippyunits' erasure): `degree` becomes the pure number
@@ -604,6 +626,97 @@ impl Unit {
                 }
             }
         }
+    }
+}
+
+/// A label as named factors with integer exponents, in order of appearance.
+type Factors = Vec<(String, i32)>;
+
+/// `label`'s factors, for labels written as a plain product with at most one `/`
+/// (`km`, `m s-1`, `km/min`, `kg m2 s-2`); `None` for anything else (numbers, brackets,
+/// powers with `^`, offsets), which keeps derived units on their canonical spelling.
+fn factors(label: &str) -> Option<Factors> {
+    let (num, den) = match label.split_once('/') {
+        Some((a, b)) => (a, b),
+        None => (label, ""),
+    };
+    if den.contains('/') {
+        return None;
+    }
+    let mut out: Factors = Vec::new();
+    for (part, sign) in [(num, 1), (den, -1)] {
+        for tok in part.split_whitespace() {
+            let (sym, exp) = split_power(tok)?;
+            add_factor(&mut out, sym, exp.checked_mul(sign)?)?;
+        }
+    }
+    (!out.is_empty()).then_some(out)
+}
+
+/// `km` → (`km`, 1); `s-1` → (`s`, -1); `m2` → (`m`, 2).
+fn split_power(tok: &str) -> Option<(&str, i32)> {
+    if tok.contains(['(', ')', '*', '^', '.', '·', '@']) {
+        return None;
+    }
+    let split = tok.trim_end_matches(|c: char| c.is_ascii_digit()).len();
+    let (mut sym, mut exp) = (tok, 1i32);
+    if split < tok.len() {
+        let head = tok.get(..split)?;
+        let start = if head.ends_with(['-', '+']) {
+            split.checked_sub(1)?
+        } else {
+            split
+        };
+        exp = tok.get(start..)?.parse().ok()?;
+        sym = tok.get(..start)?;
+    }
+    let first = sym.chars().next()?;
+    (!first.is_ascii_digit() && !sym.ends_with(['-', '+'])).then_some((sym, exp))
+}
+
+fn add_factor(out: &mut Factors, sym: &str, exp: i32) -> Option<()> {
+    match out.iter_mut().find(|(s, _)| s == sym) {
+        Some((_, e)) => *e = e.checked_add(exp)?,
+        None => out.push((sym.to_owned(), exp)),
+    }
+    Some(())
+}
+
+/// The factors of a product (`sign` 1) or quotient (`sign` -1) of two labels.
+fn combine(a: Option<Factors>, b: Option<Factors>, sign: i32) -> Option<Factors> {
+    let mut out = a?;
+    for (sym, exp) in b? {
+        add_factor(&mut out, &sym, exp.checked_mul(sign)?)?;
+    }
+    Some(out)
+}
+
+fn scaled_exps(f: Factors, g: impl Fn(i32) -> Option<i32>) -> Option<Factors> {
+    f.into_iter().map(|(s, e)| Some((s, g(e)?))).collect()
+}
+
+/// `u` labelled with `factors` written UDUNITS style (`km min-1`, `km2`), if that spelling
+/// parses back to exactly `u`; otherwise `u` as it is (shown in canonical form).
+fn labelled(u: Unit, factors: Option<Factors>) -> Unit {
+    let Some(f) = factors else { return u };
+    let terms: Vec<String> = f
+        .iter()
+        .filter(|(_, e)| *e != 0)
+        .map(|(s, e)| {
+            if *e == 1 {
+                s.clone()
+            } else {
+                format!("{s}{e}")
+            }
+        })
+        .collect();
+    if terms.is_empty() {
+        return u;
+    }
+    let label = terms.join(" ");
+    match label.parse::<Unit>() {
+        Ok(p) if p == u => u.with_label(label),
+        _ => u,
     }
 }
 

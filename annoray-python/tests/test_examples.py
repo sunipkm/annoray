@@ -14,7 +14,7 @@ import pytest
 HERE = Path(__file__).resolve().parent
 EXAMPLES = HERE.parent / "examples"
 REPO = HERE.parents[1]
-NAMES = ["quickstart", "weather", "disk_to_disk"]
+NAMES = ["quickstart", "weather", "disk_to_disk", "quantities"]
 
 # Run code with xarray and pandas unimportable.
 BLOCKED = (

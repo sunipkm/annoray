@@ -25,7 +25,9 @@ pub use annoray_core::*;
 pub use annoray_macros::{isel, sel};
 /// Runtime units, CF calendars and dates (the `annoray-units` crate).
 pub use annoray_units as units;
-pub use annoray_units::{Calendar, CfDate, Unit, UnitError, UnitPolicy};
+pub use annoray_units::{
+    Calendar, CfDate, Dyn, Quantity, Unit, UnitError, UnitPolicy, dimension, dims,
+};
 
 pub mod io;
 

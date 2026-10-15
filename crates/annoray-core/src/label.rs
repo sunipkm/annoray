@@ -81,6 +81,14 @@ label_from!(
     TimeDelta => |v| Self::TimeDelta(v),
 );
 
+impl<K: annoray_units::Kind> From<annoray_units::Quantity<K>> for Label {
+    /// A quantity, converted into the coordinate's unit before lookup.
+    fn from(q: annoray_units::Quantity<K>) -> Self {
+        let (v, u) = q.into_parts();
+        Self::Quantity(v, u)
+    }
+}
+
 /// How a scalar label matches coordinate values.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Method {
