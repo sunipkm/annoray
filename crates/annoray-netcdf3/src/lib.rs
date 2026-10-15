@@ -16,6 +16,8 @@
 //! # }
 //! ```
 
+#![deny(missing_docs)]
+
 mod ck;
 mod read;
 mod types;

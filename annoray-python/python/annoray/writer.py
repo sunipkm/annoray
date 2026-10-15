@@ -53,16 +53,17 @@ def _values(var: xr.Variable) -> dict[str, Any]:
     raise TypeError(f"cannot write values of type {data.dtype}")
 
 
-def _cftime(flat, shape, calendar: str) -> dict[str, Any]:
-    parts = [[], [], [], [], [], [], [], []]
+def _cftime(flat: Iterable[Any], shape: tuple[int, ...], calendar: str) -> dict[str, Any]:
+    parts: list[list[int]] = [[], [], [], [], [], [], [], []]
     for d in flat:
-        missing = d is None or (isinstance(d, float) and np.isnan(d))
-        fields = (
-            (0, 1, 1, 0, 0, 0, 0)
-            if missing
-            else (d.year, d.month, d.day, d.hour, d.minute, d.second, d.microsecond)
-        )
-        for p, f in zip(parts, (*fields, int(missing)), strict=True):
+        if d is None or (isinstance(d, float) and np.isnan(d)):
+            fields = (0, 1, 1, 0, 0, 0, 0, 1)  # missing
+        elif hasattr(d, "calendar"):
+            c: Any = d
+            fields = (c.year, c.month, c.day, c.hour, c.minute, c.second, c.microsecond, 0)
+        else:
+            raise TypeError(f"expected cftime dates, found {d!r}")
+        for p, f in zip(parts, fields, strict=True):
             p.append(int(f))
     return {"kind": "cftime", "data": parts, "shape": list(shape), "calendar": calendar}
 
@@ -114,12 +115,13 @@ def to_netcdf(
                 **_values(var),
             }
         )
-    if unlimited_dims is None:
-        unlimited_dims = ds.encoding.get("unlimited_dims", ())
+    unlimited: Iterable[Hashable] = (
+        unlimited_dims if unlimited_dims is not None else ds.encoding.get("unlimited_dims", ())
+    )
     _write(
         os.fspath(path),
         format,
         dict(ds.attrs),
         variables,
-        [str(d) for d in unlimited_dims],
+        [str(d) for d in unlimited],
     )

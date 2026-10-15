@@ -16,6 +16,7 @@ import ctypes
 import glob
 import os
 import sys
+from typing import Literal
 
 import h5py
 import hdf5plugin
@@ -32,6 +33,23 @@ i16 = (np.arange(300, dtype="int16").reshape(20, 15) * 7 - 1000)
 PENDING = []
 
 
+# hdf5plugin types the codec names as literals.
+BLOSC_CODECS: tuple[Literal["blosclz", "lz4", "lz4hc", "zlib", "zstd"], ...] = (
+    "blosclz",
+    "lz4",
+    "lz4hc",
+    "zlib",
+    "zstd",
+)
+
+
+def dataset(f: h5py.File, name: str) -> h5py.Dataset:
+    """`f[name]`, which must be a dataset."""
+    d = f[name]
+    assert isinstance(d, h5py.Dataset), name
+    return d
+
+
 def add(f, name, data, **kw):
     f.create_dataset(name, data=data, **kw)
     PENDING.append(name)
@@ -43,7 +61,7 @@ def add_plain_copies(path):
     filters such as scale-offset that is not what a reader gets.)"""
     with h5py.File(path, "a") as f:
         for name in PENDING:
-            f.create_dataset(name + "_plain", data=f[name][()])
+            f.create_dataset(name + "_plain", data=dataset(f, name)[()])
     PENDING.clear()
 
 
@@ -59,7 +77,7 @@ if len(sys.argv) == 3 and sys.argv[1] == "--big":
         add(f, "lz4", counts, chunks=chunks, **hdf5plugin.LZ4())
         add(f, "lz4_blocks", smooth, chunks=chunks, **hdf5plugin.LZ4(nbytes=65536))
         add(f, "bzip2", counts, chunks=chunks, **hdf5plugin.BZip2(blocksize=1))
-        for cname in ["blosclz", "lz4", "lz4hc", "zlib", "zstd"]:
+        for cname in BLOSC_CODECS:
             for shuf, tag in [(hdf5plugin.Blosc.SHUFFLE, "s"), (hdf5plugin.Blosc.BITSHUFFLE, "b")]:
                 add(f, f"blosc_{cname}_{tag}", smooth, chunks=chunks, **hdf5plugin.Blosc(cname=cname, clevel=5, shuffle=shuf))
         add(f, "blosc_i32_noshuffle", counts, chunks=chunks, **hdf5plugin.Blosc(cname="lz4", clevel=9, shuffle=hdf5plugin.Blosc.NOSHUFFLE))
@@ -71,7 +89,7 @@ if len(sys.argv) == 3 and sys.argv[1] == "--big":
     add_plain_copies(sys.argv[2])
     for name in sorted(h5py.File(sys.argv[2])):
         if not name.endswith("_plain"):
-            d = h5py.File(sys.argv[2])[name]
+            d = dataset(h5py.File(sys.argv[2]), name)
             masks = {d.id.read_direct_chunk(c.chunk_offset)[0] for c in (d.id.get_chunk_info(i) for i in range(d.id.get_num_chunks()))}
             print(name, d._filters, "skipped filters in some chunks" if masks != {0} else "")
     sys.exit(0)
@@ -84,7 +102,7 @@ with h5py.File(OUT, "w") as f:
     add(f, "lz4", ints, chunks=(16, 16), **hdf5plugin.LZ4(nbytes=512))
     add(f, "bzip2", ints, chunks=(16, 16), **hdf5plugin.BZip2(blocksize=9))
     add(f, "bzip2_bytes", bytes_, chunks=(11, 7), **hdf5plugin.BZip2(blocksize=1))
-    for cname in ["blosclz", "lz4", "lz4hc", "zlib", "zstd"]:
+    for cname in BLOSC_CODECS:
         for shuf, tag in [(hdf5plugin.Blosc.NOSHUFFLE, "n"), (hdf5plugin.Blosc.SHUFFLE, "s"), (hdf5plugin.Blosc.BITSHUFFLE, "b")]:
             add(f, f"blosc_{cname}_{tag}", floats, chunks=(10, 8), **hdf5plugin.Blosc(cname=cname, clevel=5, shuffle=shuf))
     add(f, "blosc_i16", i16, chunks=(7, 9), **hdf5plugin.Blosc(cname="lz4", clevel=9, shuffle=hdf5plugin.Blosc.SHUFFLE))
@@ -122,9 +140,9 @@ for name, base, prec, off, values in [
 fid.close()
 with h5py.File(OUT, "a") as f:
     for name in ["nbit", "nbit_u16"]:
-        f.create_dataset(name + "_plain", data=f[name][()].astype("int64"))
+        f.create_dataset(name + "_plain", data=dataset(f, name)[()].astype("int64"))
 print("wrote", OUT)
 with h5py.File(OUT) as f:
     for k in sorted(f):
         if not k.endswith("_plain"):
-            print(k, f[k]._filters)
+            print(k, dataset(f, k)._filters)

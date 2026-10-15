@@ -38,7 +38,7 @@ def main():
                     try:
                         d = cftime.num2date(v, units, calendar=cal)
                         res = f"{d.year} {d.month} {d.day} {d.hour} {d.minute} {d.second} {d.microsecond}"
-                    except Exception:
+                    except Exception:  # noqa: BLE001 - any failure is recorded as ERR
                         res = "ERR"
                     print(f"{cal}|{units}|{v!r}|{res}")
 

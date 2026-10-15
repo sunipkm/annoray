@@ -1,5 +1,7 @@
 //! Procedural macros for annoray. Use them through the `annoray` facade crate.
 
+#![deny(missing_docs)]
+
 use proc_macro2::{Delimiter, Spacing, Span, TokenStream, TokenTree};
 use quote::{quote, quote_spanned};
 use syn::spanned::Spanned;

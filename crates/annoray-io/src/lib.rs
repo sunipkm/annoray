@@ -4,6 +4,8 @@
 //! variables with their on-disk element types, attributes exactly as stored, and groups. No CF
 //! interpretation happens here; `annoray-cf` turns a `RawDataset` into a `Dataset` and back.
 
+#![deny(missing_docs)]
+
 use std::ops::Deref;
 use std::path::Path;
 

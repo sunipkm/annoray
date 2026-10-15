@@ -5,6 +5,8 @@
 //! including groups. It is the reference implementation that the pure-Rust backends are tested
 //! against.
 
+#![deny(missing_docs)]
+
 use std::path::Path;
 
 use annoray_core::{AttrValue, Attrs, DType, Name, TypedArray};

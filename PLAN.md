@@ -291,6 +291,37 @@ new base dimensions.
 - The scale-mismatch message no longer names Rust API ("convert one first"), so both
   languages report it alike.
 
+**Python counterpart (`annoray.dims`).** Python cannot check before running, so dimensions
+are explicit and checked at run time, mirroring the Rust names.
+- **`annoray.Dimension`** wraps the Rust `Dimension`:
+  `Dimension(length=1, time=-1)`, with `*`, `/`, `**`, `exponents` and `dimensionless`.
+  `Unit`, `Quantity` and `DataArray` have `.dimension`.
+- **Named dimensions** (`annoray.dims.Length`, `Velocity`, …, the same set as Rust's `dims`)
+  are classes with a metaclass:
+  - `Length(2.5, "km")` makes a quantity whose unit must be a length.
+  - `isinstance(q, Velocity)` asks whether a `Quantity` or `DataArray` has that dimension,
+    however it was computed.
+  - `Velocity.check(q)` is Rust's `cast`.
+  - Named dimensions compose (`Length / Time**3`); `annoray.dimension("Jerk", ...)` names a
+    composition, and names with the same exponents interchange.
+- **Typed for Pylance/pyright:**
+  - Named dimensions are real classes (`class Jerk(Dim, dimension=Length / Time**3)`),
+    because checkers reject classes made at run time in annotations. `annoray.dimension()`
+    remains the run-time spelling.
+  - Annotations read `Quantity[Length]` / `DataArray[Velocity]`, Rust's `Quantity<Length>`.
+    The type stub (`_annoray.pyi`, with `py.typed`) makes them generic, and the classes
+    accept subscripting at run time (`__class_getitem__`).
+  - `Length(...)` returns `Quantity[Length]`, so pyright flags passing a directly built
+    `Quantity[Time]` where `Quantity[Length]` is expected. Arithmetic results are
+    `Quantity[Any]`, since Python's type system cannot compute dimensions.
+- **`@annoray.dims.checked`** enforces those annotations (also bare `Length` and
+  `Annotated[Quantity, Length]`) at each call. It resolves string annotations in the
+  defining scope too.
+- **Ruff and pyright** are configured in `annoray-python/pyproject.toml` and run in CI
+  (`ruff check`, `ruff format --check`, `pyright`).
+- The Python `quantities` example uses all of this and still prints exactly what the typed
+  Rust twin prints.
+
 ### Interop with typed unit libraries (features `uom`, `whippyunits`)
 
 A shared bridge trait in `annoray-units`, implemented by each feature:

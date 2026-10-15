@@ -6,6 +6,8 @@
 //! - [`raw`]: raw file access and writing for the xarray backend engine (`engine="annoray"`).
 //! - [`convert`]: values, labels, indexers and errors between Python and Rust.
 
+#![deny(missing_docs)]
+
 mod alloc;
 mod convert;
 mod native;
@@ -29,6 +31,7 @@ fn _annoray(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<native::PyRolling>()?;
     m.add_class::<native::PyDt>()?;
     m.add_class::<tree::PyDataTree>()?;
+    m.add_class::<units::PyDimension>()?;
     m.add_class::<units::PyUnit>()?;
     m.add_class::<units::PyQuantity>()?;
     m.add_function(wrap_pyfunction!(tree::open_datatree, m)?)?;

@@ -54,7 +54,7 @@ pub enum Compat {
     NoConflicts,
 }
 
-/// Options for [`concat`] and [`concat_datasets`].
+/// Options for [`concat()`] and [`concat_datasets`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct ConcatOptions {

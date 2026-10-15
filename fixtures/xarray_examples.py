@@ -27,7 +27,7 @@ def show_err(name, f):
     try:
         f()
         print(f"{name}: no error")
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - the error type is the expected output
         print(f"{name}: {type(e).__name__}")
 
 

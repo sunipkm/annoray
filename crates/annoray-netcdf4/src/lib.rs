@@ -17,6 +17,8 @@
 //! These bookkeeping attributes are hidden when reading. HDF5 files without them (plain HDF5)
 //! get netCDF-C's `phony_dim_N` dimensions.
 
+#![deny(missing_docs)]
+
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;

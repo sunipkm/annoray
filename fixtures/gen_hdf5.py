@@ -151,9 +151,9 @@ def contents(f, big_endian=False):
 
 
 VARIANTS = {
-    "earliest": dict(libver=("earliest", "latest")),
-    "v18": dict(libver=("v108", "latest")),
-    "latest": dict(libver="latest"),
+    "earliest": {"libver": ("earliest", "latest")},
+    "v18": {"libver": ("v108", "latest")},
+    "latest": {"libver": "latest"},
 }
 
 

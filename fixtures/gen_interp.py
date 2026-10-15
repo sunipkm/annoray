@@ -6,6 +6,7 @@ Each line: case|method|targets|shape|values. Inputs are rebuilt identically in t
 """
 
 import warnings
+from typing import Literal
 
 import numpy as np
 import pandas as pd
@@ -25,16 +26,19 @@ cases = {
 targets = [-1, 0, 0.5, 1, 1.5, 2, 2.5, 3.5, 4, 5, 7.25, 25, nan]
 
 
+METHODS: tuple[Literal["linear", "nearest"], ...] = ("linear", "nearest")
+
+
 def fmt(v):
     return " ".join(repr(float(x)) for x in np.asarray(v, dtype=float).ravel())
 
 
 for name, da in cases.items():
-    for method in ["linear", "nearest"]:
+    for method in METHODS:
         r = da.interp(x=targets, method=method)
         print(f"{name}|{method}|x|{','.join(map(str, r.shape))}|{fmt(r.values)}")
 g = cases["grid"]
-for method in ["linear", "nearest"]:
+for method in METHODS:
     r = g.interp(x=[5.0, 25.0], y=[0.5, 1.75], method=method)
     print(f"grid2|{method}|x,y|{','.join(map(str, r.shape))}|{fmt(r.values)}")
 t = xr.DataArray([0.0, 24.0, 48.0], dims="x", coords={"x": pd.to_datetime(["2000-01-01", "2000-01-02", "2000-01-03"])})

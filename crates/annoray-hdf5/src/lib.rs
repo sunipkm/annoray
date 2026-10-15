@@ -21,6 +21,8 @@
 //! # }
 //! ```
 
+#![deny(missing_docs)]
+
 mod backend;
 mod checksum;
 mod ck;

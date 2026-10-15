@@ -6,6 +6,8 @@ Every dataset holds f(i, j) = i * 100 + j (divided by 7 for floats) at index (i,
 """
 
 import sys
+import typing
+from typing import Any
 
 import h5py
 import hdf5plugin  # noqa: F401 - registers the filter plugins
@@ -18,11 +20,19 @@ expected_filters = {
     "blosc_zstd_bit": "32001",
     "blosc_zlib_none": "32001",
 }
+def dataset(f: h5py.File, name: str) -> h5py.Dataset:
+    """`f[name]`, which must be a dataset."""
+    d = f[name]
+    assert isinstance(d, h5py.Dataset), name
+    return d
+
+
 with h5py.File(sys.argv[1]) as f:
     assert sorted(f) == sorted(expected_filters), sorted(f)
     for name, fid in expected_filters.items():
-        d = f[name]
-        assert fid in d._filters, (name, d._filters)
+        d = dataset(f, name)
+        filters = typing.cast("dict[str, Any]", d._filters)  # h5py types it as a cached_property
+        assert fid in filters, (name, filters)
         i, j = np.indices(d.shape)
         want = (i * 100 + j).astype(d.dtype)
         if d.dtype.kind == "f":

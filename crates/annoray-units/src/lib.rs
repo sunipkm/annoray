@@ -24,6 +24,8 @@
 //! # Ok::<(), annoray_units::UnitError>(())
 //! ```
 
+#![deny(missing_docs)]
+
 mod ck;
 mod dimension;
 pub mod dims;

@@ -16,6 +16,8 @@
 //! (dates as integers in the coarsest exact unit, `_FillValue = NaN` for floats, `string{N}`
 //! char dimensions in classic files), and adapting types to the target format.
 
+#![deny(missing_docs)]
+
 mod decode;
 mod encode;
 mod num;

@@ -98,21 +98,25 @@ def test_arithmetic_matches_xarray():
     check(r * 2.0 - 1.0, x * 2.0 - 1.0)
     check(2.0 / (r + 10.0), 2.0 / (x + 10.0))
     # Inner join on shared labels, as xarray does.
-    check(r.isel(y=slice(0, 3)) + r.isel(y=slice(1, 4)), x.isel(y=slice(0, 3)) + x.isel(y=slice(1, 4)))
+    check(
+        r.isel(y=slice(0, 3)) + r.isel(y=slice(1, 4)), x.isel(y=slice(0, 3)) + x.isel(y=slice(1, 4))
+    )
 
 
 def test_units_are_checked():
     a = ar.DataArray([1.0, 2.0], dims="x", units="m")
     s = ar.DataArray([2.0, 4.0], dims="x", units="s")
-    assert (a / s).units in {"m/s", "m s-1", "m·s⁻¹"} or "m" in (a / s).units
+    assert (a / s).units == "m s-1"
     assert (a * a).units in {"m2", "m^2", "m²"}
     with pytest.raises(ar.UnitError):
-        a + s
+        _ = a + s
     with pytest.raises(ar.UnitError):
-        a + 1.0  # a bare number is dimensionless
+        _ = a + 1.0  # a bare number is dimensionless
     with pytest.raises(ar.UnitError, match="convert one first"):
-        a + ar.Quantity(1.0, "km")
-    np.testing.assert_allclose((a + ar.Quantity(1.0, "km").__class__(1000.0, "m")).values, [1001, 1002])
+        _ = a + ar.Quantity(1.0, "km")
+    np.testing.assert_allclose(
+        (a + ar.Quantity(1.0, "km").__class__(1000.0, "m")).values, [1001, 1002]
+    )
     np.testing.assert_allclose(a.to("cm").values, [100.0, 200.0])
     c = ar.DataArray([0.0, 100.0], dims="x", units="degC")
     np.testing.assert_allclose(c.to("K").values, [273.15, 373.15])
@@ -127,13 +131,15 @@ def test_pint_quantities():
     np.testing.assert_allclose((a + 1.0 * u.m).values, [2.0, 3.0])
     assert (a * (2.0 * u.s)).units is not None
     with pytest.raises(ar.UnitError):
-        a + 50.0 * u.cm
+        _ = a + 50.0 * u.cm
     with pytest.raises(ar.UnitError):
-        a + 1.0 * u.s
+        _ = a + 1.0 * u.s
 
 
 def test_quantity_labels():
-    a = ar.DataArray([1.0, 2.0], dims="x", coords={"x": ar.DataArray([0.0, 1000.0], dims="x", units="m")})
+    a = ar.DataArray(
+        [1.0, 2.0], dims="x", coords={"x": ar.DataArray([0.0, 1000.0], dims="x", units="m")}
+    )
     assert a.sel(x=ar.Quantity(1.0, "km")).values == 2.0
     with pytest.raises(ar.UnitError):
         a.sel(x=ar.Quantity(1.0, "s"))
@@ -186,7 +192,9 @@ def test_transpose_matches():
     check(r.transpose("y", ...), x.transpose("y", ...))
     check(r.T, x.T)
     ds = r.to_dataset()
-    xr.testing.assert_allclose(ds.transpose("x", ...).to_xarray(), x.to_dataset().transpose("x", ...))
+    xr.testing.assert_allclose(
+        ds.transpose("x", ...).to_xarray(), x.to_dataset().transpose("x", ...)
+    )
 
 
 def test_getitem_matches():
@@ -320,8 +328,10 @@ def test_interp_matches():
 
 def test_combining_matches():
     r, x = pair()
-    check(ar.concat([r.isel(time=slice(0, 2)), r.isel(time=slice(2, 6))], "time"),
-          xr.concat([x.isel(time=slice(0, 2)), x.isel(time=slice(2, 6))], "time"))
+    check(
+        ar.concat([r.isel(time=slice(0, 2)), r.isel(time=slice(2, 6))], "time"),
+        xr.concat([x.isel(time=slice(0, 2)), x.isel(time=slice(2, 6))], "time"),
+    )
     a, b = ar.align(r.isel(y=slice(0, 3)), r.isel(y=slice(1, 4)), join="outer")
     xa, xb = xr.align(x.isel(y=slice(0, 3)), x.isel(y=slice(1, 4)), join="outer")
     check(a, xa)
@@ -366,7 +376,7 @@ def test_open_dataset_matches_xarray(name):
     theirs = xr.open_dataset(FIXTURES / name)
     assert set(ours.keys()) == set(theirs.data_vars)
     for k in theirs.variables:
-        a, b = ours[k], theirs[k]
+        a, b = ours[str(k)], theirs[k]
         assert a.dims == b.dims
         if b.dtype.kind in "fiub":
             np.testing.assert_allclose(a.values, b.values, equal_nan=True)
@@ -509,7 +519,9 @@ def test_datatree_matches_xarray():
     assert sorted(ours.paths) == sorted(n.path for n in theirs.subtree)
     for node in theirs.subtree:
         got = ours.to_dataset(node.path).to_xarray()
-        xr.testing.assert_allclose(got.drop_attrs(deep=True), node.to_dataset().load().drop_attrs(deep=True))
+        xr.testing.assert_allclose(
+            got.drop_attrs(deep=True), node.to_dataset().load().drop_attrs(deep=True)
+        )
     assert set(ours) == set(theirs.children)
     assert "obs" in ours and "nope" not in ours
     with pytest.raises(KeyError):
@@ -523,7 +535,10 @@ def test_datatree_build_write_and_convert(tmp_path):
     tree = ar.DataTree.from_dict({"/": root, "/a": a, "/a/b": b})
     assert tree.paths == ["/", "/a", "/a/b"]
     # Inherited coordinates.
-    assert "x" in tree.to_dataset("/a/b").coords and "x" not in tree.to_dataset("/a/b", inherit=False).coords
+    assert (
+        "x" in tree.to_dataset("/a/b").coords
+        and "x" not in tree.to_dataset("/a/b", inherit=False).coords
+    )
     assert tree["a"]["b"].dataset["p"].units == "Pa"
     tree.to_netcdf(tmp_path / "t.nc")
     back = ar.open_datatree(tmp_path / "t.nc")
@@ -559,10 +574,10 @@ def test_quantity_arithmetic_and_conversion():
     assert abs(v.to("m/s").magnitude - 2500 / 1800) < 1e-12
     assert (d**2).units == "km2" and (-d).magnitude == -2.5 and abs(-d) == d
     with pytest.raises(ar.UnitError, match="convert one first"):
-        d + ar.Quantity(1, "m")
+        _ = d + ar.Quantity(1, "m")
     assert (d + ar.Quantity(1, "m").to("km")).magnitude == pytest.approx(2.501)
     with pytest.raises(ar.UnitError):
-        d + 1.0  # a plain number is dimensionless
+        _ = d + 1.0  # a plain number is dimensionless
     assert float(ar.Quantity(5, "%")) == pytest.approx(0.05)
     with pytest.raises(ar.UnitError):
         float(d)
@@ -577,7 +592,7 @@ def test_quantity_comparisons_convert():
     assert ar.Quantity(1, "km") > ar.Quantity(999, "m")
     assert ar.Quantity(1, "km") != ar.Quantity(1, "s")
     with pytest.raises(ar.UnitError):
-        ar.Quantity(1, "km") < ar.Quantity(1, "s")
+        _ = ar.Quantity(1, "km") < ar.Quantity(1, "s")
 
 
 def test_quantities_with_data_arrays():
@@ -590,4 +605,79 @@ def test_quantities_with_data_arrays():
     np.testing.assert_allclose(da.to(ar.Unit("m")).values, [1000.0, 2000.0])
     assert da.sel(x=1 * km).values == 2.0
     with pytest.raises(ar.UnitError):
-        da + ar.Quantity(1, "s")
+        _ = da + ar.Quantity(1, "s")
+
+
+# ----- named dimensions -----
+
+
+def test_dimensions_compose_and_name():
+    from annoray.dims import Energy, Force, Length, Mass, Time, Velocity
+
+    assert Length / Time == Velocity.dimension
+    assert (Force * Length) == Energy.dimension  # torque and energy: one dimension
+    assert repr(Velocity.dimension) == "Dimension(length=1, time=-1)"
+    assert str(Velocity.dimension) == "m s-1"
+
+    class Jerk(ar.dims.Dim, dimension=Length / Time**3):
+        """Rate of change of acceleration."""
+
+    assert str(Jerk.dimension) == "m s-3" and ar.dims.name_of(Jerk.dimension) == "Jerk"
+    made = ar.dimension("Snap", Length / Time**4)  # the run-time spelling
+    assert str(made.dimension) == "m s-4" and isinstance(made, ar.dims.DimensionType)
+    speed = ar.dimension("Speed", Length / Time)
+    assert speed.dimension == Velocity.dimension
+    assert ar.Dimension(mass=1, length=2, time=-2) == Energy.dimension
+    assert ar.Unit("kJ").dimension == Energy.dimension and Mass.dimension.exponents == {"mass": 1}
+    assert (1 / Time) == ar.dims.Frequency.dimension
+
+
+def test_dimensioned_quantities():
+    from annoray.dims import Length, Time, Velocity
+
+    d = Length(2.5, "km")
+    assert isinstance(d, ar.Quantity) and isinstance(d, Length) and not isinstance(d, Time)
+    with pytest.raises(ar.UnitError, match="expected Length"):
+        Length(1.0, "s")
+    v = d / Time(30.0, "min")
+    assert isinstance(v, Velocity)  # however it was made
+    assert Velocity.check(v) is v
+    with pytest.raises(ar.UnitError):
+        Velocity.check(d)
+    da = ar.DataArray([1.0, 2.0], dims="x", units="m/s")
+    assert isinstance(da, Velocity) and da.dimension == Velocity.dimension
+    assert ar.DataArray([1.0], dims="x").dimension is None
+    assert not isinstance(3.0, Length)
+
+
+def test_checked_functions():
+    from typing import Annotated
+
+    from annoray.dims import Energy, Length, Time, Velocity, checked
+
+    @checked
+    def speed(
+        d: ar.Quantity[Length], t: ar.Quantity[Time], label: str = ""
+    ) -> ar.Quantity[Velocity]:
+        return d / t
+
+    # Bare names work at run time too (type checkers prefer `Quantity[...]`).
+    @checked
+    def bare(d: Length) -> Length:  # pyright: ignore[reportInvalidTypeForm]
+        return d
+
+    with pytest.raises(ar.UnitError, match="argument 'd'"):
+        bare(Time(1, "s"))  # pyright: ignore[reportArgumentType]  (on purpose)
+
+    assert isinstance(speed(Length(1, "km"), Time(1, "h")), Velocity)
+    with pytest.raises(ar.UnitError, match="argument 'd'"):
+        speed(Time(1, "h"), Length(1, "km"))  # pyright: ignore[reportArgumentType]  (on purpose)
+
+    @checked
+    def wrong(d: Annotated[ar.Quantity, Length]) -> Energy:  # pyright: ignore[reportInvalidTypeForm]
+        return d  # pyright: ignore[reportReturnType]  (wrong on purpose)
+
+    with pytest.raises(ar.UnitError, match="result"):
+        wrong(Length(1, "m"))
+    with pytest.raises(ar.UnitError, match="argument 'd'"):
+        wrong(Time(1, "s"))

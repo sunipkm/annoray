@@ -47,8 +47,10 @@ show("mean tmin (skipping NaN)", ds["tmin"].mean("time").values)
 clim = ds["tmin"].groupby("time.month").mean()
 show("IA tmin by month", clim.sel(location="IA").values)
 anom = ds["tmin"].groupby("time.month") - clim
-show("IN anomaly, first week of June 2000",
-     anom.sel(location="IN", time=slice("2000-06-01", "2000-06-07")).values)
+show(
+    "IN anomaly, first week of June 2000",
+    anom.sel(location="IN", time=slice("2000-06-01", "2000-06-07")).values,
+)
 
 # Resampling to monthly means, and a centred 7-day rolling mean.
 monthly = ds["tmax"].resample(time="MS").mean()
@@ -59,4 +61,7 @@ show("IL 7-day tmax, first days", weekly.sel(location="IL").isel(time=slice(0, 6
 # The daily range, and units.
 show("mean daily range", (ds["tmax"] - ds["tmin"]).mean("time").values)
 show("mean tmax in degF", ds["tmax"].mean("time").to("degF").values)
-show("filled tmin, IA, days 0-2", ds["tmin"].fillna(-99.0).sel(location="IA").isel(time=slice(0, 3)).values)
+show(
+    "filled tmin, IA, days 0-2",
+    ds["tmin"].fillna(-99.0).sel(location="IA").isel(time=slice(0, 3)).values,
+)

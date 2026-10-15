@@ -13,8 +13,14 @@ import xarray as xr
 warnings.simplefilter("ignore")
 golden = xr.open_dataset(os.path.join(os.path.dirname(__file__), "nc", "xr_nc4.nc"))
 ours = xr.open_dataset(sys.argv[1])
-assert sorted(ours.data_vars) == sorted(golden.data_vars), (sorted(ours.data_vars), sorted(golden.data_vars))
-assert sorted(ours.coords) == sorted(golden.coords), (sorted(ours.coords), sorted(golden.coords))
+assert sorted(map(str, ours.data_vars)) == sorted(map(str, golden.data_vars)), (
+    sorted(map(str, ours.data_vars)),
+    sorted(map(str, golden.data_vars)),
+)
+assert sorted(map(str, ours.coords)) == sorted(map(str, golden.coords)), (
+    sorted(map(str, ours.coords)),
+    sorted(map(str, golden.coords)),
+)
 for name in golden.variables:
     a, b = golden[name], ours[name]
     assert a.dims == b.dims, (name, a.dims, b.dims)

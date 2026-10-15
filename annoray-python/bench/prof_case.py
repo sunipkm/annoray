@@ -1,6 +1,6 @@
 """Run one of the slow benchmark cases in a loop, for a profiler.
 
-    py-spy record --native -r 500 -f raw -o out.txt -- python prof_case.py CASE SECONDS
+py-spy record --native -r 500 -f raw -o out.txt -- python prof_case.py CASE SECONDS
 """
 
 from __future__ import annotations

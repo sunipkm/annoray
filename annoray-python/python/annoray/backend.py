@@ -11,6 +11,7 @@ from __future__ import annotations
 import os
 import threading
 from collections.abc import Iterable
+from typing import Any
 
 import numpy as np
 from xarray.backends.common import (
@@ -89,7 +90,7 @@ class AnnorayStore(AbstractDataStore):
     """A group of a file opened by annoray, serving raw variables."""
 
     def __init__(self, group: RawGroup, filename: str):
-        self.group = group
+        self._group: RawGroup | None = group
         self._filename = filename
         self.lock = threading.Lock()  # unused: reads are thread-safe in Rust
 
@@ -105,13 +106,13 @@ class AnnorayStore(AbstractDataStore):
         data = indexing.LazilyIndexedArray(
             AnnorayArray(self.group, name, info["shape"], info["dtype"])
         )
-        encoding = {"dtype": str if info["dtype"] == "object" else np.dtype(info["dtype"])}
+        encoding: dict[str, Any] = {
+            "dtype": str if info["dtype"] == "object" else np.dtype(info["dtype"])
+        }
         if info["chunks"] is not None:
             encoding["contiguous"] = False
             encoding["chunksizes"] = tuple(info["chunks"])
-            encoding["preferred_chunks"] = dict(
-                zip(info["dims"], info["chunks"], strict=True)
-            )
+            encoding["preferred_chunks"] = dict(zip(info["dims"], info["chunks"], strict=True))
         else:
             encoding["contiguous"] = True
             encoding["chunksizes"] = None
@@ -136,9 +137,15 @@ class AnnorayStore(AbstractDataStore):
     def get_encoding(self):
         return {"unlimited_dims": {k for k, (_, u) in self.group.dims.items() if u}}
 
+    @property
+    def group(self) -> RawGroup:
+        if self._group is None:
+            raise ValueError(f"{self._filename}: the file is closed")
+        return self._group
+
     def close(self):
         # Dropping the last reference unmaps the file.
-        self.group = None
+        self._group = None
 
 
 def _strip(group: str | None) -> str | None:

@@ -12,6 +12,8 @@
 //!
 //! No function in this crate panics on bad input: all failures are returned as [`CoreError`].
 
+#![deny(missing_docs)]
+
 mod align;
 mod array;
 mod attrs;

@@ -67,14 +67,23 @@ try:
 
     # Reductions of on-disk data stream through a memory budget (here 1 MiB at a time).
     ar.set_stream_bytes(1 << 20)
-    show("time-mean air, lat 0..3, lon 0", on_disk["air"].mean("time").isel(lon=0, lat=slice(0, 3)).values)
-    show("time-std air, lat 0..3, lon 0", on_disk["air"].std("time").isel(lon=0, lat=slice(0, 3)).values)
+    show(
+        "time-mean air, lat 0..3, lon 0",
+        on_disk["air"].mean("time").isel(lon=0, lat=slice(0, 3)).values,
+    )
+    show(
+        "time-std air, lat 0..3, lon 0",
+        on_disk["air"].std("time").isel(lon=0, lat=slice(0, 3)).values,
+    )
     monthly = on_disk["air"].groupby("time.month").mean()
     show("monthly mean at (lat 10, lon 0)", monthly.isel(lat=10, lon=0).values)
 
     # Many files as one dataset, combined by their coordinates.
     both = ar.open_mfdataset(str(tmp / "air_*.nc"))
     print("multi-file sizes: " + ", ".join(f"{k}={n}" for k, n in both.sizes.items()))
-    show("overall mean (one file, two files)", [on_disk["air"].mean().values, both["air"].mean().values])
+    show(
+        "overall mean (one file, two files)",
+        [on_disk["air"].mean().values, both["air"].mean().values],
+    )
 finally:
     shutil.rmtree(tmp)

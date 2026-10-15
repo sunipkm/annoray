@@ -21,6 +21,8 @@
 //! # }
 //! ```
 
+#![deny(missing_docs)]
+
 pub use annoray_core::*;
 pub use annoray_macros::{isel, sel};
 /// Runtime units, CF calendars and dates (the `annoray-units` crate).

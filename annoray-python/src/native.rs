@@ -524,6 +524,18 @@ arithmetic!(PyDataArray);
 
 #[pymethods]
 impl PyDataArray {
+    /// `DataArray[Length]`: the dimension, for annotations (checked by `annoray.dims.checked`).
+    #[classmethod]
+    fn __class_getitem__<'py>(
+        cls: &Bound<'py, pyo3::types::PyType>,
+        item: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        cls.py()
+            .import("types")?
+            .getattr("GenericAlias")?
+            .call1((cls, item))
+    }
+
     /// `DataArray(data, dims=None, coords=None, name=None, attrs=None, units=None)`.
     ///
     /// `data` may be a numpy array (any numeric, bool, datetime64, timedelta64, string or
@@ -558,6 +570,14 @@ impl PyDataArray {
     #[getter]
     fn name(&self) -> Option<String> {
         self.inner.name().map(ToString::to_string)
+    }
+
+    /// The dimension of the data's unit (`None` for unitless data).
+    #[getter]
+    fn dimension(&self) -> Option<crate::units::PyDimension> {
+        self.inner
+            .unit()
+            .map(|u| crate::units::PyDimension { inner: u.dim() })
     }
 
     /// The unit as an `annoray.Unit` (`None` for unitless data); `units` gives it as text.

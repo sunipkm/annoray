@@ -62,7 +62,7 @@ def show(path):
         if name == "model_time":
             vals = [str(x) for x in v.values]
         print(f"  {name}: dims={v.dims} dtype={v.dtype} units={v.attrs.get('units')} values={vals}")
-    print(f"  coords={sorted(ds.coords)} data_vars={sorted(ds.data_vars)}")
+    print(f"  coords={sorted(map(str, ds.coords))} data_vars={sorted(map(str, ds.data_vars))}")
     ds.close()
 
 

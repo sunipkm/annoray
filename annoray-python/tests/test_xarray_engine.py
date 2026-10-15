@@ -67,11 +67,15 @@ def test_datatree_matches_netcdf4():
     # group with engine="netcdf4" segfaults in netCDF4-python, xarray 2026.9.)
     for group in b.children:
         a = xr.open_dataset(FIXTURES / "tree.nc", engine="annoray", group=group)
-        _assert_vars_identical(a, xr.open_dataset(FIXTURES / "tree.nc", engine="h5netcdf", group=group))
+        _assert_vars_identical(
+            a, xr.open_dataset(FIXTURES / "tree.nc", engine="h5netcdf", group=group)
+        )
 
 
 def test_engine_is_registered_and_guessed():
-    assert "annoray" in xr.backends.list_engines()
+    from xarray.backends import list_engines
+
+    assert "annoray" in list_engines()
     from annoray.backend import AnnorayBackendEntrypoint
 
     entry = AnnorayBackendEntrypoint()
@@ -181,7 +185,9 @@ def test_cftime_roundtrip(tmp_path):
 
 def test_packing_and_fill_encoding(tmp_path):
     ds = _sample()[["temp"]]
-    enc = {"temp": {"dtype": "int16", "scale_factor": 0.01, "add_offset": 280.0, "_FillValue": -32767}}
+    enc = {
+        "temp": {"dtype": "int16", "scale_factor": 0.01, "add_offset": 280.0, "_FillValue": -32767}
+    }
     path = tmp_path / "packed.nc"
     annoray.to_netcdf(ds, path, encoding=enc)
     raw = xr.open_dataset(path, engine="netcdf4", decode_cf=False)
@@ -234,7 +240,7 @@ def test_annoray_reads_xarray_written_files(tmp_path):
     for fmt in FORMATS:
         sub = ds if fmt == "NETCDF4" else ds.drop_vars(["name", "station"])
         path = tmp_path / f"x-{fmt}.nc"
-        sub.to_netcdf(path, format=fmt, engine="netcdf4")
+        sub.to_netcdf(path, format=fmt, engine="netcdf4")  # pyright: ignore[reportArgumentType, reportCallIssue]
         xr.testing.assert_identical(xr.open_dataset(path, engine="annoray").load(), sub)
 
 

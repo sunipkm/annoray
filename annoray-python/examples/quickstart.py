@@ -43,7 +43,7 @@ print(f"da * 2 -> {(da * 2.0).units}")
 print(f"da * da -> {(da * da).units}")
 print(f"da / 2 s -> {(da / seconds).units}")
 try:
-    da + seconds
+    _ = da + seconds
 except ar.UnitError as e:
     print(f"da + 2 s -> error: {e}")
 

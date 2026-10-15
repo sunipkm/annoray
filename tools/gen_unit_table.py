@@ -17,6 +17,13 @@ BASE_DIMS = {"m": "Length", "kg": "Mass", "s": "Time", "A": "Current", "K": "Tem
              "mol": "Amount", "cd": "Luminosity"}
 
 
+
+def req(text: str | None) -> str:
+    """The stripped text of an XML element the UDUNITS database always fills in."""
+    if text is None:
+        raise SystemExit("unexpected empty element in the UDUNITS database")
+    return text.strip()
+
 def plural(singular):
     """UDUNITS' automatic English plural (lib/xml.c: ut_form_plural)."""
     if singular.endswith(("s", "x", "z", "ch", "sh")):
@@ -58,11 +65,11 @@ def main(d):
         root = ET.parse(os.path.join(d, f"udunits2-{sysname}.xml")).getroot()
         for u in root.iter("unit"):
             names = names_of(u)
-            symbols = [s.text.strip() for s in u.findall("symbol")]
+            symbols = [req(s.text) for s in u.findall("symbol")]
             aliases = u.find("aliases")
             if aliases is not None:
                 names += names_of(aliases)
-                symbols += [s.text.strip() for s in aliases.findall("symbol")]
+                symbols += [req(s.text) for s in aliases.findall("symbol")]
             if u.find("base") is not None:
                 definition = f"Def::Base(BaseDim::{BASE_DIMS[symbols[0]]})"
             elif u.find("dimensionless") is not None:
@@ -72,16 +79,16 @@ def main(d):
             elif "pi" in names:
                 definition = "Def::Pi"  # exact π instead of UDUNITS' 31-digit decimal
             else:
-                definition = f"Def::Expr({rs(u.findtext('def').strip())})"
+                definition = f"Def::Expr({rs(req(u.findtext('def')))})"
             print(f"    UnitEntry {{ def: {definition}, names: {rs_list(names)}, symbols: {rs_list(symbols)} }},")
     print("];")
     print()
     print("pub(crate) static PREFIXES: &[PrefixEntry] = &[")
     root = ET.parse(os.path.join(d, "udunits2-prefixes.xml")).getroot()
     for p in root.iter("prefix"):
-        value = p.findtext("value").strip()
-        names = [n.text.strip() for n in p.findall("name")]
-        symbols = [s.text.strip() for s in p.findall("symbol")]
+        value = req(p.findtext("value"))
+        names = [req(n.text) for n in p.findall("name")]
+        symbols = [req(s.text) for s in p.findall("symbol")]
         print(f"    PrefixEntry {{ value: {rs(value)}, names: {rs_list(names)}, symbols: {rs_list(symbols)} }},")
     print("];")
 

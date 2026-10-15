@@ -15,10 +15,12 @@ and ``ar.to_netcdf(xr_dataset, path)`` writes an xarray dataset with annoray's w
 
 from __future__ import annotations
 
+from annoray import dims
 from annoray._annoray import (
     DataArray,
     Dataset,
     DataTree,
+    Dimension,
     GroupBy,
     Quantity,
     Rolling,
@@ -36,11 +38,13 @@ from annoray._annoray import (
     set_stream_bytes,
     stream_bytes,
 )
+from annoray.dims import dimension
 
 __all__ = [
     "DataArray",
     "DataTree",
     "Dataset",
+    "Dimension",
     "GroupBy",
     "Quantity",
     "Rolling",
@@ -50,6 +54,8 @@ __all__ = [
     "align",
     "concat",
     "date_range",
+    "dimension",
+    "dims",
     "from_xarray",
     "merge",
     "open_dataset",

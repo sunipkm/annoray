@@ -1,0 +1,13 @@
+{
+  // For Pylance/pyright
+  "include": [
+    "annoray-python/python",
+    "annoray-python/tests",
+    "annoray-python/examples",
+    "annoray-python/bench",
+    "fixtures",
+    "tools"
+  ],
+  "extraPaths": ["annoray-python/python"],
+  "pythonVersion": "3.11"
+}
