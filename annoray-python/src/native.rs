@@ -325,7 +325,7 @@ fn do_sel<T: Select + Clone>(
 
 // ----- reductions -----
 
-fn reduce_dims(dim: Option<&Bound<'_, PyAny>>) -> PyResult<Option<Vec<Name>>> {
+pub(crate) fn reduce_dims(dim: Option<&Bound<'_, PyAny>>) -> PyResult<Option<Vec<Name>>> {
     match dim {
         None => Ok(None),
         Some(d) if d.is_none() => Ok(None),
@@ -1823,7 +1823,7 @@ impl PyRolling {
     }
 }
 
-fn reduction_from(op: &str) -> PyResult<Reduction> {
+pub(crate) fn reduction_from(op: &str) -> PyResult<Reduction> {
     Ok(match op {
         "sum" => Reduction::Sum,
         "prod" => Reduction::Prod,

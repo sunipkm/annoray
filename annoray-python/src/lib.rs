@@ -13,6 +13,7 @@ mod convert;
 mod native;
 mod raw;
 mod reshape;
+mod stats;
 mod tree;
 mod units;
 
@@ -30,6 +31,8 @@ fn _annoray(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<native::PyDataset>()?;
     m.add_class::<native::PyGroupBy>()?;
     m.add_class::<native::PyRolling>()?;
+    m.add_class::<stats::PyWeighted>()?;
+    m.add_class::<stats::PyCoarsen>()?;
     m.add_class::<native::PyDt>()?;
     m.add_class::<tree::PyDataTree>()?;
     m.add_class::<units::PyDimension>()?;

@@ -19,6 +19,7 @@ from importlib.metadata import version as _version
 
 from annoray import dims
 from annoray._annoray import (
+    Coarsen,
     DataArray,
     Dataset,
     DataTree,
@@ -28,6 +29,7 @@ from annoray._annoray import (
     Rolling,
     Unit,
     UnitError,
+    Weighted,
     align,
     concat,
     date_range,
@@ -46,6 +48,7 @@ from annoray.dims import dimension
 __version__ = _version("annoray")
 
 __all__ = [
+    "Coarsen",
     "DataArray",
     "DataTree",
     "Dataset",
@@ -55,6 +58,7 @@ __all__ = [
     "Rolling",
     "Unit",
     "UnitError",
+    "Weighted",
     "__version__",
     "align",
     "concat",

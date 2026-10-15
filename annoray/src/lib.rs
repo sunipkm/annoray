@@ -46,6 +46,7 @@ mod align;
 mod array;
 mod attrs;
 pub mod cf;
+mod coarsen;
 mod combine;
 mod dataarray;
 mod dataset;
@@ -71,6 +72,7 @@ mod reshape;
 pub use resample::date_range;
 mod rolling;
 mod select;
+mod stats;
 mod tree;
 mod typed;
 mod variable;
@@ -79,6 +81,7 @@ pub use align::{Join, align, align_datasets};
 pub use annoray_hdf5::{BloscCodec, BloscShuffle, Compression};
 pub use array::{Arr, DType, Element, TypedArray};
 pub use attrs::{AttrValue, Attrs};
+pub use coarsen::{Boundary, Coarsen, CoarsenOptions, DatasetCoarsen, Side};
 pub use combine::{
     Compat, Concat, ConcatOptions, MergeOptions, combine_by_coords, concat, concat_datasets, merge,
 };
@@ -99,6 +102,7 @@ pub use ops::{BinOp, variables_equal};
 pub use reduce::{ReduceDims, ReduceOptions, Reduction, set_stream_bytes, stream_bytes};
 pub use repr::{Owned, Repr, ReprMut, View, ViewMut};
 pub use rolling::{DataArrayRolling, DatasetRolling, RollingOptions};
+pub use stats::{QuantileMethod, Weighted};
 pub use tree::DataTree;
 pub use variable::{Variable, VariableBase, VariableView, VariableViewMut};
 
