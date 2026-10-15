@@ -98,7 +98,9 @@ impl Converter {
     /// Convert one value.
     #[must_use]
     pub fn apply(&self, x: f64) -> f64 {
-        x.mul_add(self.factor, self.offset)
+        // Not `mul_add`: without FMA hardware enabled at compile time it is a slow library
+        // call, and numpy (hence xarray) rounds after each operation.
+        x * self.factor + self.offset
     }
 }
 

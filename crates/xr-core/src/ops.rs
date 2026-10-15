@@ -267,32 +267,65 @@ fn compute(
 #[cfg(feature = "rayon")]
 const PAR_ELEMENTS: usize = 1 << 16;
 
-/// Elementwise float arithmetic, broadcasting both operands to `shape`.
+/// Elementwise float arithmetic, broadcasting both operands to `shape`. Each operator gets
+/// its own loop (no per-element dispatch), and a single-element operand is applied as a
+/// constant over the other one (no zero-stride broadcasting).
 fn float_zip<F: num_like::Float + Send + Sync>(
     x: &ArrayViewD<'_, F>,
     y: &ArrayViewD<'_, F>,
     shape: &[usize],
     op: BinOp,
 ) -> Result<ArrayD<F>> {
+    match op {
+        BinOp::Add => zip_with(x, y, shape, op, |p, q| p.add(q)),
+        BinOp::Sub => zip_with(x, y, shape, op, |p, q| p.sub(q)),
+        BinOp::Mul => zip_with(x, y, shape, op, |p, q| p.mul(q)),
+        BinOp::Div => zip_with(x, y, shape, op, |p, q| p.div(q)),
+    }
+}
+
+fn zip_with<F: Copy + Send + Sync>(
+    x: &ArrayViewD<'_, F>,
+    y: &ArrayViewD<'_, F>,
+    shape: &[usize],
+    op: BinOp,
+    f: impl Fn(F, F) -> F + Sync + Send + Copy,
+) -> Result<ArrayD<F>> {
     let bad = || CoreError::ArithmeticOverflow(op.name());
+    let single = |a: &ArrayViewD<'_, F>| (a.len() == 1).then(|| a.iter().next().copied()).flatten();
+    // One operand a constant: map the other (when it already has the result's shape).
+    if let Some(q) = single(y)
+        && x.shape() == shape
+    {
+        return Ok(map_one(x, move |p| f(p, q)));
+    }
+    if let Some(p) = single(x)
+        && y.shape() == shape
+    {
+        return Ok(map_one(y, move |q| f(p, q)));
+    }
     let xb = x.broadcast(IxDyn(shape)).ok_or_else(bad)?;
     let yb = y.broadcast(IxDyn(shape)).ok_or_else(bad)?;
     let zip = ndarray::Zip::from(&xb).and(&yb);
-    let f = |p: &F, q: &F| float_op(op, *p, *q);
+    let g = |p: &F, q: &F| f(*p, *q);
     #[cfg(feature = "rayon")]
     if xb.len() > PAR_ELEMENTS {
-        return Ok(zip.par_map_collect(f));
+        return Ok(zip.par_map_collect(g));
     }
-    Ok(zip.map_collect(f))
+    Ok(zip.map_collect(g))
 }
 
-fn float_op<F: num_like::Float>(op: BinOp, p: F, q: F) -> F {
-    match op {
-        BinOp::Add => p.add(q),
-        BinOp::Sub => p.sub(q),
-        BinOp::Mul => p.mul(q),
-        BinOp::Div => p.div(q),
+fn map_one<F: Copy + Send + Sync>(
+    x: &ArrayViewD<'_, F>,
+    f: impl Fn(F) -> F + Sync + Send,
+) -> ArrayD<F> {
+    let zip = ndarray::Zip::from(x);
+    let g = |p: &F| f(*p);
+    #[cfg(feature = "rayon")]
+    if x.len() > PAR_ELEMENTS {
+        return zip.par_map_collect(g);
     }
+    zip.map_collect(g)
 }
 
 mod num_like {
@@ -577,16 +610,15 @@ impl<S: Repr> DataArrayBase<S> {
         self.binary(op, &scalar_array(scalar)?, UnitPolicy::Strict)
     }
 
-    /// Convert the data to another unit (as `f64`).
+    /// Convert the data to another unit: `f32` data stays `f32`, other numbers become `f64`.
     ///
     /// # Errors
     /// Unit errors if the units are incompatible, or [`CoreError::UnsupportedDType`].
     pub fn to_unit(&self, unit: &Unit) -> Result<DataArray> {
         let from = self.unit().cloned().unwrap_or_else(Unit::one);
         let conv = from.converter_to(unit)?;
-        let data = to_f64(&self.variable().typed()?, Some(&conv))?;
-        let var = Variable::from_typed(self.dims().iter().cloned(), TypedArray::F64(data))?
-            .with_unit(unit.clone());
+        let data = converted(&self.variable().typed()?, &conv)?;
+        let var = Variable::from_typed(self.dims().iter().cloned(), data)?.with_unit(unit.clone());
         let coords = self
             .coords
             .iter()
@@ -594,6 +626,32 @@ impl<S: Repr> DataArrayBase<S> {
             .collect();
         Ok(DataArrayBase::from_parts(self.name().cloned(), var, coords))
     }
+}
+
+/// Unit conversion in one pass (on several threads for large arrays).
+#[allow(clippy::cast_possible_truncation)] // f32 data stays f32
+fn converted(a: &TypedArray<View<'_>>, conv: &Converter) -> Result<TypedArray<crate::Owned>> {
+    fn go<T: Copy + Send + Sync, O: Copy + Send + Sync>(
+        x: &ArrayViewD<'_, T>,
+        f: impl Fn(T) -> O + Sync + Send,
+    ) -> ArrayD<O> {
+        let zip = ndarray::Zip::from(x);
+        let g = |v: &T| f(*v);
+        #[cfg(feature = "rayon")]
+        if x.len() > PAR_ELEMENTS {
+            return zip.par_map_collect(g);
+        }
+        zip.map_collect(g)
+    }
+    if let TypedArray::F32(x) = a {
+        return Ok(TypedArray::F32(go(x, |v: f32| {
+            conv.apply(f64::from(v)) as f32
+        })));
+    }
+    if let TypedArray::F64(x) = a {
+        return Ok(TypedArray::F64(go(x, |v: f64| conv.apply(v))));
+    }
+    Ok(TypedArray::F64(to_f64(a, Some(conv))?))
 }
 
 fn scalar_array(v: f64) -> Result<DataArray> {

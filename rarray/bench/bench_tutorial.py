@@ -6,9 +6,14 @@ xarray vs native rarray. Every rarray result is checked against xarray's before 
 
 from __future__ import annotations
 
+import os
+
+# scipy (imported by xarray.tutorial) starts OpenBLAS threads that spin idle and take cores
+# from both libraries; one is enough here.
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+
 import argparse
 import json
-import os
 import statistics
 import sys
 import time

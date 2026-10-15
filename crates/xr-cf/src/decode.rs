@@ -13,8 +13,7 @@ use xr_core::{
 use xr_io::{RawData, RawDataset, RawVariable};
 
 use crate::num::{
-    attr_dtype, attr_f64, attr_f64s, f64_to_float, flip_sign, flip_sign_attr, is_float, is_int,
-    to_f64,
+    attr_dtype, attr_f64, attr_f64s, flip_sign, flip_sign_attr, is_float, is_int, to_f64,
 };
 use crate::{CfError, Result};
 
@@ -525,22 +524,58 @@ fn apply(steps: &[Step], mut data: TypedArray<Owned>, name: &str) -> Result<Type
                 scale,
                 offset,
                 target,
-            } => {
-                let fill_is_nan = masks.iter().any(|m| m.is_nan());
-                let values = to_f64(&data)
-                    .ok_or_else(|| invalid(name, "not numeric"))?
-                    .mapv(|v| {
-                        if masks.contains(&v) || (fill_is_nan && v.is_nan()) {
-                            f64::NAN
-                        } else {
-                            v.mul_add(*scale, *offset)
-                        }
-                    });
-                f64_to_float(values, *target)
-            }
+            } => mask_scale(&data, masks, *scale, *offset, *target)
+                .ok_or_else(|| invalid(name, "not numeric"))?,
         };
     }
     Ok(data)
+}
+
+/// Mask fill values and unpack (`packed * scale + offset`) in one pass, straight into the
+/// target float type. Rounding follows xarray (numpy): the values are first converted to the
+/// target type, then multiplied and added with a rounding after each operation, so results
+/// match xarray's bit for bit. A scale of 1 and an offset of 0 are not applied.
+#[allow(clippy::cast_possible_truncation, clippy::float_cmp)] // rounding to f32 is intended
+fn mask_scale(
+    data: &TypedArray<Owned>,
+    masks: &[f64],
+    scale: f64,
+    offset: f64,
+    target: DType,
+) -> Option<TypedArray<Owned>> {
+    let fill_is_nan = masks.iter().any(|m| m.is_nan());
+    let masked = |v: f64| masks.contains(&v) || (fill_is_nan && v.is_nan());
+    let (mul, add) = (scale != 1.0, offset != 0.0);
+    if target == DType::F32 {
+        let f = |v: f64| {
+            if masked(v) {
+                return f32::NAN;
+            }
+            let mut t = v as f32;
+            if mul {
+                t = (f64::from(t) * scale) as f32;
+            }
+            if add {
+                t = (f64::from(t) + offset) as f32;
+            }
+            t
+        };
+        return crate::num::map_f64(data, f).map(TypedArray::F32);
+    }
+    let f = |v: f64| {
+        if masked(v) {
+            return f64::NAN;
+        }
+        let mut t = v;
+        if mul {
+            t *= scale;
+        }
+        if add {
+            t += offset;
+        }
+        t
+    };
+    crate::num::map_f64(data, f).map(TypedArray::F64)
 }
 
 /// A lazily decoded variable: reads raw slices and decodes them.

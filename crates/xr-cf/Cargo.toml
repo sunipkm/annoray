@@ -13,6 +13,11 @@ ndarray.workspace = true
 thiserror.workspace = true
 xr-core.workspace = true
 xr-io.workspace = true
+rayon = { workspace = true, optional = true }
+
+[features]
+# Decode (unpack and mask) large arrays on several threads.
+rayon = ["dep:rayon", "ndarray/rayon"]
 
 [lints]
 workspace = true

@@ -965,3 +965,41 @@ Stages:
   97 ms, and writing 2.9 s vs 10 s. The writer now builds and compresses chunks in parallel
   (rayon), in batches bounded to 256 MB, and writes them in order, so files are
   byte-identical to the serial writer.
+
+**Performance work in stage 2.** Measured with `perf` against xarray's tutorial datasets
+(`rarray/bench/bench_tutorial.py`, Ryzen 7 9700X with 16 threads; every rarray result is
+checked against xarray's before it is timed). Causes found and fixed:
+- **Rolling:** each window was found with `skip()` on a strided lane, which is O(n²) per
+  lane. Windows are now O(1) slices, and lanes run in parallel. 40× slower than xarray became
+  about 3× faster.
+- **Elementwise arithmetic:**
+  - Floats were copied to f64 and mapped through an `Option`. Each operator now has its own
+    `Zip` loop, parallel for large arrays.
+  - A scalar operand is applied as a constant, with no zero-stride broadcast.
+- **Reductions over leading or middle dimensions:** these now accumulate whole rows into the
+  result, as numpy does: no transposed copy, and slice loops for contiguous rows. Large
+  results are split across threads along a kept dimension. Values are added in lane order, so
+  results equal the lane path's bit for bit (tested on three shapes, with and without threads).
+  Reductions over trailing dimensions keep lanes, which now run in parallel.
+- **Group arithmetic** (`groupby(...) - climatology`): one `take` expands `other` along the
+  grouped dimension, then one elementwise operation. Before, each group was copied out and the
+  result rebuilt by concatenation.
+- **Group reductions:**
+  - Contiguous groups (every resample period) are reduced from views.
+  - Results are stacked with one copy rather than a checked concatenation. A guard falls back
+    to concatenation when parts differ in shape, dtype, unit or coordinates.
+- **Unit conversion and CF unpacking:** these ran two passes through an f64 copy using
+  `mul_add`, which is a slow library call without FMA enabled at compile time. Each is now one
+  parallel pass that computes `x * scale + offset` with numpy's rounding (unpacked values now
+  match xarray's bit for bit). f32 data stays f32 under `.to()`.
+- **HDF5 shuffle filter:** it wrote bytes with a stride and checked every byte. Writes are now
+  sequential, with fixed-width loops for 2-, 4- and 8-byte elements.
+- **Benchmark hygiene:** scipy's OpenBLAS threads spin idle and take cores, so the benchmark
+  sets `OPENBLAS_NUM_THREADS=1`.
+
+Open items:
+- Results of 500 MB and more are fresh allocations, so the kernel's page faults dominate.
+  numpy reuses temporaries (`a * 2 + a` allocates once) and asks for huge pages on large
+  arrays. Large anomaly and arithmetic cases stay at 0.5–0.8×.
+- Native reads of deflate-compressed files are about 2× slower than netCDF-C; the time is
+  in inflate.

@@ -1,5 +1,12 @@
 //! Reductions against Python xarray (`fixtures/reductions.txt`, from `fixtures/gen_reductions.py`).
-#![allow(clippy::unwrap_used, clippy::indexing_slicing, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::indexing_slicing,
+    clippy::panic,
+    clippy::arithmetic_side_effects,
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation
+)]
 
 use chrono::{NaiveDateTime, TimeDelta};
 use ndarray::{ArrayD, IxDyn};
@@ -280,4 +287,85 @@ fn dataset_reductions() {
         Some("s")
     );
     assert!(ds.sum("nope").is_err());
+}
+
+/// Reducing leading or middle dimensions accumulates whole rows (on several threads for
+/// large results); reducing trailing ones walks lanes. Both must give the same bits.
+#[test]
+fn rows_and_lanes_agree() {
+    // [8, 16, 300]: one task. [6, 40, 400]: reducing `a` splits along `b` (threads).
+    // [2, 10, 9000]: reducing `b` splits along `c` (the first kept dimension is too short).
+    for shape in [[8usize, 16, 300], [6, 40, 400], [2, 10, 9000]] {
+        rows_and_lanes_agree_for(shape);
+    }
+}
+
+fn rows_and_lanes_agree_for(shape: [usize; 3]) {
+    let [_, nb, nc] = shape;
+    let mut data = ArrayD::from_shape_fn(IxDyn(&shape), |ix| {
+        let k = (ix[0] * nb + ix[1]) * nc + ix[2];
+        if k % 13 == 0 || (ix[1] == 3 && ix[2] < 5) {
+            NAN
+        } else {
+            ((k * 7919) % 1000) as f64 / 7.0 - 50.0
+        }
+    });
+    // Every value of one column missing, to cover all-NaN results.
+    for i in 0..shape[0] {
+        for j in 0..nb {
+            data[[i, j, nc - 1]] = NAN;
+        }
+    }
+    let f32data = data.mapv(|v| v as f32);
+    let ops = [
+        Reduction::Sum,
+        Reduction::Mean,
+        Reduction::Var,
+        Reduction::Std,
+        Reduction::Min,
+        Reduction::Max,
+    ];
+    let dims = ["a", "b", "c"];
+    for (typed, label) in [
+        (TypedArray::F64(data.clone()), "f64"),
+        (TypedArray::F32(f32data), "f32"),
+    ] {
+        let v = Variable::from_typed(dims, typed).unwrap();
+        for reduce in [vec!["a"], vec!["b"], vec!["a", "b"], vec!["a", "c"]] {
+            let rest: Vec<&str> = dims
+                .iter()
+                .copied()
+                .filter(|d| !reduce.contains(d))
+                .collect();
+            let order: Vec<&str> = rest.iter().chain(&reduce).copied().collect();
+            let t = v.transpose(&order).unwrap();
+            for op in ops {
+                for skipna in [true, false] {
+                    for ddof in [0, 1] {
+                        let mut opts = ReduceOptions::default().skipna(skipna).ddof(ddof);
+                        if op == Reduction::Sum && ddof == 1 {
+                            opts = opts.min_count(5);
+                        }
+                        let names: Vec<Name> = reduce.iter().map(|d| Name::from(*d)).collect();
+                        let rows = v.reduce(op, names.clone(), &opts).unwrap();
+                        let lanes = t.reduce(op, names, &opts).unwrap();
+                        let (r, l) = match (rows.typed().unwrap(), lanes.typed().unwrap()) {
+                            (TypedArray::F64(r), TypedArray::F64(l)) => {
+                                (r.mapv(f64::to_bits), l.mapv(f64::to_bits))
+                            }
+                            (TypedArray::F32(r), TypedArray::F32(l)) => (
+                                r.mapv(|x| u64::from(x.to_bits())),
+                                l.mapv(|x| u64::from(x.to_bits())),
+                            ),
+                            other => panic!("{other:?}"),
+                        };
+                        assert_eq!(
+                            r, l,
+                            "{shape:?} {label} {op:?} over {reduce:?} skipna={skipna} ddof={ddof}"
+                        );
+                    }
+                }
+            }
+        }
+    }
 }

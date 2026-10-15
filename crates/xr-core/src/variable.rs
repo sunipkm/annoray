@@ -680,6 +680,21 @@ impl<S: Repr> fmt::Debug for VariableBase<S> {
     }
 }
 
+impl Variable {
+    /// The variable with dimension `from` called `to` (the data untouched).
+    pub(crate) fn rename_dim(mut self, from: &str, to: &Name) -> Result<Self> {
+        if from != to.as_str() && self.dims.iter().any(|d| d == to) {
+            return Err(CoreError::DuplicateDim(to.clone()));
+        }
+        for d in &mut self.dims {
+            if d.as_str() == from {
+                *d = to.clone();
+            }
+        }
+        Ok(self)
+    }
+}
+
 fn permuted_as<T: crate::Element, S: Repr>(
     a: &TypedArray<S>,
     order: &[usize],

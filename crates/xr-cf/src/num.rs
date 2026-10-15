@@ -77,13 +77,40 @@ pub(crate) fn to_f64(a: &TypedArray<Owned>) -> Option<ArrayD<f64>> {
     })
 }
 
-/// `f64` data as a float array of type `to` (`F32` or `F64`).
-#[allow(clippy::cast_possible_truncation)] // f64 → f32 rounding is the intended conversion
-pub(crate) fn f64_to_float(a: ArrayD<f64>, to: DType) -> TypedArray<Owned> {
-    if to == DType::F32 {
-        TypedArray::F32(a.mapv(|v| v as f32))
-    } else {
-        TypedArray::F64(a)
+/// Elements above which [`map_f64`] runs on several threads.
+#[cfg(feature = "rayon")]
+const PAR_ELEMENTS: usize = 1 << 16;
+
+/// Every element as `f64`, mapped through `f`, in one pass (no `f64` copy first); on several
+/// threads for large arrays with the `rayon` feature. `None` for non-numeric data.
+#[allow(clippy::cast_precision_loss)] // 64-bit integers are promoted to f64 deliberately
+pub(crate) fn map_f64<O: Copy + Send + Sync>(
+    a: &TypedArray<Owned>,
+    f: impl Fn(f64) -> O + Sync + Send,
+) -> Option<ArrayD<O>> {
+    macro_rules! go {
+        ($x:expr, $conv:expr) => {{
+            let zip = ndarray::Zip::from($x);
+            let g = |v: &_| f($conv(*v));
+            #[cfg(feature = "rayon")]
+            if $x.len() > PAR_ELEMENTS {
+                return Some(zip.par_map_collect(g));
+            }
+            Some(zip.map_collect(g))
+        }};
+    }
+    match a {
+        TypedArray::F32(x) => go!(x, f64::from),
+        TypedArray::F64(x) => go!(x, |v: f64| v),
+        TypedArray::I8(x) => go!(x, f64::from),
+        TypedArray::I16(x) => go!(x, f64::from),
+        TypedArray::I32(x) => go!(x, f64::from),
+        TypedArray::I64(x) => go!(x, |v: i64| v as f64),
+        TypedArray::U8(x) => go!(x, f64::from),
+        TypedArray::U16(x) => go!(x, f64::from),
+        TypedArray::U32(x) => go!(x, f64::from),
+        TypedArray::U64(x) => go!(x, |v: u64| v as f64),
+        _ => None,
     }
 }
 

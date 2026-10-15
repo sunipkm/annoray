@@ -5,6 +5,12 @@
 
 from __future__ import annotations
 
+import os
+
+# scipy (imported by xarray.tutorial) starts OpenBLAS threads that spin idle and take cores
+# from both libraries; one is enough here.
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+
 import sys
 import time
 import warnings
@@ -24,6 +30,17 @@ def path(name):
 def setup(case):
     if case == "anomaly":
         a = ra.open_dataset(path("air_temperature")).load().air
+        clim = a.groupby("time.month").mean()
+        return lambda: a.groupby("time.month") - clim
+    if case in ("anomaly_big", "arith_big"):
+        x = xr.tutorial.open_dataset("air_temperature").load().air
+        x = xr.concat([x] * 16, "time")
+        x = x.assign_coords(
+            time=np.arange(x.sizes["time"]) * np.timedelta64(6, "h") + np.datetime64("1900-01-01")
+        )
+        a = ra.from_xarray(x)
+        if case == "arith_big":
+            return lambda: a * 2.0 + a
         clim = a.groupby("time.month").mean()
         return lambda: a.groupby("time.month") - clim
     if case == "resample_ys":

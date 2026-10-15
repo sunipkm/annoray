@@ -39,6 +39,20 @@ fn invalid(reason: impl Into<String>) -> CoreError {
     CoreError::InvalidReduction(reason.into())
 }
 
+/// Equal-shaped arrays of one element type stacked along a new leading axis (one copy).
+fn stack_as<T: crate::Element>(
+    parts: &[crate::TypedArray<crate::View<'_>>],
+    _: crate::array::Marker<T>,
+) -> Option<crate::TypedArray<crate::Owned>> {
+    let views = parts
+        .iter()
+        .map(|p| T::peek(p).map(|a| a.view().insert_axis(ndarray::Axis(0))))
+        .collect::<Option<Vec<_>>>()?;
+    ndarray::concatenate(ndarray::Axis(0), &views)
+        .ok()
+        .map(T::wrap)
+}
+
 fn to_isize(v: &[usize]) -> Result<Vec<isize>> {
     v.iter()
         .map(|i| isize::try_from(*i).map_err(|_| CoreError::ArithmeticOverflow("groupby")))
@@ -274,6 +288,11 @@ pub(crate) trait GroupOut: Sized {
     fn has_dim(&self, dim: &Name) -> bool;
     fn len_along(&self, dim: &Name) -> usize;
     fn concat_along(parts: &[Self], dim: &Name) -> Result<Self>;
+    /// Stack results of the same shape along a new leading dimension `dim`. By default a
+    /// concatenation; data arrays copy the values once, without concatenation's checks.
+    fn stack_new(parts: &[Self], dim: &Name) -> Result<Self> {
+        Self::concat_along(parts, dim)
+    }
     fn take_along(&self, dim: &Name, idx: &[usize]) -> Result<Self>;
     fn set_coord(self, name: &Name, v: Variable) -> Result<Self>;
     fn has_var(&self, name: &Name) -> bool;
@@ -297,6 +316,57 @@ impl GroupOut for DataArray {
     fn concat_along(parts: &[Self], dim: &Name) -> Result<Self> {
         let refs: Vec<&Self> = parts.iter().collect();
         concat(&refs, dim, &ConcatOptions::default())
+    }
+    fn stack_new(parts: &[Self], dim: &Name) -> Result<Self> {
+        let Some(first) = parts.first() else {
+            return Err(invalid("no groups"));
+        };
+        let same = parts.iter().all(|p| {
+            p.dims() == first.dims()
+                && p.shape() == first.shape()
+                && p.dtype() == first.dtype()
+                && p.unit() == first.unit()
+                && !p.dims().contains(dim)
+                && p.coords().len() == first.coords().len()
+                && p.coords().iter().all(|(k, c)| {
+                    first
+                        .coords()
+                        .get(k)
+                        .is_some_and(|f| crate::variables_equal(c, f))
+                })
+        });
+        if !same {
+            return Self::concat_along(parts, dim);
+        }
+        let views = parts
+            .iter()
+            .map(|p| p.variable().typed())
+            .collect::<Result<Vec<_>>>()?;
+        let Some(head) = views.first() else {
+            return Err(invalid("no groups"));
+        };
+        let Some(data) =
+            crate::array::typed_dispatch!(head, x => stack_as(&views, crate::array::marker(x)))
+        else {
+            return Self::concat_along(parts, dim);
+        };
+        let dims: Vec<Name> = std::iter::once(dim.clone())
+            .chain(first.dims().iter().cloned())
+            .collect();
+        let mut var = Variable::from_typed(dims, data)?;
+        var.set_unit(first.unit().cloned());
+        var.attrs_mut()
+            .extend(first.attrs().iter().map(|(k, a)| (k.clone(), a.clone())));
+        let coords = first
+            .coords()
+            .iter()
+            .map(|(k, c)| (k.clone(), c.to_owned()))
+            .collect();
+        Ok(DataArrayBase::from_parts(
+            first.name().cloned(),
+            var,
+            coords,
+        ))
     }
     fn take_along(&self, dim: &Name, idx: &[usize]) -> Result<Self> {
         self.take(dim, &to_isize(idx)?)
@@ -367,7 +437,7 @@ fn stacked<O: GroupOut>(g: &Grouper, parts: Vec<O>, kept: &[usize]) -> Result<O>
     if parts.is_empty() {
         return Err(invalid("no groups"));
     }
-    let out = O::concat_along(&parts, &g.name)?;
+    let out = O::stack_new(&parts, &g.name)?;
     let labels = g.labels.take(&g.name, &to_isize(kept)?)?;
     let out = out.set_coord(&g.name, labels)?;
     if kept.len() == g.groups.len() {
@@ -410,18 +480,34 @@ fn nonempty(g: &Grouper) -> impl Iterator<Item = (usize, &Vec<usize>)> {
         .filter(|(_, idx)| !idx.is_empty())
 }
 
-fn reduce_groups<O: GroupOut>(
-    g: &Grouper,
-    get: impl Fn(&[usize]) -> Result<O>,
-    op: Reduction,
-    opts: &ReduceOptions,
-) -> Result<O> {
+/// The range `start..end` if `idx` is one (ascending, without gaps).
+fn contiguous(idx: &[usize]) -> Option<(usize, usize)> {
+    let first = *idx.first()?;
+    let ok = idx
+        .iter()
+        .enumerate()
+        .all(|(k, i)| first.checked_add(k) == Some(*i));
+    ok.then(|| (first, first.saturating_add(idx.len())))
+}
+
+/// `dim = start..end` as a positional slice.
+fn range_indexer(dim: &Name, (start, end): (usize, usize)) -> Result<[(Name, crate::Indexer); 1]> {
+    let s = isize::try_from(start).map_err(|_| CoreError::ArithmeticOverflow("groupby"))?;
+    let e = isize::try_from(end).map_err(|_| CoreError::ArithmeticOverflow("groupby"))?;
+    Ok([(
+        dim.clone(),
+        crate::Indexer::Slice(crate::PySlice::new(Some(s), Some(e), None)),
+    )])
+}
+
+/// Reduce every group (`one` reduces the group at the given positions).
+fn reduce_groups<O: GroupOut>(g: &Grouper, one: impl Fn(&[usize]) -> Result<O>) -> Result<O> {
     let mut parts = Vec::new();
     let mut kept = Vec::new();
     for (i, idx) in g.groups.iter().enumerate() {
         // An empty group reduces like any empty array (a sum of 0, a count of 0, a NaN
         // mean); where that is undefined (the minimum of nothing) it becomes NaN.
-        match get(idx)?.reduce_along(op, &g.dim, opts) {
+        match one(idx) {
             Ok(r) => {
                 parts.push(r);
                 kept.push(i);
@@ -612,7 +698,16 @@ impl<'a, S: Repr> DataArrayGroupBy<'a, S> {
     }
 
     fn reduce_impl(&self, op: Reduction, opts: &ReduceOptions) -> Result<DataArray> {
-        self.finish(reduce_groups(&self.g, |idx| self.get(idx), op, opts)?)
+        let dim = &self.g.dim;
+        let out = reduce_groups(&self.g, |idx| match contiguous(idx) {
+            // Runs (all of resample's groups): reduce a view, copying nothing.
+            Some(r) => self
+                .obj
+                .isel(range_indexer(dim, r)?)?
+                .reduce(op, vec![dim.clone()], opts),
+            None => self.get(idx)?.reduce_along(op, dim, opts),
+        })?;
+        self.finish(out)
     }
 
     /// The group dimension where the grouped one was, as xarray does for data arrays
@@ -657,6 +752,65 @@ impl<'a, S: Repr> DataArrayGroupBy<'a, S> {
     /// [`CoreError::NoSuchDim`] if `other` lacks the group dimension;
     /// [`CoreError::LabelNotFound`] if a group label is missing from it; arithmetic errors.
     pub fn binary<R: Repr>(
+        &self,
+        op: BinOp,
+        other: &DataArrayBase<R>,
+        policy: UnitPolicy,
+    ) -> Result<DataArray> {
+        // `other` expanded along the grouped dimension (each position gets its group's entry)
+        // with one take, then one elementwise operation: no per-group copies or reassembly.
+        let name = &self.g.name;
+        let dim = &self.g.dim;
+        let coord = other.coord(name)?.to_owned();
+        let theirs: HashMap<Key, usize> = label_keys(&coord, name, &vec![false; coord.len()])?
+            .into_iter()
+            .enumerate()
+            .filter_map(|(i, k)| k.map(|k| (k, i)))
+            .collect();
+        let ours = label_keys(&self.g.labels, name, &vec![false; self.g.labels.len()])?;
+        let n = self.obj.len_of(dim)?;
+        let mut pos: Vec<Option<usize>> = vec![None; n];
+        for (gi, idx) in self.g.groups.iter().enumerate() {
+            if idx.is_empty() {
+                continue;
+            }
+            let j = ours
+                .get(gi)
+                .and_then(Option::as_ref)
+                .and_then(|k| theirs.get(k))
+                .ok_or_else(|| CoreError::LabelNotFound {
+                    dim: name.clone(),
+                    label: format!("group {gi}"),
+                })?;
+            for i in idx {
+                if let Some(p) = pos.get_mut(*i) {
+                    *p = Some(*j);
+                }
+            }
+        }
+        let Some(pos) = pos.into_iter().collect::<Option<Vec<usize>>>() else {
+            // Positions outside every group (missing labels): group by group.
+            return self.binary_by_groups(op, other, policy);
+        };
+        let var = other
+            .variable()
+            .take(name, &to_isize(&pos)?)?
+            .rename_dim(name, dim)?;
+        let mut rhs = DataArray::new(var);
+        for (k, c) in other.coords() {
+            if !c.dims().contains(name) {
+                rhs = rhs.with_coord(k.clone(), c.to_owned())?;
+            }
+        }
+        let mut out = self.obj.binary(op, &rhs, policy)?;
+        // The grouping variable as a coordinate, as xarray adds it.
+        if !out.coords().contains_key(name) {
+            out = out.with_coord(name.clone(), self.g.key.clone())?;
+        }
+        Ok(out)
+    }
+
+    fn binary_by_groups<R: Repr>(
         &self,
         op: BinOp,
         other: &DataArrayBase<R>,
@@ -745,7 +899,12 @@ impl<'a, S: Repr> DatasetGroupBy<'a, S> {
                 }
             }
         }
-        let mut out = reduce_groups(&self.g, |idx| sub.take(dim, &to_isize(idx)?), op, opts)?;
+        let mut out = reduce_groups(&self.g, |idx| match contiguous(idx) {
+            Some(r) => sub
+                .isel(range_indexer(dim, r)?)?
+                .reduce(op, vec![dim.clone()], opts),
+            None => sub.take(dim, &to_isize(idx)?)?.reduce_along(op, dim, opts),
+        })?;
         for (k, v) in kept {
             out.add_var(k, v)?;
         }

@@ -23,7 +23,7 @@ xr-hdf5.workspace = true
 default = ["rayon", "zstd", "lz4"]
 # Decompress HDF5/netCDF-4 chunks, and compute rolling windows, reductions and arithmetic,
 # in parallel.
-rayon = ["xr-hdf5/rayon", "xr-core/rayon"]
+rayon = ["xr-hdf5/rayon", "xr-core/rayon", "xr-cf/rayon"]
 # Read Zstandard- and LZ4-compressed HDF5/netCDF-4 chunks (pure Rust). LZF is always read.
 zstd = ["xr-hdf5/zstd"]
 lz4 = ["xr-hdf5/lz4"]
