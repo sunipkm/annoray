@@ -10,7 +10,7 @@ authors = [{ name = "Sunip K. Mukherjee", email = "sunipkmukherjee@gmail.com" }]
 requires-python = ">=3.11"
 license = "MIT OR Apache-2.0"
 license-files = ["LICENSE-MIT", "LICENSE-APACHE"]
-dependencies = ["numpy>=1.26"]
+dependencies = ["numpy>=1.26", "matplotlib>=3.8"]
 dynamic = ["version"]
 keywords = ["xarray", "netcdf", "hdf5", "units", "labelled arrays", "climate", "cf-conventions"]
 classifiers = [

@@ -2,7 +2,7 @@
 
 **Annotated arrays**: the [xarray](https://xarray.dev) data model with first-class physical
 units, implemented in Rust (PyO3). I/O uses pure-Rust netCDF-3, netCDF-4 and HDF5 backends;
-the only runtime dependency is NumPy.
+the runtime dependencies are NumPy and matplotlib.
 
 - **Labelled indexing and alignment:** `isel`, `sel` (exact, nearest, pad, backfill),
   name-based broadcasting, `groupby`, `resample`, `rolling`, `interp`, `concat`, `merge`,
@@ -15,6 +15,11 @@ the only runtime dependency is NumPy.
 - **Dimension annotations:** `Quantity[Velocity]` / `DataArray[Velocity]` type hints,
   enforced at call time by `@checked`; derived dimensions are declared as `Dim` subclasses.
 - **Zero-copy NumPy interop:** `.values` exposes the Rust buffer as a read-only array.
+- **matplotlib plotting:** `da.plot()` dispatching on rank, `line`, `step`,
+  `hist`, `scatter`, `pcolormesh`, `imshow` (incl. RGB), `contour`, `contourf`, `surface`;
+  `ds.plot.scatter`/`quiver`/`streamplot`; `row`/`col` faceting via `FacetGrid` with a shared
+  colour scale. Semantics follow `xarray.plot` (CF-derived labels, robust/divergent colormap
+  heuristics, discrete levels, interval inference); labels carry the array's unit.
 
 > Pre-1.0: the API is unstable.
 

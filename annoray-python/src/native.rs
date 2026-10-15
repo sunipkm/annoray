@@ -946,6 +946,16 @@ impl PyDataArray {
         })
     }
 
+    /// Plotting with matplotlib: `da.plot()` by rank, or `da.plot.pcolormesh(...)` etc.
+    /// (`annoray.plot`).
+    #[getter]
+    fn plot<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        slf.py()
+            .import("annoray.plot")?
+            .getattr("DataArrayPlotAccessor")?
+            .call1((slf,))
+    }
+
     /// Date and time components: `da.dt.year`, `da.dt.dayofyear`, ….
     #[getter]
     fn dt(slf: &Bound<'_, Self>) -> PyDt {
@@ -1058,6 +1068,16 @@ impl PyDataset {
     }
 
     /// Data variables, as data arrays.
+    /// Plots of variables against each other: `ds.plot.scatter(x=..., y=...)`, `quiver`,
+    /// `streamplot` (`annoray.plot`).
+    #[getter]
+    fn plot<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        slf.py()
+            .import("annoray.plot")?
+            .getattr("DatasetPlotAccessor")?
+            .call1((slf,))
+    }
+
     #[getter]
     fn data_vars<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let d = PyDict::new(py);
