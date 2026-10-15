@@ -5,7 +5,8 @@
 //! reduced together with [`reduce`](crate::DataArrayBase::reduce), so every reduction, NaN
 //! handling and unit rule of `reduce` applies. Coordinates along a coarsened dimension are
 //! reduced with the options' coordinate reduction (the mean, as xarray's `coord_func`);
-//! non-numeric ones take each window's first label. Lazy data is read.
+//! non-numeric ones take each window's first label. Lazy data is read when reducing, slab by
+//! slab within the streaming budget.
 
 use indexmap::IndexMap;
 use ndarray::IxDyn;
@@ -84,12 +85,28 @@ impl CoarsenOptions {
     }
 }
 
-/// A data array cut into windows, ready to reduce: from [`DataArrayBase::coarsen`].
+/// A data array to reduce in windows: from [`DataArrayBase::coarsen`]. Lazy data stays lazy
+/// until a reduction, which reads it slab by slab within the streaming budget.
 #[derive(Debug, Clone)]
 pub struct Coarsen {
+    /// Trimmed or padded to whole windows (lazily, for lazy data).
+    source: DataArray,
+    sizes: Vec<(Name, usize)>,
+    opts: CoarsenOptions,
+    order: Vec<Name>,
+}
+
+/// Data and coordinates cut into windows.
+#[derive(Debug, Clone)]
+struct Cut {
     data: DataArray,
+    /// Each coarsened dimension and its window dimension.
+    windows: Vec<(Name, Name)>,
     window_dims: Vec<Name>,
+    /// Coordinates along coarsened dimensions, reduced to one value per window.
     coords: IndexMap<Name, Variable>,
+    /// The same coordinates cut into windows (for `construct`).
+    split_coords: IndexMap<Name, Variable>,
     order: Vec<Name>,
 }
 
@@ -217,53 +234,179 @@ impl<S: Repr> DataArrayBase<S> {
     /// the window.
     pub fn coarsen(&self, windows: &[(&str, usize)], opts: &CoarsenOptions) -> Result<Coarsen> {
         let order: Vec<Name> = self.coords().keys().cloned().collect();
+        // Fit every dimension first (data and coordinates together), then cut each into
+        // windows, so coordinates along several coarsened dimensions are cut along all.
         let mut da = self.to_owned();
-        let mut window_dims = Vec::new();
-        let mut coords: IndexMap<Name, Variable> = IndexMap::new();
+        let mut pairs: Vec<(Name, Name)> = Vec::new();
         for (dim, w) in windows {
             let dim = Name::from(*dim);
             if *w == 0 {
                 return Err(invalid("a window of 0"));
             }
-            if window_dims.contains(&window_name(&dim)) {
+            if pairs.iter().any(|(d, _)| *d == dim) {
                 return Err(invalid(format!("coarsen: {dim:?} given twice")));
             }
             da = fit(&da, &dim, *w, opts)?;
-            let window = window_name(&dim);
-            let var = split(da.variable(), &dim, *w, &window)?;
-            let mut kept = IndexMap::new();
-            for (k, c) in da.coords() {
-                if !c.dims().contains(&dim) {
-                    kept.insert(k.clone(), c.clone());
-                    continue;
-                }
-                let blocks = split(c, &dim, *w, &window)?;
-                let reduced = if numeric(c.dtype()) {
-                    blocks.reduce(opts.coord_reduction, &window, &ReduceOptions::default())?
-                } else {
-                    blocks.isel([(window.as_str(), 0isize)])?.to_owned()
-                };
-                coords.insert(k.clone(), reduced);
-            }
-            da = DataArrayBase::from_parts(da.name().cloned(), var, kept);
-            window_dims.push(window);
+            pairs.push((dim.clone(), window_name(&dim)));
         }
         Ok(Coarsen {
-            data: da,
-            window_dims,
-            coords,
+            source: da,
+            sizes: pairs
+                .iter()
+                .zip(windows)
+                .map(|((d, _), (_, w))| (d.clone(), *w))
+                .collect(),
+            opts: *opts,
             order,
         })
     }
 }
 
+/// `da` (already whole windows long) cut along `sizes`.
+fn cut(
+    da: &DataArray,
+    sizes: &[(Name, usize)],
+    opts: &CoarsenOptions,
+    order: &[Name],
+) -> Result<Cut> {
+    let pairs: Vec<(Name, Name)> = sizes
+        .iter()
+        .map(|(d, _)| (d.clone(), window_name(d)))
+        .collect();
+    let order = order.to_vec();
+    let mut var = da.variable().to_owned();
+    let mut kept = IndexMap::new();
+    let mut split_coords: IndexMap<Name, Variable> = IndexMap::new();
+    for (k, c) in da.coords() {
+        if pairs.iter().any(|(d, _)| c.dims().contains(d)) {
+            split_coords.insert(k.clone(), c.clone());
+        } else {
+            kept.insert(k.clone(), c.clone());
+        }
+    }
+    for ((dim, window), (_, w)) in pairs.iter().zip(sizes) {
+        var = split(&var, dim, *w, window)?;
+        for c in split_coords.values_mut() {
+            if c.dims().contains(dim) {
+                *c = split(c, dim, *w, window)?;
+            }
+        }
+    }
+    let mut coords = IndexMap::new();
+    for (k, c) in &split_coords {
+        let own: Vec<Name> = pairs
+            .iter()
+            .map(|(_, wd)| wd.clone())
+            .filter(|wd| c.dims().contains(wd))
+            .collect();
+        let reduced = if numeric(c.dtype()) {
+            c.reduce(opts.coord_reduction, own, &ReduceOptions::default())?
+        } else {
+            c.isel(own.iter().map(|wd| (wd.as_str(), 0isize)))?
+                .to_owned()
+        };
+        coords.insert(k.clone(), reduced);
+    }
+    Ok(Cut {
+        data: DataArrayBase::from_parts(da.name().cloned(), var, kept),
+        window_dims: pairs.iter().map(|(_, w)| w.clone()).collect(),
+        windows: pairs,
+        coords,
+        split_coords,
+        order,
+    })
+}
+
 impl Coarsen {
+    /// The dimension to read lazy data in slabs along, and the slab-length multiple: a
+    /// dimension not coarsened if there is one, else the first coarsened one (whole windows).
+    fn slab_dim(&self) -> (Name, usize) {
+        let coarsened = |d: &Name| self.sizes.iter().any(|(c, _)| c == d);
+        match self.source.dims().iter().find(|d| !coarsened(d)) {
+            Some(d) => (d.clone(), 1),
+            None => self
+                .sizes
+                .first()
+                .map_or((Name::from(""), 1), |(d, w)| (d.clone(), *w)),
+        }
+    }
+
+    /// The windows as dimensions instead of reducing them: each coarsened dimension `dim`
+    /// becomes `(outer, inner)` (blocks, position in the block), coordinates included, as
+    /// xarray's `coarsen(...).construct(dim=(outer, inner))`.
+    ///
+    /// # Errors
+    /// [`CoreError::InvalidReduction`] unless every coarsened dimension is named exactly
+    /// once; [`CoreError::DuplicateDim`] for names already in use.
+    pub fn construct(&self, names: &[(&str, &str, &str)]) -> Result<DataArray> {
+        cut(&self.source, &self.sizes, &self.opts, &self.order)?.construct(names)
+    }
+
     /// Reduce every window with `op` (NaN handling, `ddof` and units as for
-    /// [`reduce`](DataArrayBase::reduce)).
+    /// [`reduce`](DataArrayBase::reduce)). Lazy data is read in slabs of whole windows.
     ///
     /// # Errors
     /// As for [`reduce`](DataArrayBase::reduce).
     pub fn reduce(&self, op: Reduction, opts: &ReduceOptions) -> Result<DataArray> {
+        let (dim, multiple) = self.slab_dim();
+        crate::slabs::by_slabs(&self.source, &dim, multiple, |s| {
+            cut(s, &self.sizes, &self.opts, &self.order)?.reduce(op, opts)
+        })
+    }
+}
+
+impl Cut {
+    /// The windows as dimensions instead of reducing them: each coarsened dimension `dim`
+    /// becomes `(outer, inner)` (blocks, position in the block), coordinates included, as
+    /// xarray's `coarsen(...).construct(dim=(outer, inner))`.
+    ///
+    /// # Errors
+    /// [`CoreError::InvalidReduction`] unless every coarsened dimension is named exactly
+    /// once; [`CoreError::DuplicateDim`] for names already in use.
+    fn construct(&self, names: &[(&str, &str, &str)]) -> Result<DataArray> {
+        for (dim, _) in &self.windows {
+            let n = names.iter().filter(|(d, _, _)| *d == dim.as_str()).count();
+            if n != 1 {
+                return Err(invalid(format!(
+                    "construct: give (outer, inner) names for {dim:?} exactly once"
+                )));
+            }
+        }
+        if let Some((d, _, _)) = names
+            .iter()
+            .find(|(d, _, _)| !self.windows.iter().any(|(w, _)| w.as_str() == *d))
+        {
+            return Err(invalid(format!("construct: {d:?} is not coarsened")));
+        }
+        let rename = |mut v: Variable| -> Result<Variable> {
+            for (dim, outer, inner) in names {
+                let window = window_name(&Name::from(*dim));
+                if v.dims().iter().any(|d| d.as_str() == *dim) {
+                    v = v.rename_dim(dim, &Name::from(*outer))?;
+                }
+                if v.dims().contains(&window) {
+                    v = v.rename_dim(window.as_str(), &Name::from(*inner))?;
+                }
+            }
+            Ok(v)
+        };
+        let var = rename(self.data.variable().to_owned())?;
+        let mut coords: IndexMap<Name, Variable> = IndexMap::new();
+        for k in &self.order {
+            if let Some(c) = self.data.coords().get(k) {
+                coords.insert(k.clone(), c.clone());
+            } else if let Some(c) = self.split_coords.get(k) {
+                coords.insert(k.clone(), rename(c.clone())?);
+            }
+        }
+        Ok(DataArrayBase::from_parts(
+            self.data.name().cloned(),
+            var,
+            coords,
+        ))
+    }
+
+    fn reduce(&self, op: Reduction, opts: &ReduceOptions) -> Result<DataArray> {
         let out = self.data.reduce(op, self.window_dims.clone(), opts)?;
         let mut coords: IndexMap<Name, Variable> = out.coords().clone();
         coords.extend(self.coords.iter().map(|(k, c)| (k.clone(), c.clone())));
@@ -305,6 +448,9 @@ shortcuts!(
     max Max "Maximum of each window, skipping NaNs.",
     count Count "Number of non-NaN values in each window.",
 );
+
+/// `(dimension, outer, inner)` names for [`Coarsen::construct`].
+type Construct<'a> = (&'a str, &'a str, &'a str);
 
 /// A dataset cut into windows: from [`DatasetBase::coarsen`].
 #[derive(Debug, Clone)]
@@ -396,6 +542,71 @@ impl DatasetCoarsen {
                 coords.insert(k.clone(), reduced.variable().to_owned());
             } else {
                 coords.insert(k.clone(), c.clone());
+            }
+        }
+        for (k, c) in coords {
+            out.add_coord(k, c)?;
+        }
+        for (k, v) in vars {
+            out.add_var(k, v)?;
+        }
+        *out.attrs_mut() = self.ds.attrs().clone();
+        Ok(out)
+    }
+
+    /// The windows as dimensions for every variable; see [`Coarsen::construct`].
+    ///
+    /// # Errors
+    /// As for [`Coarsen::construct`].
+    pub fn construct(&self, names: &[(&str, &str, &str)]) -> Result<Dataset> {
+        let mut out = Dataset::new();
+        let mut coords: IndexMap<Name, Variable> = IndexMap::new();
+        let mut vars = Vec::new();
+        let own = |dims: &[Name]| -> (Vec<(&str, usize)>, Vec<Construct<'_>>) {
+            let w: Vec<(&str, usize)> = self
+                .windows
+                .iter()
+                .filter(|(d, _)| dims.contains(d))
+                .map(|(d, w)| (d.as_str(), *w))
+                .collect();
+            let n = names
+                .iter()
+                .filter(|(d, _, _)| w.iter().any(|(x, _)| x == d))
+                .copied()
+                .collect();
+            (w, n)
+        };
+        for (d, _) in &self.windows {
+            if !names.iter().any(|(n, _, _)| *n == d.as_str()) {
+                return Err(invalid(format!(
+                    "construct: give (outer, inner) names for {d:?}"
+                )));
+            }
+        }
+        for k in self.ds.data_vars().keys() {
+            let da = self.ds.get(k)?;
+            let (w, n) = own(da.dims());
+            if w.is_empty() {
+                vars.push((k.clone(), da.variable().to_owned()));
+                continue;
+            }
+            let r = da.coarsen(&w, &self.opts)?.construct(&n)?;
+            for (ck, c) in r.coords() {
+                coords.entry(ck.clone()).or_insert_with(|| c.clone());
+            }
+            vars.push((k.clone(), r.variable().to_owned()));
+        }
+        for (k, c) in self.ds.coords() {
+            if coords.contains_key(k) {
+                continue;
+            }
+            let (w, n) = own(c.dims());
+            if w.is_empty() {
+                coords.insert(k.clone(), c.clone());
+            } else {
+                let da = DataArrayBase::from_parts(None, c.clone(), IndexMap::new());
+                let r = da.coarsen(&w, &self.opts)?.construct(&n)?;
+                coords.insert(k.clone(), r.variable().to_owned());
             }
         }
         for (k, c) in coords {

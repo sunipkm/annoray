@@ -10,8 +10,12 @@
 //! - **Weighted** sums, means, variances and standard deviations: weights broadcast by
 //!   dimension name, must not be NaN, and count only where the data is not NaN. Units follow
 //!   the arithmetic: a weighted sum has the unit of data × weights, a mean that of the data.
+//!   Weighted quantiles use xarray's algorithm (Kish's effective sample size, linear
+//!   interpolation; zero weights ignored).
 //!
-//! These read lazy data (weighted reductions stream where the plain ones do).
+//! Lazy data: quantiles and `idxmin`/`idxmax` read it in slabs along a kept dimension within
+//! the streaming budget (a quantile over every dimension needs all values at once and reads
+//! it whole); weighted reductions stay lazy and stream like the plain reductions.
 
 use ndarray::{Array2, ArrayD, IxDyn};
 
@@ -166,12 +170,30 @@ impl<S: Repr> DataArrayBase<S> {
         method: QuantileMethod,
         skipna: bool,
     ) -> Result<DataArray> {
+        let reduced = all_dims(self.dims(), dims.reduce_dims())?;
+        // Lazy data: slabs along a kept dimension (over all dimensions, it is read whole).
+        match self.dims().iter().find(|d| !reduced.contains(d)) {
+            Some(kept) => crate::slabs::by_slabs(self, kept, 1, |s| {
+                s.quantile_eager(qs, scalar_q, &reduced, method, skipna)
+            }),
+            None => self.quantile_eager(qs, scalar_q, &reduced, method, skipna),
+        }
+    }
+
+    fn quantile_eager(
+        &self,
+        qs: &[f64],
+        scalar_q: bool,
+        reduced: &[Name],
+        method: QuantileMethod,
+        skipna: bool,
+    ) -> Result<DataArray> {
+        let reduced = reduced.to_vec();
         if qs.iter().any(|q| !(0.0..=1.0).contains(q)) || (scalar_q && qs.len() != 1) {
             return Err(CoreError::InvalidReduction(
                 "quantiles must be in [0, 1] (exactly one for a scalar quantile)".into(),
             ));
         }
-        let reduced = all_dims(self.dims(), dims.reduce_dims())?;
         let r = rows(self.variable(), &reduced)?;
         let mut out = Vec::with_capacity(qs.len().saturating_mul(r.values.nrows()));
         let mut per_row: Vec<Vec<f64>> = Vec::with_capacity(r.values.nrows());
@@ -224,6 +246,13 @@ impl<S: Repr> DataArrayBase<S> {
     }
 
     fn idx_extreme(&self, dim: &str, skipna: bool, max: bool) -> Result<DataArray> {
+        match self.dims().iter().find(|d| d.as_str() != dim) {
+            Some(kept) => crate::slabs::by_slabs(self, kept, 1, |s| s.idx_eager(dim, skipna, max)),
+            None => self.idx_eager(dim, skipna, max),
+        }
+    }
+
+    fn idx_eager(&self, dim: &str, skipna: bool, max: bool) -> Result<DataArray> {
         let name = Name::from(dim);
         let coord = self
             .coords()
@@ -282,19 +311,29 @@ impl<S: Repr> DataArrayBase<S> {
     /// # Errors
     /// [`CoreError::InvalidReduction`] if the weights contain NaN.
     pub fn weighted<R: Repr>(&self, weights: &DataArrayBase<R>) -> Result<Weighted> {
-        let any_nan = weights
-            .isnull()?
-            .reduce(Reduction::Any, .., &ReduceOptions::default())?;
-        if any_nan.to_f64()?.iter().any(|v| *v != 0.0) {
-            return Err(CoreError::InvalidReduction(
-                "weights cannot contain missing values".into(),
-            ));
-        }
+        check_weights(weights)?;
         Ok(Weighted {
             data: self.to_owned(),
             weights: weights.to_owned(),
         })
     }
+}
+
+/// Weights must not be NaN (as xarray).
+fn check_weights<R: Repr>(weights: &DataArrayBase<R>) -> Result<()> {
+    // The minimum of the validity mask (streamed for lazy weights): below 1 means a NaN.
+    let valid = DataArrayBase::from_parts(
+        None,
+        weights.variable().valid_f64()?,
+        indexmap::IndexMap::new(),
+    );
+    let lowest = valid.reduce(Reduction::Min, .., &ReduceOptions::default())?;
+    if lowest.to_f64()?.iter().any(|v| *v < 1.0) {
+        return Err(CoreError::InvalidReduction(
+            "weights cannot contain missing values".into(),
+        ));
+    }
+    Ok(())
 }
 
 /// Weighted reductions of a data array: from [`DataArrayBase::weighted`].
@@ -330,11 +369,10 @@ impl Weighted {
 
     fn weight_total(&self, dims: &[Name]) -> Result<DataArray> {
         // 1 where the data is valid, 0 where it is NaN: weights × mask broadcasts by name.
-        let notnull = self.data.notnull()?;
         let mask = DataArrayBase::from_parts(
             None,
-            Variable::new(notnull.dims().to_vec(), notnull.to_f64()?)?,
-            notnull.coords().clone(),
+            self.data.variable().valid_f64()?,
+            self.data.coords().clone(),
         );
         let valid = self.weights.try_mul(&mask)?;
         let total = self.sum_of(&valid, dims)?;
@@ -404,6 +442,281 @@ impl Weighted {
                 .map(|(k, c)| (k.clone(), c.clone()))
                 .collect(),
         ))
+    }
+}
+
+/// xarray's weighted quantile of one lane (adapted there from Akinshin's reference
+/// implementation): zero weights dropped, Kish's effective sample size
+/// `n = (Σw)² / Σw²`, Hyndman–Fan type 7 (linear) positions `h = (n − 1) q + 1`.
+#[allow(clippy::cast_precision_loss)]
+fn weighted_quantile_1d(data: &[f64], weights: &[f64], qs: &[f64], skipna: bool) -> Vec<f64> {
+    let nan = || vec![f64::NAN; qs.len()];
+    if !skipna && data.iter().any(|x| x.is_nan()) {
+        return nan();
+    }
+    let mut pairs: Vec<(f64, f64)> = data
+        .iter()
+        .zip(weights)
+        .filter(|(x, w)| !x.is_nan() && **w != 0.0)
+        .map(|(x, w)| (*x, *w))
+        .collect();
+    if pairs.is_empty() {
+        return nan();
+    }
+    let total: f64 = pairs.iter().map(|(_, w)| w).sum();
+    let squares: f64 = pairs.iter().map(|(_, w)| w * w).sum();
+    let nw = total * total / squares;
+    pairs.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let mut cum = Vec::with_capacity(pairs.len().saturating_add(1));
+    cum.push(0.0);
+    let mut acc = 0.0;
+    for (_, w) in &pairs {
+        acc += w / total;
+        cum.push(acc);
+    }
+    qs.iter()
+        .map(|q| {
+            let h = ((nw - 1.0) * q + 1.0).clamp(1.0, nw);
+            let (lo, hi) = ((h - 1.0) / nw, h / nw);
+            let v: Vec<f64> = cum
+                .iter()
+                .map(|c| (lo.max(hi.min(*c))) * nw - h + 1.0)
+                .collect();
+            pairs
+                .iter()
+                .zip(v.windows(2))
+                .map(|((x, _), d)| {
+                    x * (d.get(1).copied().unwrap_or(0.0) - d.first().copied().unwrap_or(0.0))
+                })
+                .sum()
+        })
+        .collect()
+}
+
+/// `a` broadcast against `b` by dimension name: `a × ones(b)` (units of `a` kept).
+fn broadcast_against(a: &DataArray, b: &DataArray) -> Result<DataArray> {
+    let ones = Variable::new(
+        b.dims().to_vec(),
+        ArrayD::from_elem(IxDyn(b.variable().shape()), 1.0),
+    )?;
+    let ones = DataArrayBase::from_parts(
+        None,
+        ones,
+        b.coords()
+            .iter()
+            .filter(|(_, c)| c.dims().iter().all(|d| b.dims().contains(d)))
+            .map(|(k, c)| (k.clone(), c.clone()))
+            .collect(),
+    );
+    a.try_mul(&ones)
+}
+
+impl Weighted {
+    /// Weighted quantiles over `dims` (xarray's algorithm: Kish's effective sample size and
+    /// linear interpolation; zero weights ignored). `scalar_q` as for
+    /// [`DataArrayBase::quantile`].
+    ///
+    /// # Errors
+    /// As for [`DataArrayBase::quantile`].
+    pub fn quantile(
+        &self,
+        qs: &[f64],
+        scalar_q: bool,
+        dims: impl ReduceDims,
+        skipna: bool,
+    ) -> Result<DataArray> {
+        if qs.iter().any(|q| !(0.0..=1.0).contains(q)) || (scalar_q && qs.len() != 1) {
+            return Err(CoreError::InvalidReduction(
+                "quantiles must be in [0, 1] (exactly one for a scalar quantile)".into(),
+            ));
+        }
+        let reduced = self.dims(dims)?;
+        // Data and weights on the same (union) dimensions, in the same order.
+        let data = broadcast_against(&self.data, &self.weights)?;
+        let order: Vec<&str> = data.dims().iter().map(Name::as_str).collect();
+        let weights = broadcast_against(&self.weights, &self.data)?.transpose(&order)?;
+        let rd = rows(data.variable(), &reduced)?;
+        let rw = rows(weights.variable(), &reduced)?;
+        let per_row: Vec<Vec<f64>> = rd
+            .values
+            .rows()
+            .into_iter()
+            .zip(rw.values.rows())
+            .map(|(d, w)| {
+                let (d, w): (Vec<f64>, Vec<f64>) = (d.to_vec(), w.to_vec());
+                weighted_quantile_1d(&d, &w, qs, skipna)
+            })
+            .collect();
+        let mut out = Vec::with_capacity(qs.len().saturating_mul(per_row.len()));
+        for i in 0..qs.len() {
+            out.extend(
+                per_row
+                    .iter()
+                    .map(|r| r.get(i).copied().unwrap_or(f64::NAN)),
+            );
+        }
+        let (dims, shape): (Vec<Name>, Vec<usize>) = if scalar_q {
+            (rd.kept.clone(), rd.shape.clone())
+        } else {
+            (
+                std::iter::once(Name::from("quantile"))
+                    .chain(rd.kept.iter().cloned())
+                    .collect(),
+                std::iter::once(qs.len())
+                    .chain(rd.shape.iter().copied())
+                    .collect(),
+            )
+        };
+        let mut var = Variable::new(dims, shaped(&shape, out)?)?;
+        var.set_unit(self.data.unit().cloned());
+        let mut coords = indexmap::IndexMap::new();
+        coords.insert(Name::from("quantile"), quantile_coord(qs, scalar_q)?);
+        coords.extend(kept_coords(&data, &reduced));
+        Ok(DataArrayBase::from_parts(
+            self.data.name().cloned(),
+            var,
+            coords,
+        ))
+    }
+}
+
+/// Weighted reductions of every numeric data variable: from [`DatasetBase::weighted`].
+#[derive(Debug, Clone)]
+pub struct DatasetWeighted {
+    ds: Dataset,
+    weights: DataArray,
+}
+
+impl<S: Repr> DatasetBase<S> {
+    /// Reductions of every numeric data variable weighted by `weights`.
+    ///
+    /// # Errors
+    /// As for [`DataArrayBase::weighted`].
+    pub fn weighted<R: Repr>(&self, weights: &DataArrayBase<R>) -> Result<DatasetWeighted> {
+        check_weights(weights)?;
+        Ok(DatasetWeighted {
+            ds: self.to_owned(),
+            weights: weights.to_owned(),
+        })
+    }
+}
+
+impl DatasetWeighted {
+    fn each(&self, f: impl Fn(&Weighted) -> Result<DataArray>) -> Result<Dataset> {
+        let mut out = Dataset::new();
+        let mut coords: indexmap::IndexMap<Name, Variable> = indexmap::IndexMap::new();
+        let mut vars = Vec::new();
+        for k in self.ds.data_vars().keys() {
+            let da = self.ds.get(k)?.to_owned();
+            if matches!(
+                da.variable().dtype(),
+                crate::DType::Str
+                    | crate::DType::Bool
+                    | crate::DType::DateTime
+                    | crate::DType::CfDate
+            ) {
+                continue;
+            }
+            let w = Weighted {
+                data: da,
+                weights: self.weights.clone(),
+            };
+            let r = f(&w)?;
+            for (ck, c) in r.coords() {
+                coords.entry(ck.clone()).or_insert_with(|| c.clone());
+            }
+            vars.push((k.clone(), r.variable().to_owned()));
+        }
+        for (k, c) in coords {
+            out.add_coord(k, c)?;
+        }
+        for (k, v) in vars {
+            out.add_var(k, v)?;
+        }
+        *out.attrs_mut() = self.ds.attrs().clone();
+        Ok(out)
+    }
+
+    fn names(dims: impl ReduceDims) -> Option<Vec<Name>> {
+        dims.reduce_dims()
+    }
+
+    /// [`Weighted::sum_of_weights`] of every variable.
+    ///
+    /// # Errors
+    /// As for [`Weighted::sum_of_weights`].
+    pub fn sum_of_weights(&self, dims: impl ReduceDims) -> Result<Dataset> {
+        let d = Self::names(dims);
+        self.each(|w| match &d {
+            Some(d) => w.sum_of_weights(d.clone()),
+            None => w.sum_of_weights(..),
+        })
+    }
+
+    /// [`Weighted::sum`] of every variable.
+    ///
+    /// # Errors
+    /// As for [`Weighted::sum`].
+    pub fn sum(&self, dims: impl ReduceDims) -> Result<Dataset> {
+        let d = Self::names(dims);
+        self.each(|w| match &d {
+            Some(d) => w.sum(d.clone()),
+            None => w.sum(..),
+        })
+    }
+
+    /// [`Weighted::mean`] of every variable.
+    ///
+    /// # Errors
+    /// As for [`Weighted::mean`].
+    pub fn mean(&self, dims: impl ReduceDims) -> Result<Dataset> {
+        let d = Self::names(dims);
+        self.each(|w| match &d {
+            Some(d) => w.mean(d.clone()),
+            None => w.mean(..),
+        })
+    }
+
+    /// [`Weighted::var`] of every variable.
+    ///
+    /// # Errors
+    /// As for [`Weighted::var`].
+    pub fn var(&self, dims: impl ReduceDims) -> Result<Dataset> {
+        let d = Self::names(dims);
+        self.each(|w| match &d {
+            Some(d) => w.var(d.clone()),
+            None => w.var(..),
+        })
+    }
+
+    /// [`Weighted::std`] of every variable.
+    ///
+    /// # Errors
+    /// As for [`Weighted::std`].
+    pub fn std(&self, dims: impl ReduceDims) -> Result<Dataset> {
+        let d = Self::names(dims);
+        self.each(|w| match &d {
+            Some(d) => w.std(d.clone()),
+            None => w.std(..),
+        })
+    }
+
+    /// [`Weighted::quantile`] of every variable.
+    ///
+    /// # Errors
+    /// As for [`Weighted::quantile`].
+    pub fn quantile(
+        &self,
+        qs: &[f64],
+        scalar_q: bool,
+        dims: impl ReduceDims,
+        skipna: bool,
+    ) -> Result<Dataset> {
+        let d = Self::names(dims);
+        self.each(|w| match &d {
+            Some(d) => w.quantile(qs, scalar_q, d.clone(), skipna),
+            None => w.quantile(qs, scalar_q, .., skipna),
+        })
     }
 }
 

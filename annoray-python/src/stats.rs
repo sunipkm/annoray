@@ -1,8 +1,8 @@
 //! `quantile`, `idxmin`/`idxmax`, `weighted` and `coarsen` for data arrays and datasets.
 
 use annoray::{
-    Boundary, Coarsen, CoarsenOptions, DataArray, Dataset, DatasetCoarsen, Name, QuantileMethod,
-    ReduceOptions, Reduction, Side, Weighted,
+    Boundary, Coarsen, CoarsenOptions, DataArray, Dataset, DatasetCoarsen, DatasetWeighted,
+    QuantileMethod, ReduceOptions, Reduction, Side, Weighted,
 };
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
@@ -126,7 +126,9 @@ impl PyDataArray {
     /// Weighted reductions: `da.weighted(w).mean("lat")`.
     fn weighted(&self, weights: &Bound<'_, PyDataArray>) -> PyResult<PyWeighted> {
         Ok(PyWeighted {
-            inner: self.inner.weighted(&weights.get().inner).py_err()?,
+            inner: Weights::Da(Box::new(
+                self.inner.weighted(&weights.get().inner).py_err()?,
+            )),
         })
     }
 
@@ -183,6 +185,15 @@ impl PyDataset {
         new_ds(py, py.detach(|| self.inner.idxmax(dim, skipna)).py_err()?)
     }
 
+    /// Weighted reductions of every numeric variable: `ds.weighted(w).mean("lat")`.
+    fn weighted(&self, weights: &Bound<'_, PyDataArray>) -> PyResult<PyWeighted> {
+        Ok(PyWeighted {
+            inner: Weights::Ds(Box::new(
+                self.inner.weighted(&weights.get().inner).py_err()?,
+            )),
+        })
+    }
+
     /// Block reductions of every variable: `ds.coarsen(time=4).mean()`.
     #[pyo3(signature = (dim=None, boundary="exact", side="left", coord_func="mean", **kwargs))]
     fn coarsen(
@@ -202,17 +213,15 @@ impl PyDataset {
     }
 }
 
-/// Weighted reductions: from `DataArray.weighted`.
-#[pyclass(frozen, name = "Weighted", module = "annoray")]
-pub(crate) struct PyWeighted {
-    inner: Weighted,
+enum Weights {
+    Da(Box<Weighted>),
+    Ds(Box<DatasetWeighted>),
 }
 
-fn with_dims(
-    dim: Option<&Bound<'_, PyAny>>,
-    f: impl FnOnce(Option<Vec<Name>>) -> annoray::Result<DataArray>,
-) -> PyResult<DataArray> {
-    f(reduce_dims(dim)?).py_err()
+/// Weighted reductions: from `DataArray.weighted` / `Dataset.weighted`.
+#[pyclass(frozen, name = "Weighted", module = "annoray")]
+pub(crate) struct PyWeighted {
+    inner: Weights,
 }
 
 macro_rules! weighted_ops {
@@ -221,12 +230,24 @@ macro_rules! weighted_ops {
         impl PyWeighted {$(
             #[doc = $doc]
             #[pyo3(signature = (dim=None))]
-            fn $m(&self, py: Python<'_>, dim: Option<&Bound<'_, PyAny>>) -> PyResult<Py<PyDataArray>> {
-                let out = with_dims(dim, |d| match d {
-                    Some(d) => self.inner.$m(d),
-                    None => self.inner.$m(..),
-                })?;
-                new_da(py, out)
+            fn $m(&self, py: Python<'_>, dim: Option<&Bound<'_, PyAny>>) -> PyResult<Py<PyAny>> {
+                let dims = reduce_dims(dim)?;
+                match &self.inner {
+                    Weights::Da(w) => {
+                        let out = py.detach(|| match dims {
+                            Some(d) => w.$m(d),
+                            None => w.$m(..),
+                        });
+                        Ok(new_da(py, out.py_err()?)?.into_any())
+                    }
+                    Weights::Ds(w) => {
+                        let out = py.detach(|| match dims {
+                            Some(d) => w.$m(d),
+                            None => w.$m(..),
+                        });
+                        Ok(new_ds(py, out.py_err()?)?.into_any())
+                    }
+                }
             }
         )*}
     };
@@ -239,6 +260,38 @@ weighted_ops!(
     var "The weighted variance (no degrees-of-freedom correction).",
     std "The weighted standard deviation."
 );
+
+#[pymethods]
+impl PyWeighted {
+    /// Weighted quantiles (xarray's algorithm: Kish's effective sample size, linear).
+    #[pyo3(signature = (q, *, dim=None, skipna=true))]
+    fn quantile(
+        &self,
+        py: Python<'_>,
+        q: &Bound<'_, PyAny>,
+        dim: Option<&Bound<'_, PyAny>>,
+        skipna: bool,
+    ) -> PyResult<Py<PyAny>> {
+        let (qs, scalar) = probabilities(q)?;
+        let dims = reduce_dims(dim)?;
+        match &self.inner {
+            Weights::Da(w) => {
+                let out = py.detach(|| match dims {
+                    Some(d) => w.quantile(&qs, scalar, d, skipna),
+                    None => w.quantile(&qs, scalar, .., skipna),
+                });
+                Ok(new_da(py, out.py_err()?)?.into_any())
+            }
+            Weights::Ds(w) => {
+                let out = py.detach(|| match dims {
+                    Some(d) => w.quantile(&qs, scalar, d, skipna),
+                    None => w.quantile(&qs, scalar, .., skipna),
+                });
+                Ok(new_ds(py, out.py_err()?)?.into_any())
+            }
+        }
+    }
+}
 
 enum Blocks {
     Da(Box<Coarsen>),
@@ -263,6 +316,34 @@ impl PyCoarsen {
                 let out: Dataset = py.detach(|| c.reduce(op, &opts)).py_err()?;
                 Ok(new_ds(py, out)?.into_any())
             }
+        }
+    }
+}
+
+#[pymethods]
+impl PyCoarsen {
+    /// The windows as dimensions: `da.coarsen(x=2).construct(x=("x_coarse", "x_fine"))`.
+    #[pyo3(signature = (window_dim=None, **kwargs))]
+    fn construct(
+        &self,
+        py: Python<'_>,
+        window_dim: Option<&Bound<'_, PyAny>>,
+        kwargs: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<Py<PyAny>> {
+        let names: Vec<(String, String, String)> = merge_kwargs(window_dim, kwargs)?
+            .into_iter()
+            .map(|(d, pair)| {
+                let (outer, inner): (String, String) = pair.extract()?;
+                Ok((d, outer, inner))
+            })
+            .collect::<PyResult<_>>()?;
+        let refs: Vec<(&str, &str, &str)> = names
+            .iter()
+            .map(|(d, o, i)| (d.as_str(), o.as_str(), i.as_str()))
+            .collect();
+        match &self.inner {
+            Blocks::Da(c) => Ok(new_da(py, py.detach(|| c.construct(&refs)).py_err()?)?.into_any()),
+            Blocks::Ds(c) => Ok(new_ds(py, py.detach(|| c.construct(&refs)).py_err()?)?.into_any()),
         }
     }
 }

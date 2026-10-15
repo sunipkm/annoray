@@ -72,6 +72,7 @@ mod reshape;
 pub use resample::date_range;
 mod rolling;
 mod select;
+mod slabs;
 mod stats;
 mod tree;
 mod typed;
@@ -102,7 +103,7 @@ pub use ops::{BinOp, variables_equal};
 pub use reduce::{ReduceDims, ReduceOptions, Reduction, set_stream_bytes, stream_bytes};
 pub use repr::{Owned, Repr, ReprMut, View, ViewMut};
 pub use rolling::{DataArrayRolling, DatasetRolling, RollingOptions};
-pub use stats::{QuantileMethod, Weighted};
+pub use stats::{DatasetWeighted, QuantileMethod, Weighted};
 pub use tree::DataTree;
 pub use variable::{Variable, VariableBase, VariableView, VariableViewMut};
 

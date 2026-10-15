@@ -99,3 +99,75 @@ fn coarsen_blocks() {
         [3.0, 4.0, 8.0, 5.0]
     );
 }
+
+#[test]
+fn lazy_data_streams_in_slabs() {
+    let path =
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../fixtures/nc/xr_nc4.nc");
+    let open = || annoray::io::open_dataset(&path).unwrap();
+    let ds = open();
+    let name = ds
+        .data_vars()
+        .iter()
+        .find(|(_, v)| v.is_lazy() && v.ndim() >= 2 && v.dtype().to_string().starts_with("float"))
+        .map(|(k, _)| k.clone())
+        .unwrap();
+    let lazy = ds.get(&name).unwrap().to_owned();
+    // A separate, loaded copy (loading a clone would fill the cache the clones share).
+    let mut all = open();
+    all.load().unwrap();
+    let eager = all.get(&name).unwrap().to_owned();
+    let (d0, d1) = (lazy.dims()[0].to_string(), lazy.dims()[1].to_string());
+    let same = |a: &DataArray, b: &DataArray| {
+        let (x, y) = (vals(a), vals(b));
+        assert_eq!(x.len(), y.len());
+        for (p, q) in x.iter().zip(&y) {
+            assert!((p.is_nan() && q.is_nan()) || (p - q).abs() <= 1e-12 * q.abs().max(1.0));
+        }
+    };
+    // One row per slab: forces the slab path.
+    let before = annoray::stream_bytes();
+    annoray::set_stream_bytes(1);
+    let q = |d: &DataArray| {
+        d.quantile(
+            &[0.25, 0.5],
+            false,
+            d1.as_str(),
+            QuantileMethod::Linear,
+            true,
+        )
+        .unwrap()
+    };
+    same(&q(&lazy), &q(&eager));
+    same(
+        &lazy.idxmax(&d1, true).unwrap(),
+        &eager.idxmax(&d1, true).unwrap(),
+    );
+    let n1 = lazy.variable().len_of(&d1).unwrap();
+    let w = if n1 % 2 == 0 { 2 } else { 1 };
+    let c = |d: &DataArray| {
+        d.coarsen(&[(d1.as_str(), w)], &CoarsenOptions::default())
+            .unwrap()
+            .mean()
+            .unwrap()
+    };
+    same(&c(&lazy), &c(&eager));
+    let n0 = lazy.variable().len_of(&d0).unwrap();
+    let c0 = |d: &DataArray| {
+        let opts = CoarsenOptions::default().boundary(Boundary::Trim);
+        d.coarsen(&[(d0.as_str(), 2.min(n0)), (d1.as_str(), w)], &opts)
+            .unwrap()
+            .max()
+            .unwrap()
+    };
+    same(&c0(&lazy), &c0(&eager));
+    let weights =
+        DataArray::from_array([d1.as_str()], ArrayD::from_elem(IxDyn(&[n1]), 2.0)).unwrap();
+    let wm = |d: &DataArray| d.weighted(&weights).unwrap().mean(d1.as_str()).unwrap();
+    same(&wm(&lazy), &wm(&eager));
+    annoray::set_stream_bytes(before);
+    assert!(
+        lazy.variable().is_lazy(),
+        "the lazy source was loaded whole"
+    );
+}

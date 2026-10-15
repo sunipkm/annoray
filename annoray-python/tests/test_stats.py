@@ -134,3 +134,50 @@ def test_coarsen_exact_and_datasets():
     same(ds.coarsen(x=2).mean()["v"], xd.coarsen(x=2).mean()["v"])
     same(ds.quantile(0.5, "x")["v"], xd.quantile(0.5, "x")["v"])
     same(ds.idxmax("x")["v"], xd.idxmax("x")["v"])
+
+
+@pytest.mark.parametrize("q", [0.5, [0.0, 0.1, 0.5, 0.9, 1.0]])
+@pytest.mark.parametrize("dim", ["y", "x", None])
+def test_weighted_quantile(q, dim):
+    values = RNG.standard_normal((4, 6))
+    values[0, 1] = NAN
+    a, x = pair(values)
+    w = xr.DataArray([1.0, 2.0, 0.5, 0.0], dims="y", coords={"y": x.y})
+    got = a.weighted(ar.from_xarray(w)).quantile(q, dim=dim)
+    want = x.weighted(w).quantile(q, dim=dim)
+    np.testing.assert_allclose(
+        np.asarray(got.values), np.asarray(want.values), rtol=1e-12, equal_nan=True
+    )
+    assert tuple(got.dims) == tuple(want.dims)
+
+
+@pytest.mark.parametrize("op", ["sum", "mean", "std", "sum_of_weights"])
+def test_dataset_weighted(op):
+    a, x = pair()
+    w = xr.DataArray([1.0, 2.0, 0.5, 3.0], dims="y", coords={"y": x.y})
+    got = getattr(a.to_dataset().weighted(ar.from_xarray(w)), op)("y")
+    want = getattr(x.to_dataset().weighted(w), op)("y")
+    np.testing.assert_allclose(got["v"].values, want["v"].values, rtol=1e-12)
+
+
+def test_coarsen_construct():
+    a, x = pair()
+    got = a.coarsen(x=2).construct(x=("x_coarse", "x_fine"))
+    want = x.coarsen(x=2).construct(x=("x_coarse", "x_fine"))
+    same(got, want)
+    ds, xd = a.to_dataset(), x.to_dataset()
+    g = ds.coarsen(x=3, y=2).construct(x=("xc", "xf"), y=("yc", "yf"))
+    w = xd.coarsen(x=3, y=2).construct(x=("xc", "xf"), y=("yc", "yf"))
+    same(g["v"], w["v"])
+    with pytest.raises(ValueError, match="construct"):
+        a.coarsen(x=2).construct(y=("a", "b"))
+
+
+def test_coarsen_two_dimensional_coordinate():
+    # A coordinate along both coarsened dimensions is cut and reduced along both.
+    a, x = pair()
+    x = x.assign_coords(lat=(("y", "x"), np.arange(24.0).reshape(4, 6)))
+    a = ar.from_xarray(x)
+    got = a.coarsen(x=2, y=2).mean()
+    want = x.coarsen(x=2, y=2).mean()
+    np.testing.assert_allclose(got.coords["lat"].values, want.coords["lat"].values)

@@ -101,6 +101,23 @@ impl<S: Repr> VariableBase<S> {
         like(self, data)
     }
 
+    /// 1.0 where the value is present, 0.0 where it is missing, as `f64` (lazy data stays
+    /// lazy); dimensionless.
+    pub(crate) fn valid_f64(&self) -> Result<Variable> {
+        let mask = |t: &TypedArray<View<'_>>| null_mask(t).mapv(|m| if m { 0.0 } else { 1.0 });
+        let mut v = if self.is_lazy() {
+            self.lazy_map("valid", move |t| Ok(TypedArray::F64(mask(&t.view()))))?
+        } else {
+            Variable::from_typed(
+                self.dims().iter().cloned(),
+                TypedArray::F64(mask(&self.typed()?)),
+            )?
+        };
+        v.set_unit(None);
+        v.attrs_mut().clear();
+        Ok(v)
+    }
+
     /// `f` applied lazily, box by box (unit and attributes kept).
     fn lazy_map(
         &self,
