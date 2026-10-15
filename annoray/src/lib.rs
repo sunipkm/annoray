@@ -67,6 +67,7 @@ mod ops;
 mod reduce;
 mod repr;
 pub mod resample;
+mod reshape;
 pub use resample::date_range;
 mod rolling;
 mod select;

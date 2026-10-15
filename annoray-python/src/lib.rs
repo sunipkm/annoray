@@ -12,6 +12,7 @@ mod alloc;
 mod convert;
 mod native;
 mod raw;
+mod reshape;
 mod tree;
 mod units;
 

@@ -101,7 +101,7 @@ fn variable_from_py(
 
 /// A variable given as `(dims, data[, attrs])`, a `DataArray`, or bare data (for a coordinate
 /// named like its dimension).
-fn spec_from_py(py: Python<'_>, name: &str, v: &Bound<'_, PyAny>) -> PyResult<Variable> {
+pub(crate) fn spec_from_py(py: Python<'_>, name: &str, v: &Bound<'_, PyAny>) -> PyResult<Variable> {
     if let Ok(da) = v.cast::<PyDataArray>() {
         return Ok(da.get().inner.variable().to_owned());
     }
@@ -130,7 +130,9 @@ fn spec_from_py(py: Python<'_>, name: &str, v: &Bound<'_, PyAny>) -> PyResult<Va
     variable_from_py(py, Some(&dims), v, None, None)
 }
 
-fn dict_iter<'py>(d: Option<&Bound<'py, PyAny>>) -> PyResult<Vec<(String, Bound<'py, PyAny>)>> {
+pub(crate) fn dict_iter<'py>(
+    d: Option<&Bound<'py, PyAny>>,
+) -> PyResult<Vec<(String, Bound<'py, PyAny>)>> {
     match d {
         None => Ok(Vec::new()),
         Some(d) if d.is_none() => Ok(Vec::new()),
@@ -204,11 +206,11 @@ fn sizes_dict<'py>(
     Ok(d)
 }
 
-fn new_da(py: Python<'_>, inner: DataArray) -> PyResult<Py<PyDataArray>> {
+pub(crate) fn new_da(py: Python<'_>, inner: DataArray) -> PyResult<Py<PyDataArray>> {
     Py::new(py, PyDataArray { inner })
 }
 
-fn new_ds(py: Python<'_>, inner: Dataset) -> PyResult<Py<PyDataset>> {
+pub(crate) fn new_ds(py: Python<'_>, inner: Dataset) -> PyResult<Py<PyDataset>> {
     Py::new(py, PyDataset { inner })
 }
 
@@ -218,9 +220,9 @@ pub(crate) fn new_dataset(py: Python<'_>, inner: Dataset) -> PyResult<Py<PyDatas
 
 // ----- selection -----
 
-type IselArgs<'py> = Vec<(String, Bound<'py, PyAny>)>;
+pub(crate) type IselArgs<'py> = Vec<(String, Bound<'py, PyAny>)>;
 
-fn merge_kwargs<'py>(
+pub(crate) fn merge_kwargs<'py>(
     indexers: Option<&Bound<'py, PyAny>>,
     kwargs: Option<&Bound<'py, PyDict>>,
 ) -> PyResult<IselArgs<'py>> {

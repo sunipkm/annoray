@@ -371,6 +371,50 @@ impl LazySource for MapSource {
     }
 }
 
+/// A source with a new length-1 axis at `axis` (`expand_dims` of lazy data).
+#[derive(Debug)]
+pub(crate) struct InsertAxisSource {
+    src: Arc<dyn LazySource>,
+    axis: usize,
+    shape: Vec<usize>,
+}
+
+impl InsertAxisSource {
+    pub(crate) fn new(src: Arc<dyn LazySource>, axis: usize) -> Self {
+        let mut shape = src.shape().to_vec();
+        shape.insert(axis.min(shape.len()), 1);
+        Self { src, axis, shape }
+    }
+}
+
+impl LazySource for InsertAxisSource {
+    fn dtype(&self) -> DType {
+        self.src.dtype()
+    }
+    fn shape(&self) -> &[usize] {
+        &self.shape
+    }
+    fn chunking(&self, axis: usize) -> Option<(usize, usize)> {
+        match axis.cmp(&self.axis) {
+            std::cmp::Ordering::Less => self.src.chunking(axis),
+            std::cmp::Ordering::Equal => None,
+            std::cmp::Ordering::Greater => self.src.chunking(axis.checked_sub(1)?),
+        }
+    }
+    fn read_slice(&self, start: &[usize], count: &[usize]) -> Result<TypedArray<Owned>> {
+        let (mut s, mut c) = (start.to_vec(), count.to_vec());
+        if self.axis >= s.len() || self.axis >= c.len() {
+            return Err(overflow());
+        }
+        s.remove(self.axis);
+        let n = c.remove(self.axis);
+        if n == 0 {
+            return TypedArray::empty(self.dtype(), count).ok_or_else(overflow);
+        }
+        Ok(self.src.read_slice(&s, &c)?.insert_axis_owned(self.axis))
+    }
+}
+
 /// Positions `indices` of `src` along `axis` (fancy indexing), read for whichever box is
 /// asked: runs of consecutive positions are read as slices, so only the selected data is
 /// read (or, for many scattered positions, the box covering them).
