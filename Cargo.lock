@@ -670,6 +670,7 @@ name = "rarray"
 version = "0.0.1"
 dependencies = [
  "chrono",
+ "libc",
  "ndarray",
  "numpy",
  "pyo3",

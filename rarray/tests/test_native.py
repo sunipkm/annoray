@@ -439,3 +439,61 @@ def test_threads_share_objects():
         out = list(pool.map(lambda i: r.isel(time=i % 6).mean().values, range(200)))
     expect = [float(x.isel(time=i % 6).mean()) for i in range(200)]
     np.testing.assert_allclose(out, expect)
+
+
+# ----- disk to disk -----
+
+
+@pytest.fixture
+def big_file(tmp_path):
+    rng = np.random.default_rng(3)
+    data = rng.normal(size=(40, 30, 20))
+    data[5, 3, :] = np.nan
+    x = xr.Dataset(
+        {"v": (("t", "y", "x"), data, {"units": "K"})},
+        coords={"t": np.arange(40.0), "y": np.arange(30.0), "x": np.arange(20.0)},
+    )
+    path = tmp_path / "big.nc"
+    x.to_netcdf(path, encoding={"v": {"zlib": True, "chunksizes": (5, 30, 20)}})
+    return path, x
+
+
+def test_lazy_arithmetic_streams_and_matches(big_file, tmp_path):
+    path, x = big_file
+    ds = ra.open_dataset(path)
+    expr = (ds.v * 2.0 + ds.v.isel(t=0)).to("degC")
+    assert expr.is_lazy, "nothing computed until read or written"
+    xr.testing.assert_allclose(
+        expr.to_xarray().drop_attrs(), ((x.v * 2.0 + x.v.isel(t=0)) - 273.15).drop_attrs()
+    )
+    ra.Dataset({"w": expr}).to_netcdf(tmp_path / "w.nc")
+    back = xr.open_dataset(tmp_path / "w.nc")
+    np.testing.assert_allclose(back.w, (x.v * 2.0 + x.v.isel(t=0)) - 273.15)
+
+
+@pytest.mark.parametrize("op", ["mean", "sum", "std", "var", "min", "max"])
+@pytest.mark.parametrize("dim", ["t", "y", ["t", "x"], None])
+def test_streamed_reductions_match(big_file, op, dim):
+    path, x = big_file
+    old = ra.stream_bytes()
+    ra.set_stream_bytes(8 * 30 * 20 * 3)  # three time steps at a time
+    try:
+        ds = ra.open_dataset(path)
+        assert ds.v.is_lazy
+        check(getattr(ds.v, op)(dim), getattr(x.v, op)(dim))
+    finally:
+        ra.set_stream_bytes(old)
+    assert ra.stream_bytes() == old
+
+
+def test_write_encoding(big_file, tmp_path):
+    path, x = big_file
+    ds = ra.open_dataset(path)
+    out = tmp_path / "enc.nc"
+    ds.to_netcdf(out, encoding={"v": {"zlib": True, "complevel": 7, "chunksizes": (10, 15, 20)}})
+    back = xr.open_dataset(out)
+    assert back.v.encoding["zlib"] and back.v.encoding["complevel"] == 7
+    assert back.v.encoding["chunksizes"] == (10, 15, 20)
+    xr.testing.assert_allclose(back.v, x.v)
+    with pytest.raises(KeyError):
+        ds.to_netcdf(tmp_path / "no.nc", encoding={"nope": {"zlib": True}})

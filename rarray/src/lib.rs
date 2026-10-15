@@ -4,11 +4,15 @@
 //! - [`raw`]: raw file access and writing for the xarray backend engine (`engine="rarray"`).
 //! - [`convert`]: values, labels, indexers and errors between Python and Rust.
 
+mod alloc;
 mod convert;
 mod native;
 mod raw;
 
 use pyo3::prelude::*;
+
+#[global_allocator]
+static ALLOCATOR: alloc::Allocator = alloc::Allocator;
 
 /// The Rust extension module of rarray.
 #[pymodule]
@@ -26,6 +30,8 @@ fn _rarray(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(native::merge, m)?)?;
     m.add_function(wrap_pyfunction!(native::align, m)?)?;
     m.add_function(wrap_pyfunction!(native::from_xarray, m)?)?;
+    m.add_function(wrap_pyfunction!(native::set_stream_bytes, m)?)?;
+    m.add_function(wrap_pyfunction!(native::stream_bytes, m)?)?;
     m.add("UnitError", m.py().get_type::<convert::UnitError>())?;
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     Ok(())

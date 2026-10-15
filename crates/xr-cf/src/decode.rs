@@ -599,6 +599,10 @@ impl LazySource for CfSource {
         &self.shape
     }
 
+    fn chunking(&self, axis: usize) -> Option<(usize, usize)> {
+        self.inner.chunking(axis)
+    }
+
     fn read_slice(&self, start: &[usize], count: &[usize]) -> xr_core::Result<TypedArray<Owned>> {
         let err = |e: CfError| xr_core::CoreError::Read(e.to_string());
         let (mut start, mut count) = (start.to_vec(), count.to_vec());

@@ -20,6 +20,14 @@ pub trait LazySource: Send + Sync + fmt::Debug {
     /// # Errors
     /// [`CoreError::Read`] if the underlying file cannot be read.
     fn read_slice(&self, start: &[usize], count: &[usize]) -> Result<TypedArray<Owned>>;
+
+    /// How the data is chunked on disk along `axis`, if it is: chunks are `size` long and
+    /// their boundaries fall at `offset + k * size` (`offset < size`). Readers that go
+    /// through the data in slabs end them on boundaries, so no chunk is decoded twice.
+    fn chunking(&self, axis: usize) -> Option<(usize, usize)> {
+        let _ = axis;
+        None
+    }
 }
 
 /// The selection on one axis of the source.
@@ -244,6 +252,28 @@ impl LazyArray {
 }
 
 impl LazyArray {
+    /// The source's chunking along visible `axis`, shifted by the selection (unit steps only).
+    pub(crate) fn chunking(&self, axis: usize) -> Option<(usize, usize)> {
+        let (u, sel) = self
+            .sel
+            .iter()
+            .enumerate()
+            .filter(|(_, s)| matches!(s, Sel::Range { .. }))
+            .nth(axis)?;
+        let Sel::Range { start, step: 1, .. } = *sel else {
+            return None;
+        };
+        let (size, offset) = self.source.chunking(u)?;
+        let shift = start.checked_rem(size)?;
+        Some((
+            size,
+            offset
+                .checked_add(size)?
+                .checked_sub(shift)?
+                .checked_rem(size)?,
+        ))
+    }
+
     /// Read `[start, start + count)` of the selection (not cached).
     pub(crate) fn read_slice(&self, start: &[usize], count: &[usize]) -> Result<TypedArray<Owned>> {
         let ops: Vec<Option<LazyOp>> = start
@@ -286,6 +316,178 @@ impl LazySource for ViewSource {
     }
     fn read_slice(&self, start: &[usize], count: &[usize]) -> Result<TypedArray<Owned>> {
         self.0.read_slice(start, count)
+    }
+    fn chunking(&self, axis: usize) -> Option<(usize, usize)> {
+        self.0.chunking(axis)
+    }
+}
+
+/// A function applied to whichever box of `src` is read (elementwise maps such as
+/// `isnull` or `fillna` on lazy data).
+pub(crate) struct MapSource {
+    src: Arc<dyn LazySource>,
+    dtype: DType,
+    what: &'static str,
+    f: Box<dyn Fn(TypedArray<Owned>) -> Result<TypedArray<Owned>> + Send + Sync>,
+}
+
+impl fmt::Debug for MapSource {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "MapSource({}, {:?})", self.what, self.src)
+    }
+}
+
+impl MapSource {
+    /// `f` over `src`; its element type comes from applying `f` to an empty array.
+    pub(crate) fn new(
+        src: Arc<dyn LazySource>,
+        what: &'static str,
+        f: impl Fn(TypedArray<Owned>) -> Result<TypedArray<Owned>> + Send + Sync + 'static,
+    ) -> Result<Self> {
+        let empty = TypedArray::empty(src.dtype(), &vec![0; src.shape().len().max(1)])
+            .ok_or_else(|| CoreError::Read(format!("{what}: empty probe")))?;
+        let dtype = f(empty)?.dtype();
+        Ok(Self {
+            src,
+            dtype,
+            what,
+            f: Box::new(f),
+        })
+    }
+}
+
+impl LazySource for MapSource {
+    fn dtype(&self) -> DType {
+        self.dtype
+    }
+    fn shape(&self) -> &[usize] {
+        self.src.shape()
+    }
+    fn read_slice(&self, start: &[usize], count: &[usize]) -> Result<TypedArray<Owned>> {
+        (self.f)(self.src.read_slice(start, count)?)
+    }
+    fn chunking(&self, axis: usize) -> Option<(usize, usize)> {
+        self.src.chunking(axis)
+    }
+}
+
+/// Positions `indices` of `src` along `axis` (fancy indexing), read for whichever box is
+/// asked: runs of consecutive positions are read as slices, so only the selected data is
+/// read (or, for many scattered positions, the box covering them).
+#[derive(Debug)]
+pub(crate) struct TakeSource {
+    src: Arc<dyn LazySource>,
+    axis: usize,
+    indices: Vec<usize>,
+    shape: Vec<usize>,
+}
+
+/// Above this many runs, covering reads (of several positions each) beat one read per run.
+const TAKE_MAX_RUNS: usize = 64;
+
+/// How much larger than the positions it keeps a covering read may be.
+const TAKE_SPAN: usize = 4;
+
+/// Extra rows a covering read may span regardless.
+const TAKE_SLACK: usize = 16;
+
+impl TakeSource {
+    pub(crate) fn new(src: Arc<dyn LazySource>, axis: usize, indices: Vec<usize>) -> Result<Self> {
+        let len = src.shape().get(axis).copied().ok_or_else(overflow)?;
+        if indices.iter().any(|i| *i >= len) {
+            return Err(CoreError::Read("take: position outside the data".into()));
+        }
+        let mut shape = src.shape().to_vec();
+        if let Some(n) = shape.get_mut(axis) {
+            *n = indices.len();
+        }
+        Ok(Self {
+            src,
+            axis,
+            indices,
+            shape,
+        })
+    }
+}
+
+impl LazySource for TakeSource {
+    fn dtype(&self) -> DType {
+        self.src.dtype()
+    }
+    fn shape(&self) -> &[usize] {
+        &self.shape
+    }
+    fn read_slice(&self, start: &[usize], count: &[usize]) -> Result<TypedArray<Owned>> {
+        let (lo, n) = (
+            start.get(self.axis).copied().ok_or_else(overflow)?,
+            count.get(self.axis).copied().ok_or_else(overflow)?,
+        );
+        let want = self
+            .indices
+            .get(lo..lo.checked_add(n).ok_or_else(overflow)?)
+            .ok_or_else(overflow)?;
+        let read_box = |a: usize, len: usize| {
+            let (mut s, mut c) = (start.to_vec(), count.to_vec());
+            if let (Some(x), Some(y)) = (s.get_mut(self.axis), c.get_mut(self.axis)) {
+                *x = a;
+                *y = len;
+            }
+            self.src.read_slice(&s, &c)
+        };
+        // Runs of consecutive positions.
+        let mut runs: Vec<(usize, usize)> = Vec::new();
+        for i in want {
+            match runs.last_mut() {
+                Some((a, len)) if a.checked_add(*len) == Some(*i) => *len = len.saturating_add(1),
+                _ => runs.push((*i, 1)),
+            }
+        }
+        if runs.len() <= TAKE_MAX_RUNS {
+            let pieces = runs
+                .iter()
+                .map(|(a, len)| read_box(*a, *len))
+                .collect::<Result<Vec<_>>>()?;
+            if pieces.len() == 1 {
+                return pieces.into_iter().next().ok_or_else(overflow);
+            }
+            let first = pieces.first().ok_or_else(overflow)?;
+            return crate::array::typed_dispatch!(first, x => join_as(&pieces, self.axis, crate::array::marker(x)))
+                .ok_or_else(|| CoreError::Read("take: joining runs".into()));
+        }
+        // Many scattered positions: windows of them (in order), each read as the box
+        // covering it and picked from. A window grows only while its span stays within
+        // `TAKE_SPAN` times its positions (plus slack), so reads stay near what is kept;
+        // neighbouring positions share one read (one decode of their chunk).
+        let mut pieces = Vec::new();
+        let mut w = 0usize;
+        while w < want.len() {
+            let (mut lo, mut hi) = (usize::MAX, 0usize);
+            let mut end = w;
+            for (k, i) in want.iter().enumerate().skip(w) {
+                let (nlo, nhi) = (lo.min(*i), hi.max(*i));
+                let span = nhi.saturating_sub(nlo).saturating_add(1);
+                let n = k.saturating_sub(w).saturating_add(1);
+                if k > w && span > n.saturating_mul(TAKE_SPAN).saturating_add(TAKE_SLACK) {
+                    break;
+                }
+                (lo, hi, end) = (nlo, nhi, k.saturating_add(1));
+            }
+            let covering = read_box(lo, hi.saturating_sub(lo).saturating_add(1))?;
+            let rel: Vec<usize> = want
+                .get(w..end)
+                .unwrap_or_default()
+                .iter()
+                .map(|i| i.saturating_sub(lo))
+                .collect();
+            pieces.push(covering.view().select_axis(self.axis, &rel));
+            w = end;
+        }
+        if pieces.len() == 1 {
+            return pieces.into_iter().next().ok_or_else(overflow);
+        }
+        let first = pieces.first().ok_or_else(overflow)?;
+        crate::array::typed_dispatch!(first, x => join_as(&pieces, self.axis, crate::array::marker(x)))
+            .ok_or_else(|| CoreError::Read("take: joining windows".into()))
     }
 }
 
@@ -414,6 +616,20 @@ impl LazySource for ConcatSource {
     }
     fn shape(&self) -> &[usize] {
         &self.shape
+    }
+    fn chunking(&self, axis: usize) -> Option<(usize, usize)> {
+        // Along the joined axis the parts' chunks need not line up; elsewhere they must agree.
+        if axis == self.axis {
+            return None;
+        }
+        let part_axis = if self.new_axis && axis > self.axis {
+            axis.checked_sub(1)?
+        } else {
+            axis
+        };
+        let mut grids = self.parts.iter().map(|p| p.chunking(part_axis));
+        let first = grids.next()??;
+        grids.all(|g| g == Some(first)).then_some(first)
     }
     fn read_slice(&self, start: &[usize], count: &[usize]) -> Result<TypedArray<Owned>> {
         let (lo, n) = (

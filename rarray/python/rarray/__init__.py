@@ -35,6 +35,8 @@ from rarray._rarray import (
     merge,
     open_dataset,
     open_mfdataset,
+    set_stream_bytes,
+    stream_bytes,
 )
 from rarray.backend import RarrayBackendEntrypoint
 from rarray.writer import to_netcdf as _xr_to_netcdf
@@ -55,6 +57,8 @@ __all__ = [
     "open_dataset",
     "open_datatree",
     "open_mfdataset",
+    "set_stream_bytes",
+    "stream_bytes",
     "to_netcdf",
 ]
 

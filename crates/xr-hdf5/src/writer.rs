@@ -745,13 +745,18 @@ impl Plan<'_> {
             Ok((origin, chunk))
         };
         // Filtering dominates writing: chunks are built and compressed in parallel, a batch at
-        // a time (bounded memory), then written in order.
+        // a time, then written in order. The batch holds at most the streaming budget
+        // (`xr_core::set_stream_bytes`) of chunks, and at least one.
         #[cfg(feature = "rayon")]
         let batch = if filtered {
             let chunk_bytes = chunk_elems.saturating_mul(esize).max(1);
             rayon::current_num_threads()
                 .saturating_mul(2)
-                .min((256usize << 20).checked_div(chunk_bytes).unwrap_or(1))
+                .min(
+                    xr_core::stream_bytes()
+                        .checked_div(chunk_bytes)
+                        .unwrap_or(1),
+                )
                 .max(1)
         } else {
             1

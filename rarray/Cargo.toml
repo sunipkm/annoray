@@ -21,5 +21,8 @@ numpy.workspace = true
 pyo3 = { workspace = true, features = ["multiple-pymethods"] }
 xarray-rs.workspace = true
 
+[target.'cfg(target_os = "linux")'.dependencies]
+libc.workspace = true
+
 [lints]
 workspace = true

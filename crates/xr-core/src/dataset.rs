@@ -127,6 +127,18 @@ impl Dataset {
         self
     }
 
+    /// How variable (or coordinate) `name` is to be stored on disk.
+    ///
+    /// # Errors
+    /// [`CoreError::NoSuchVariable`] if there is no such variable.
+    pub fn encoding_of_mut(&mut self, name: &str) -> Result<&mut crate::Encoding> {
+        self.data_vars
+            .get_mut(name)
+            .or_else(|| self.coords.get_mut(name))
+            .map(Variable::encoding_mut)
+            .ok_or_else(|| CoreError::NoSuchVariable(name.into()))
+    }
+
     /// Mutable access to the global attributes.
     pub fn attrs_mut(&mut self) -> &mut Attrs {
         &mut self.attrs

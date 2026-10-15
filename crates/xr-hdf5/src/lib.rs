@@ -865,7 +865,19 @@ impl Dataset {
         #[cfg(feature = "rayon")]
         if !self.filters.is_empty() && chunks.len() > 1 {
             use rayon::prelude::*;
-            let batch = rayon::current_num_threads().saturating_mul(4).max(1);
+            // Decoded chunks in flight: up to four per thread, so large reads stay within
+            // memory.
+            let threads = rayon::current_num_threads().max(1);
+            let chunk_bytes = cdims
+                .iter()
+                .try_fold(esize, |a, c| a.checked_mul(usize::try_from(*c).ok()?))
+                .unwrap_or(usize::MAX)
+                .max(1);
+            // Within the streaming budget (`xr_core::set_stream_bytes`), at least one.
+            let batch = xr_core::stream_bytes()
+                .checked_div(chunk_bytes)
+                .unwrap_or(0)
+                .clamp(1, threads.saturating_mul(4));
             for group in chunks.chunks(batch) {
                 let decoded = group
                     .par_iter()

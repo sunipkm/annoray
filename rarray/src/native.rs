@@ -1313,25 +1313,34 @@ impl PyDataset {
     }
 
     /// Write to netCDF (`format` as in xarray; netCDF-4 by default), with the GIL released.
-    #[pyo3(signature = (path, format="NETCDF4", unlimited_dims=None))]
+    /// Lazy variables (opened from files, or computed from them) are read, computed and
+    /// written chunk by chunk, so the data never has to fit in memory. `encoding` takes
+    /// xarray's per-variable settings (`zlib`, `complevel`, `shuffle`, `chunksizes`,
+    /// `compression`, `dtype`, `_FillValue`, `scale_factor`, `add_offset`, `units`,
+    /// `calendar`); settings not given keep the variable's own.
+    #[pyo3(signature = (path, format="NETCDF4", encoding=None, unlimited_dims=None))]
     fn to_netcdf(
         &self,
         py: Python<'_>,
         path: PathBuf,
         format: &str,
+        encoding: Option<&Bound<'_, PyDict>>,
         unlimited_dims: Option<Vec<String>>,
     ) -> PyResult<()> {
         let opts = WriteOptions::format(crate::raw::format_from_name(format)?);
         let write = |ds: &Dataset| py.detach(|| ds.to_netcdf_with(&path, &opts));
-        match unlimited_dims {
-            None => write(&self.inner),
-            Some(u) => {
-                let mut ds = self.inner.clone();
-                ds.encoding_mut().unlimited_dims = u.into_iter().map(Into::into).collect();
-                write(&ds)
-            }
+        if encoding.is_none() && unlimited_dims.is_none() {
+            return write(&self.inner).map_err(xr_error);
         }
-        .map_err(xr_error)
+        let mut ds = self.inner.clone();
+        if let Some(u) = unlimited_dims {
+            ds.encoding_mut().unlimited_dims = u.into_iter().map(Into::into).collect();
+        }
+        for (k, v) in dict_iter(encoding.map(|e| e.as_any()))? {
+            let enc = ds.encoding_of_mut(&k).py_err()?;
+            crate::raw::update_encoding(enc, v.cast::<PyDict>()?)?;
+        }
+        write(&ds).map_err(xr_error)
     }
 
     /// As an `xarray.Dataset` (units as `"units"` attributes).
@@ -1855,6 +1864,21 @@ pub(crate) fn open_mfdataset(
         .map_err(xr_error)?;
     warn_all(py, &out.warnings)?;
     new_ds(py, out.dataset)
+}
+
+/// Set the streaming budget (default 64 MiB): how much on-disk data reductions of lazy data
+/// (`mean`, `sum`, `std`, `var`, `min`, `max`) read at a time, and how many bytes of chunks
+/// reading and writing decode or compress at once. Memory use when streaming stays near a
+/// few times this, whatever the size of the data.
+#[pyfunction]
+pub(crate) fn set_stream_bytes(bytes: usize) {
+    xarray_rs::set_stream_bytes(bytes);
+}
+
+/// The current streaming budget, in bytes.
+#[pyfunction]
+pub(crate) fn stream_bytes() -> usize {
+    xarray_rs::stream_bytes()
 }
 
 /// Concatenate data arrays (or datasets) along a dimension.

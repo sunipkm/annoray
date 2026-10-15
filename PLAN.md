@@ -937,6 +937,95 @@ Stages:
 3. **Differential tests** from Python against xarray, porting a subset of xarray's own tests,
    with the deviation list kept in one place.
 
+4. **Disk-to-disk computation.** Pipelines (open, subset, compute, reduce, write) run on
+   data larger than memory. This is chunk-wise evaluation inside the writer and inside
+   reductions, not a general task graph. Memory is bounded by threads × chunk (or by the
+   streaming budget), never by the size of the data.
+   - **Lazy elementwise operations:** arithmetic on lazy data (`a * 2 + b`, `.to()`)
+     builds a source that, for any requested box, reads the matching boxes of its operands
+     and computes. Alignment, broadcasting and units are settled when the expression is
+     built. Writing pulls one chunk at a time, so `(ds.v * 2 + 1).to_netcdf(...)` streams.
+     `.values` or `.load()` computes the whole result.
+   - **Streaming reductions** of lazy data (sum, mean, var, std, min, max), slab by slab
+     along the first dimension within a memory budget (`set_stream_bytes`). Reducing that
+     dimension uses the row accumulators (two passes for var/std); keeping it reduces each
+     slab on its own. Results equal the in-memory reductions bit for bit. Contiguous groups
+     (resample) stream the same way.
+   - **`encoding=`** on the native `Dataset.to_netcdf`. It takes xarray's per-variable
+     settings; settings not given keep the variable's own (`Dataset::encoding_of_mut`).
+   - **Done in the second round:**
+     - **Chunk-aligned slabs.** `LazySource::chunking(axis)` reports the on-disk chunk
+       grid (size and offset). It is implemented by the HDF5 source, passed through by the
+       CF, conversion and map sources, shifted by lazy selections, and agreed across
+       concatenated parts. `plan_slabs` ends slabs on chunk boundaries.
+     - **Lazy `isnull`/`notnull`/`fillna`** (`MapSource`) **and `where`** (`TypedWhere`,
+       reading the condition's part of each box).
+     - **Lazy integer-list selection** (`TakeSource`). Runs of consecutive positions are
+       read as slices. Many scattered positions are read in windows whose span stays
+       within 4× the positions they keep, so far-apart positions don't read what lies
+       between them.
+     - **Single-pass group reductions** of lazy data (`stream_groups`): each slab is read
+       once and its rows go to their group's accumulators, in the in-memory order.
+       Reducing group by group had read every chunk once per group, which was 11× slower
+       for 12 interleaved groups. Datasets stream their float variables and reduce the
+       others group by group.
+     - **One streaming budget** (`set_stream_bytes`, default 64 MiB). It covers
+       reductions' slabs, the HDF5 reader's decode batch and the writer's compression
+       batch (with at least one chunk in flight).
+     - **No-panic fix:** `broadcast_to_dims` could panic inside ndarray's `permuted_axes`
+       when given inconsistent dimension names. It now returns `DimCountMismatch`, and
+       all 11 callers propagate it.
+     - **Measured** (ignifly, the same 800 MB variable): copying with a 16 / 64 / 256 MiB
+       budget takes 7.0 s / 3.5 s / 3.1 s with +102 / +355 / +415 MB. A groupby over 12
+       interleaved groups takes 0.89 s and +270 MB streamed, against 0.83 s and +2.5 GB
+       loaded first.
+     - **Single-pass streamed variances.** Each slab's exact two-pass moments (count,
+       mean, sum of squared deviations) are computed in memory and merged into the running
+       ones with the pairwise update of Chan, Golub and LeVeque. Data is read once instead
+       of twice. Streamed var/std agree with the in-memory (two-pass) results to rounding
+       (within 1e-12 relative for f64 in the tests); sums, means, minima and maxima stay
+       bit-identical. `std("t")` on the 800 MB variable went from 1.61 s to 0.86 s, the same
+       as `mean`.
+   - **Later:**
+     - Alignment that has to reindex a lazy operand still loads it.
+     - Median and integer reductions of lazy data still load.
+
+   **Implementation notes (done: elementwise, reductions, encoding):**
+   - **Lazy elementwise operations:** `BinarySource` and `ConvertSource` (xr-core
+     `ops.rs`).
+     - `DataArray::binary` returns a lazy result whenever an operand is lazy, once
+       alignment is a no-op. Each operand reads its part of the requested box (dimensions
+       it lacks are broadcast) and the box goes through the same `compute` as in memory.
+     - The result's dtype comes from computing on empty operands (a 0-d operand reads its
+       one value), so building an expression reads nothing.
+   - **Streaming reductions** (`reduce.rs`):
+     - `streamed` handles lazy f32/f64 data for sum, mean, var, std, min and max. It reads
+       slabs along the first axis, sized by `set_stream_bytes` (default 64 MiB).
+     - Reducing that axis feeds the slabs to `RowState`, the row accumulators shared with
+       the in-memory path, so the order of addition and the result bits are the same.
+       Variances merge per-slab moments instead (see the second round below).
+     - Keeping that axis reduces each slab on its own.
+     - Groupby and resample over contiguous groups reduce lazy views, so they stream too.
+   - **HDF5 reads:** the parallel decode batch is capped at 64 MiB of decoded chunks (at
+     least one chunk per thread). Before, a large read held threads × 4 chunks.
+   - **Measured** (ignifly, an 800 MB variable, deflate-compressed, 10×250×250 chunks,
+     16 threads; extra anonymous memory, with the load counted for the in-memory runs):
+
+     | Operation | Streamed | Loaded first |
+     |---|---|---|
+     | `v * 2 + v[0]` written to disk | 4.1 s, 330 MB | 3.6 s, 3.9 GB |
+     | `mean("t")` | 0.86 s, 279 MB | 0.73 s, 1.6 GB |
+     | `mean("y")` | 0.85 s, 267 MB | 0.73 s, 1.6 GB |
+     | `std("t")` | 1.61 s, 345 MB | 0.73 s, 1.6 GB |
+
+     Streaming memory does not depend on the size of the data.
+   - **Tests:**
+     - xr-core `tests/lazy_compute.rs`: a source that records its largest read checks that
+       expressions stay lazy, read only the boxes asked for, and match in-memory results
+       bit for bit; and that reductions stay within the budget and match bit for bit.
+     - pytest: lazy arithmetic, unit conversion and streamed reductions against xarray, and
+       `encoding=` round trips.
+
 **Stage 1 implementation notes (done):**
 - Rust side (`rarray/src/lib.rs`, module `rarray._rarray`): `RawGroup` opens a file with
   `read_lazy` and serves **raw** variables (dims, attributes, storage details, and `read(name,
@@ -997,9 +1086,23 @@ checked against xarray's before it is timed). Causes found and fixed:
 - **Benchmark hygiene:** scipy's OpenBLAS threads spin idle and take cores, so the benchmark
   sets `OPENBLAS_NUM_THREADS=1`.
 
+- **Huge pages:** rarray's global allocator is the system allocator, but on Linux it advises
+  transparent huge pages (`MADV_HUGEPAGE`) for blocks of 4 MiB or more, as numpy does
+  (`rarray/src/alloc.rs`, one scoped `unsafe`). Faults on fresh large results fell from one
+  per 4 KiB to one per 2 MiB. Libraries do not set a global allocator; Rust programs using
+  xarray-rs choose their own.
+- **Reusing buffers the core owns:** `binary_reusing_rhs` writes `lhs op rhs` into the right
+  operand's buffer when no aligning, broadcasting or unit conversion is needed. It is used
+  for group arithmetic (the expanded climatology) and for operands that `binary` has just
+  aligned. Python temporaries are not reused: detecting them reliably needs Python 3.14's
+  `PyUnstable_Object_IsUniqueReferencedTemporary` and mutable objects.
+- **Sums, means, variances and standard deviations along lanes** are streamed rather than
+  copied into a buffer. A reduction over all values had been building a 500 MB `Vec`.
+
 Open items:
-- Results of 500 MB and more are fresh allocations, so the kernel's page faults dominate.
-  numpy reuses temporaries (`a * 2 + a` allocates once) and asks for huge pages on large
-  arrays. Large anomaly and arithmetic cases stay at 0.5–0.8×.
+- `a * 2 + a` on large arrays (0.8×): numpy reuses the temporary from `a * 2`, so it
+  allocates and zero-fills once where we do twice. The remaining kernel time is page
+  zeroing.
+- Annual resample of ersstv5 (0.8×): per-group overhead over 52 small groups.
 - Native reads of deflate-compressed files are about 2× slower than netCDF-C; the time is
   in inflate.

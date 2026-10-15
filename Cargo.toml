@@ -21,6 +21,7 @@ rust-version = "1.97"
 license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
+libc = "0.2"
 xarray-rs = { path = "xarray-rs", version = "0.0.1" }
 xr-core = { path = "crates/xr-core", version = "0.0.1" }
 xr-macros = { path = "crates/xr-macros", version = "0.0.1" }

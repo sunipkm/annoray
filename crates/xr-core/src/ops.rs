@@ -72,16 +72,33 @@ pub fn variables_equal<S: Repr, R: Repr>(a: &VariableBase<S>, b: &VariableBase<R
 // ----- broadcasting -----
 
 /// Reorder `v`'s axes into `out_dims` order and insert length-1 axes for missing dimensions.
+///
+/// # Errors
+/// [`CoreError::DimCountMismatch`] unless `dims` names each axis of `v` once and all of them
+/// are in `out_dims`.
 pub(crate) fn broadcast_to_dims<'a, T>(
     v: ArrayViewD<'a, T>,
     dims: &[Name],
     out_dims: &[Name],
-) -> ArrayViewD<'a, T> {
+) -> Result<ArrayViewD<'a, T>> {
     let order: Vec<usize> = out_dims
         .iter()
         .filter_map(|d| dims.iter().position(|x| x == d))
         .collect();
-    // `order` is a permutation of v's axes: every dimension of v appears in `out_dims` once.
+    // `permuted_axes` needs a permutation of v's axes (it panics otherwise).
+    let mut seen = vec![false; v.ndim()];
+    let permutation = order.len() == v.ndim()
+        && dims.len() == v.ndim()
+        && order.iter().all(|i| {
+            seen.get_mut(*i)
+                .is_some_and(|s| !std::mem::replace(s, true))
+        });
+    if !permutation {
+        return Err(CoreError::DimCountMismatch {
+            ndim: v.ndim(),
+            names: order.len(),
+        });
+    }
     let mut v = v.permuted_axes(IxDyn(&order));
     for (i, d) in out_dims.iter().enumerate() {
         if !dims.contains(d) {
@@ -89,7 +106,7 @@ pub(crate) fn broadcast_to_dims<'a, T>(
             v = v.insert_axis(Axis(i));
         }
     }
-    v
+    Ok(v)
 }
 
 fn zip_map<A, B, C>(
@@ -193,7 +210,7 @@ macro_rules! int_op {
         match ($a, $b) {
             $(
                 (TypedArray::$var(x), TypedArray::$var(y)) => {
-                    let (x, y) = (broadcast_to_dims(x.view(), $ad, $od), broadcast_to_dims(y.view(), $bd, $od));
+                    let (x, y) = (broadcast_to_dims(x.view(), $ad, $od)?, broadcast_to_dims(y.view(), $bd, $od)?);
                     let f = |p: &$t, q: &$t| -> Option<$t> {
                         match $op {
                             BinOp::Add => p.checked_add(*q),
@@ -243,24 +260,48 @@ fn compute(
         && let (TypedArray::F32(x), TypedArray::F32(y)) = (a, b)
     {
         let (x, y) = (
-            broadcast_to_dims(x.view(), ad, od),
-            broadcast_to_dims(y.view(), bd, od),
+            broadcast_to_dims(x.view(), ad, od)?,
+            broadcast_to_dims(y.view(), bd, od)?,
         );
         return Ok(TypedArray::F32(float_zip(&x, &y, shape, op)?));
     }
     if !converting && let (TypedArray::F64(x), TypedArray::F64(y)) = (a, b) {
         let (x, y) = (
-            broadcast_to_dims(x.view(), ad, od),
-            broadcast_to_dims(y.view(), bd, od),
+            broadcast_to_dims(x.view(), ad, od)?,
+            broadcast_to_dims(y.view(), bd, od)?,
         );
         return Ok(TypedArray::F64(float_zip(&x, &y, shape, op)?));
     }
     let (x, y) = (to_f64(a, ac)?, to_f64(b, bc)?);
     let (x, y) = (
-        broadcast_to_dims(x.view(), ad, od),
-        broadcast_to_dims(y.view(), bd, od),
+        broadcast_to_dims(x.view(), ad, od)?,
+        broadcast_to_dims(y.view(), bd, od)?,
     );
     Ok(TypedArray::F64(float_zip(&x, &y, shape, op)?))
+}
+
+/// `y = x op y`, elementwise in place (same shapes).
+fn in_place<F: num_like::Float + Send + Sync>(x: &ArrayViewD<'_, F>, y: &mut ArrayD<F>, op: BinOp) {
+    fn go<F: Copy + Send + Sync>(
+        x: &ArrayViewD<'_, F>,
+        y: &mut ArrayD<F>,
+        f: impl Fn(F, F) -> F + Sync + Send,
+    ) {
+        let zip = ndarray::Zip::from(y).and(x);
+        let g = |q: &mut F, p: &F| *q = f(*p, *q);
+        #[cfg(feature = "rayon")]
+        if x.len() > PAR_ELEMENTS {
+            zip.par_for_each(g);
+            return;
+        }
+        zip.for_each(g);
+    }
+    match op {
+        BinOp::Add => go(x, y, |p, q| p.add(q)),
+        BinOp::Sub => go(x, y, |p, q| p.sub(q)),
+        BinOp::Mul => go(x, y, |p, q| p.mul(q)),
+        BinOp::Div => go(x, y, |p, q| p.div(q)),
+    }
 }
 
 /// Elements above which elementwise float arithmetic is split across threads.
@@ -361,8 +402,8 @@ fn time_op(
     macro_rules! go {
         ($x:expr, $y:expr, $f:expr) => {
             zip_map(
-                &broadcast_to_dims($x.view(), ad, od),
-                &broadcast_to_dims($y.view(), bd, od),
+                &broadcast_to_dims($x.view(), ad, od)?,
+                &broadcast_to_dims($y.view(), bd, od)?,
                 shape,
                 $f,
                 name,
@@ -487,7 +528,8 @@ impl<S: Repr> DataArrayBase<S> {
         if !plan.is_noop() {
             let a = crate::align::apply_array(self, &plan, 0)?;
             let b = crate::align::apply_array(rhs, &plan, 1)?;
-            return a.binary(op, &b, policy);
+            // `b` is a fresh copy: the result can go into its buffer.
+            return a.binary_reusing_rhs(op, b, policy);
         }
         // Coordinates of shared dimensions must agree.
         for d in self.dims().iter().filter(|d| rhs.dims().contains(d)) {
@@ -498,7 +540,54 @@ impl<S: Repr> DataArrayBase<S> {
             }
         }
 
-        // Units.
+        let (unit, lconv, rconv) = self.plan_units(op, rhs, policy)?;
+
+        // Data.
+        let sizes = |a: &dyn Fn() -> Vec<(Name, usize)>| a();
+        let (od, shape) = out_dims(
+            &sizes(&|| self.sizes().map(|(d, n)| (d.clone(), n)).collect()),
+            &sizes(&|| rhs.sizes().map(|(d, n)| (d.clone(), n)).collect()),
+        )?;
+        // Lazy operands give a lazy result: computed box by box when read.
+        if self.variable().is_lazy() || rhs.variable().is_lazy() {
+            let src = BinarySource::new(
+                op,
+                (self.variable(), lconv),
+                (rhs.variable(), rconv),
+                od.clone(),
+                shape,
+            )?;
+            let var = Variable::from_lazy(od, crate::LazyArray::new(std::sync::Arc::new(src)))?;
+            return Ok(self.assemble(
+                var,
+                unit,
+                rhs.name(),
+                rhs.coords.iter().map(|(k, v)| (k, v.to_owned())),
+            ));
+        }
+        let data = compute(
+            op,
+            (&self.variable().typed()?, self.dims(), lconv.as_ref()),
+            (&rhs.variable().typed()?, rhs.dims(), rconv.as_ref()),
+            &od,
+            &shape,
+        )?;
+        let var = Variable::from_typed(od, data)?;
+        Ok(self.assemble(
+            var,
+            unit,
+            rhs.name(),
+            rhs.coords.iter().map(|(k, v)| (k, v.to_owned())),
+        ))
+    }
+
+    /// The units of `self op rhs`, and how to convert each operand first.
+    fn plan_units<R: Repr>(
+        &self,
+        op: BinOp,
+        rhs: &DataArrayBase<R>,
+        policy: UnitPolicy,
+    ) -> Result<(Option<Unit>, Option<Converter>, Option<Converter>)> {
         let one = Unit::one();
         let (lu, ru) = (self.unit().unwrap_or(&one), rhs.unit().unwrap_or(&one));
         let time = is_time(self.dtype()) || is_time(rhs.dtype());
@@ -529,44 +618,100 @@ impl<S: Repr> DataArrayBase<S> {
         } else {
             unit
         };
+        Ok((unit, lconv, rconv))
+    }
 
-        // Data.
-        let sizes = |a: &dyn Fn() -> Vec<(Name, usize)>| a();
-        let (od, shape) = out_dims(
-            &sizes(&|| self.sizes().map(|(d, n)| (d.clone(), n)).collect()),
-            &sizes(&|| rhs.sizes().map(|(d, n)| (d.clone(), n)).collect()),
-        )?;
-        let data = compute(
-            op,
-            (&self.variable().typed()?, self.dims(), lconv.as_ref()),
-            (&rhs.variable().typed()?, rhs.dims(), rconv.as_ref()),
-            &od,
-            &shape,
-        )?;
-        let mut var = Variable::from_typed(od, data)?;
+    /// The result of a binary operation from its data: the unit (keeping the left operand's
+    /// spelling when unchanged), the union of the coordinates (left first), and the name if
+    /// both operands share it.
+    fn assemble<'a>(
+        &self,
+        mut var: Variable,
+        unit: Option<Unit>,
+        rhs_name: Option<&Name>,
+        rhs_coords: impl Iterator<Item = (&'a Name, Variable)>,
+    ) -> DataArray {
         var.set_unit(
             unit.map(Unit::without_label)
                 .map(|u| match (self.unit(), &u) {
-                    // Keep the left operand's spelling when the unit is unchanged.
                     (Some(l), u) if l == u => l.clone(),
                     _ => u,
                 }),
         );
-
-        // Coordinates: union, left operand first.
         let mut coords: IndexMap<Name, Variable> = self
             .coords
             .iter()
             .map(|(k, v)| (k.clone(), v.to_owned()))
             .collect();
-        for (k, v) in &rhs.coords {
-            coords.entry(k.clone()).or_insert_with(|| v.to_owned());
+        for (k, v) in rhs_coords {
+            coords.entry(k.clone()).or_insert(v);
         }
-        let name = match (self.name(), rhs.name()) {
+        let name = match (self.name(), rhs_name) {
             (Some(a), Some(b)) if a == b => Some(a.clone()),
             _ => None,
         };
-        Ok(DataArrayBase::from_parts(name, var, coords))
+        DataArrayBase::from_parts(name, var, coords)
+    }
+
+    /// [`binary`](Self::binary) taking ownership of `rhs`: when nothing needs aligning,
+    /// broadcasting or converting and both operands are floats of one type, the result is
+    /// written into `rhs`'s buffer instead of a new one. Otherwise as `binary`.
+    pub(crate) fn binary_reusing_rhs(
+        &self,
+        op: BinOp,
+        rhs: DataArray,
+        policy: UnitPolicy,
+    ) -> Result<DataArray> {
+        let plan = crate::align::plan(
+            &[
+                crate::align::Obj::of_array(self),
+                crate::align::Obj::of_array(&rhs),
+            ],
+            crate::Join::Inner,
+        )?;
+        let coords_agree = self
+            .dims()
+            .iter()
+            .filter(|d| rhs.dims().contains(d))
+            .all(|d| match (self.coords.get(d), rhs.coords.get(d)) {
+                (Some(a), Some(b)) => variables_equal(a, b),
+                _ => true,
+            });
+        let fast = plan.is_noop()
+            && coords_agree
+            && self.dims() == rhs.dims()
+            && self.shape() == rhs.shape()
+            && self.dtype() == rhs.dtype()
+            && matches!(self.dtype(), DType::F32 | DType::F64)
+            && !rhs.variable().is_lazy();
+        if !fast {
+            return self.binary(op, &rhs, policy);
+        }
+        let (unit, lconv, rconv) = self.plan_units(op, &rhs, policy)?;
+        if lconv.is_some() || rconv.is_some() {
+            return self.binary(op, &rhs, policy);
+        }
+        let lhs = self.variable().typed()?;
+        let (rname, rvar, rcoords) = rhs.into_parts();
+        let dims: Vec<Name> = rvar.dims().to_vec();
+        let mut data = rvar.into_typed()?;
+        match (&lhs, &mut data) {
+            (TypedArray::F64(x), TypedArray::F64(y)) => in_place(x, y, op),
+            (TypedArray::F32(x), TypedArray::F32(y)) => in_place(x, y, op),
+            _ => {
+                return Err(CoreError::UnsupportedDType {
+                    op: op.name(),
+                    dtype: self.dtype(),
+                });
+            }
+        }
+        let var = Variable::from_typed(dims, data)?;
+        Ok(self.assemble(
+            var,
+            unit,
+            rname.as_ref(),
+            rcoords.iter().map(|(k, v)| (k, v.clone())),
+        ))
     }
 
     /// `self + rhs` (strict units).
@@ -617,14 +762,183 @@ impl<S: Repr> DataArrayBase<S> {
     pub fn to_unit(&self, unit: &Unit) -> Result<DataArray> {
         let from = self.unit().cloned().unwrap_or_else(Unit::one);
         let conv = from.converter_to(unit)?;
-        let data = converted(&self.variable().typed()?, &conv)?;
-        let var = Variable::from_typed(self.dims().iter().cloned(), data)?.with_unit(unit.clone());
+        let var = if self.variable().is_lazy() {
+            let src = ConvertSource::new(self.variable().as_lazy_source()?, conv)?;
+            Variable::from_lazy(
+                self.dims().iter().cloned(),
+                crate::LazyArray::new(std::sync::Arc::new(src)),
+            )?
+        } else {
+            Variable::from_typed(
+                self.dims().iter().cloned(),
+                converted(&self.variable().typed()?, &conv)?,
+            )?
+        }
+        .with_unit(unit.clone());
         let coords = self
             .coords
             .iter()
             .map(|(k, v)| (k.clone(), v.to_owned()))
             .collect();
         Ok(DataArrayBase::from_parts(self.name().cloned(), var, coords))
+    }
+}
+
+// ----- lazy elementwise operations -----
+
+/// One operand of a lazy operation: its source, dimensions and unit conversion.
+#[derive(Debug)]
+struct Operand {
+    src: std::sync::Arc<dyn crate::LazySource>,
+    dims: Vec<Name>,
+    conv: Option<Converter>,
+}
+
+impl Operand {
+    /// The operand's part of the result box `[start, start + count)` (dimensions it lacks
+    /// are broadcast).
+    fn read(
+        &self,
+        od: &[Name],
+        start: &[usize],
+        count: &[usize],
+    ) -> Result<TypedArray<crate::Owned>> {
+        let mut s = Vec::with_capacity(self.dims.len());
+        let mut c = Vec::with_capacity(self.dims.len());
+        for d in &self.dims {
+            let i = od
+                .iter()
+                .position(|x| x == d)
+                .ok_or_else(|| CoreError::NoSuchDim(d.clone()))?;
+            s.push(start.get(i).copied().unwrap_or(0));
+            c.push(count.get(i).copied().unwrap_or(0));
+        }
+        self.src.read_slice(&s, &c)
+    }
+}
+
+/// `lhs op rhs` computed for whichever box is read (nothing is read when it is made).
+#[derive(Debug)]
+struct BinarySource {
+    op: BinOp,
+    lhs: Operand,
+    rhs: Operand,
+    od: Vec<Name>,
+    shape: Vec<usize>,
+    dtype: DType,
+}
+
+impl BinarySource {
+    fn new<S: Repr, R: Repr>(
+        op: BinOp,
+        (l, lconv): (&VariableBase<S>, Option<Converter>),
+        (r, rconv): (&VariableBase<R>, Option<Converter>),
+        od: Vec<Name>,
+        shape: Vec<usize>,
+    ) -> Result<Self> {
+        let lhs = Operand {
+            src: l.as_lazy_source()?,
+            dims: l.dims().to_vec(),
+            conv: lconv,
+        };
+        let rhs = Operand {
+            src: r.as_lazy_source()?,
+            dims: r.dims().to_vec(),
+            conv: rconv,
+        };
+        // The result's element type, from the same computation on empty operands (a 0-d
+        // operand has its one value; nothing else is read).
+        let empty = |o: &Operand| {
+            if o.dims.is_empty() {
+                return o.src.read_slice(&[], &[]);
+            }
+            TypedArray::empty(o.src.dtype(), &vec![0; o.dims.len()]).ok_or_else(|| {
+                CoreError::UnsupportedDType {
+                    op: op.name(),
+                    dtype: o.src.dtype(),
+                }
+            })
+        };
+        let (le, re) = (empty(&lhs)?, empty(&rhs)?);
+        let dtype = compute(
+            op,
+            (&le.view(), &lhs.dims, lhs.conv.as_ref()),
+            (&re.view(), &rhs.dims, rhs.conv.as_ref()),
+            &od,
+            &vec![0; od.len()],
+        )?
+        .dtype();
+        Ok(Self {
+            op,
+            lhs,
+            rhs,
+            od,
+            shape,
+            dtype,
+        })
+    }
+}
+
+impl crate::LazySource for BinarySource {
+    fn dtype(&self) -> DType {
+        self.dtype
+    }
+    fn shape(&self) -> &[usize] {
+        &self.shape
+    }
+    fn chunking(&self, axis: usize) -> Option<(usize, usize)> {
+        let d = self.od.get(axis)?;
+        [&self.lhs, &self.rhs].into_iter().find_map(|o| {
+            let a = o.dims.iter().position(|x| x == d)?;
+            o.src.chunking(a)
+        })
+    }
+    fn read_slice(&self, start: &[usize], count: &[usize]) -> Result<TypedArray<crate::Owned>> {
+        let a = self.lhs.read(&self.od, start, count)?;
+        let b = self.rhs.read(&self.od, start, count)?;
+        compute(
+            self.op,
+            (&a.view(), &self.lhs.dims, self.lhs.conv.as_ref()),
+            (&b.view(), &self.rhs.dims, self.rhs.conv.as_ref()),
+            &self.od,
+            count,
+        )
+    }
+}
+
+/// A unit conversion computed for whichever box is read.
+#[derive(Debug)]
+struct ConvertSource {
+    src: std::sync::Arc<dyn crate::LazySource>,
+    conv: Converter,
+    dtype: DType,
+}
+
+impl ConvertSource {
+    fn new(src: std::sync::Arc<dyn crate::LazySource>, conv: Converter) -> Result<Self> {
+        let empty = TypedArray::empty(src.dtype(), &vec![0; src.shape().len()]).ok_or(
+            CoreError::UnsupportedDType {
+                op: "unit conversion",
+                dtype: src.dtype(),
+            },
+        )?;
+        let dtype = converted(&empty.view(), &conv)?.dtype();
+        Ok(Self { src, conv, dtype })
+    }
+}
+
+impl crate::LazySource for ConvertSource {
+    fn dtype(&self) -> DType {
+        self.dtype
+    }
+    fn shape(&self) -> &[usize] {
+        self.src.shape()
+    }
+    fn chunking(&self, axis: usize) -> Option<(usize, usize)> {
+        self.src.chunking(axis)
+    }
+    fn read_slice(&self, start: &[usize], count: &[usize]) -> Result<TypedArray<crate::Owned>> {
+        converted(&self.src.read_slice(start, count)?.view(), &self.conv)
     }
 }
 
@@ -707,3 +1021,57 @@ macro_rules! impl_ops {
 }
 
 impl_ops!(Add add Add, Sub sub Sub, Mul mul Mul, Div div Div);
+
+#[cfg(test)]
+#[allow(
+    clippy::unwrap_used,
+    clippy::arithmetic_side_effects,
+    clippy::cast_precision_loss
+)]
+mod tests {
+    use super::*;
+
+    fn arr(dims: &[&str], shape: &[usize], unit: &str, f: impl Fn(usize) -> f64) -> DataArray {
+        let n: usize = shape.iter().product();
+        let data = ArrayD::from_shape_vec(IxDyn(shape), (0..n).map(f).collect()).unwrap();
+        DataArray::new(
+            Variable::new(
+                dims.iter().map(|d| Name::from(*d)).collect::<Vec<_>>(),
+                data,
+            )
+            .unwrap()
+            .with_unit(unit.parse().unwrap()),
+        )
+    }
+
+    /// Reusing the right operand's buffer gives exactly what `binary` gives, for every
+    /// operator (order matters for `-` and `/`), and falls back where it cannot apply.
+    #[test]
+    fn reusing_rhs_matches_binary() {
+        let n = 1 << 17; // above the parallel threshold
+        let a = arr(&["x"], &[n], "m", |i| i as f64 * 0.5 + 1.0);
+        let b = arr(&["x"], &[n], "m", |i| (i % 97) as f64 + 0.25);
+        for op in [BinOp::Add, BinOp::Sub, BinOp::Mul, BinOp::Div] {
+            let want = a.binary(op, &b, UnitPolicy::Strict).unwrap();
+            let got = a
+                .binary_reusing_rhs(op, b.clone(), UnitPolicy::Strict)
+                .unwrap();
+            assert!(variables_equal(want.variable(), got.variable()), "{op:?}");
+        }
+        // Fallbacks: broadcasting, unit conversion, mixed types, errors.
+        let c = arr(&["y"], &[3], "m", |i| i as f64);
+        let km = arr(&["x"], &[n], "km", |i| i as f64);
+        let s = arr(&["x"], &[n], "s", |i| i as f64);
+        for rhs in [c, km] {
+            let want = a.binary(BinOp::Add, &rhs, UnitPolicy::AutoRescale).unwrap();
+            let got = a
+                .binary_reusing_rhs(BinOp::Add, rhs, UnitPolicy::AutoRescale)
+                .unwrap();
+            assert!(variables_equal(want.variable(), got.variable()));
+        }
+        assert!(
+            a.binary_reusing_rhs(BinOp::Add, s, UnitPolicy::Strict)
+                .is_err()
+        );
+    }
+}

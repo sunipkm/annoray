@@ -159,6 +159,11 @@ impl LazySource for H5Source {
         &self.shape
     }
 
+    fn chunking(&self, axis: usize) -> Option<(usize, usize)> {
+        let size = *self.dataset.chunks()?.get(axis)?;
+        (size > 0).then_some((size, 0))
+    }
+
     fn read_slice(&self, start: &[usize], count: &[usize]) -> xr_core::Result<TypedArray<Owned>> {
         let data = self
             .dataset

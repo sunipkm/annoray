@@ -575,6 +575,17 @@ impl<S: Repr> VariableBase<S> {
             .iter()
             .map(|i| normalize_index(*i, len, &name))
             .collect::<Result<Vec<_>, IndexError>>()?;
+        if self.is_lazy() {
+            // Still on disk: read the chosen positions only when (and where) needed.
+            let src = crate::lazy::TakeSource::new(self.as_lazy_source()?, axis, idx)?;
+            return Ok(VariableBase {
+                data: Data::Lazy(LazyArray::new(std::sync::Arc::new(src))),
+                dims: self.dims.clone(),
+                unit: self.unit.clone(),
+                encoding: self.encoding.clone(),
+                attrs: self.attrs().clone(),
+            });
+        }
         Ok(VariableBase {
             data: Data::Loaded(self.typed()?.select_axis(axis, &idx)),
             dims: self.dims.clone(),

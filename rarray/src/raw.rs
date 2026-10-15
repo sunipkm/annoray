@@ -356,6 +356,15 @@ fn dtype_from_name(name: &str) -> Option<DType> {
 /// xarray's encoding dict (netCDF4-python names) as our `Encoding`.
 pub(crate) fn encoding_from_py(e: &Bound<'_, PyDict>) -> PyResult<xarray_rs::Encoding> {
     let mut enc = xarray_rs::Encoding::default();
+    update_encoding(&mut enc, e)?;
+    Ok(enc)
+}
+
+/// Apply the settings in `e` (netCDF4-python names) to `enc`; settings not given are kept.
+pub(crate) fn update_encoding(
+    enc: &mut xarray_rs::Encoding,
+    e: &Bound<'_, PyDict>,
+) -> PyResult<()> {
     if let Some(d) = e.get_item("dtype")? {
         enc.dtype = dtype_from_name(&d.extract::<String>()?);
     }
@@ -414,7 +423,7 @@ pub(crate) fn encoding_from_py(e: &Bound<'_, PyDict>) -> PyResult<xarray_rs::Enc
             }
         }
     }
-    Ok(enc)
+    Ok(())
 }
 
 pub(crate) fn format_from_name(name: &str) -> PyResult<Format> {

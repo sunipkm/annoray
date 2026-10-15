@@ -52,6 +52,15 @@ impl<S: Repr> VariableBase<S> {
     /// # Errors
     /// Read errors for lazy data.
     pub fn isnull(&self) -> Result<Variable> {
+        if self.is_lazy() {
+            return self
+                .lazy_map("isnull", |t| Ok(TypedArray::Bool(null_mask(&t.view()))))
+                .map(|mut v| {
+                    v.set_unit(None);
+                    v.attrs_mut().clear();
+                    v
+                });
+        }
         Variable::from_typed(
             self.dims().iter().cloned(),
             TypedArray::Bool(null_mask(&self.typed()?)),
@@ -63,6 +72,17 @@ impl<S: Repr> VariableBase<S> {
     /// # Errors
     /// Read errors for lazy data.
     pub fn notnull(&self) -> Result<Variable> {
+        if self.is_lazy() {
+            return self
+                .lazy_map("notnull", |t| {
+                    Ok(TypedArray::Bool(null_mask(&t.view()).mapv(|m| !m)))
+                })
+                .map(|mut v| {
+                    v.set_unit(None);
+                    v.attrs_mut().clear();
+                    v
+                });
+        }
         Variable::from_typed(
             self.dims().iter().cloned(),
             TypedArray::Bool(null_mask(&self.typed()?).mapv(|m| !m)),
@@ -74,27 +94,52 @@ impl<S: Repr> VariableBase<S> {
     /// # Errors
     /// Read errors for lazy data.
     pub fn fillna(&self, value: f64) -> Result<Variable> {
-        let data = match self.typed()? {
-            #[allow(clippy::cast_possible_truncation)] // the fill value in the data's type
-            TypedArray::F32(a) => {
-                let v = value as f32;
-                TypedArray::F32(a.mapv(|x| if x.is_nan() { v } else { x }))
-            }
-            TypedArray::F64(a) => TypedArray::F64(a.mapv(|x| if x.is_nan() { value } else { x })),
-            other => other.to_owned(),
-        };
+        if self.is_lazy() {
+            return self.lazy_map("fillna", move |t| Ok(filled(&t.view(), value)));
+        }
+        let data = filled(&self.typed()?, value);
         like(self, data)
+    }
+
+    /// `f` applied lazily, box by box (unit and attributes kept).
+    fn lazy_map(
+        &self,
+        what: &'static str,
+        f: impl Fn(TypedArray<Owned>) -> Result<TypedArray<Owned>> + Send + Sync + 'static,
+    ) -> Result<Variable> {
+        let src = crate::lazy::MapSource::new(self.as_lazy_source()?, what, f)?;
+        let mut out = Variable::from_lazy(
+            self.dims().iter().cloned(),
+            crate::LazyArray::new(std::sync::Arc::new(src)),
+        )?;
+        out.set_unit(self.unit().cloned());
+        out.attrs_mut()
+            .extend(self.attrs().iter().map(|(k, a)| (k.clone(), a.clone())));
+        Ok(out)
+    }
+}
+
+/// NaNs replaced by `value` (other types unchanged).
+fn filled(t: &TypedArray<View<'_>>, value: f64) -> TypedArray<Owned> {
+    match t {
+        #[allow(clippy::cast_possible_truncation)] // the fill value in the data's type
+        TypedArray::F32(a) => {
+            let v = value as f32;
+            TypedArray::F32(a.mapv(|x| if x.is_nan() { v } else { x }))
+        }
+        TypedArray::F64(a) => TypedArray::F64(a.mapv(|x| if x.is_nan() { value } else { x })),
+        other => other.to_owned(),
     }
 }
 
 /// Keep `data` where `cond` holds; elsewhere NaN (NaT for times) or `other`.
-fn where_data<S: Repr>(
-    v: &VariableBase<S>,
+fn where_data(
+    t: TypedArray<View<'_>>,
     cond: &ArrayViewD<'_, bool>,
     other: Option<f64>,
 ) -> Result<TypedArray<Owned>> {
     let pick = |keep: bool, x: f64| if keep { x } else { other.unwrap_or(f64::NAN) };
-    Ok(match v.typed()? {
+    Ok(match t {
         #[allow(clippy::cast_possible_truncation)] // `other` in the data's type
         TypedArray::F32(a) => {
             let o = other.map_or(f32::NAN, |o| o as f32);
@@ -138,6 +183,67 @@ fn where_data<S: Repr>(
             });
         }
     })
+}
+
+/// `where` computed for whichever box is read: the data's box, and the condition's part of it
+/// (broadcast over dimensions it lacks).
+#[derive(Debug)]
+struct WhereSource {
+    data: std::sync::Arc<dyn crate::LazySource>,
+    dims: Vec<Name>,
+    cond: std::sync::Arc<dyn crate::LazySource>,
+    cdims: Vec<Name>,
+    other: Option<f64>,
+}
+
+impl WhereSource {
+    fn apply(&self, data: TypedArray<Owned>, cond: &ArrayD<bool>) -> Result<TypedArray<Owned>> {
+        let c = broadcast_to_dims(cond.view(), &self.cdims, &self.dims)?;
+        let c = c
+            .broadcast(IxDyn(data.shape()))
+            .ok_or_else(|| CoreError::InvalidReduction("cannot broadcast the condition".into()))?;
+        where_data(data.view(), &c, self.other)
+    }
+}
+
+/// [`WhereSource`] with its element type.
+#[derive(Debug)]
+struct TypedWhere(WhereSource, DType);
+
+impl crate::LazySource for TypedWhere {
+    fn dtype(&self) -> DType {
+        self.1
+    }
+    fn shape(&self) -> &[usize] {
+        self.0.data.shape()
+    }
+    fn read_slice(&self, start: &[usize], count: &[usize]) -> Result<TypedArray<Owned>> {
+        let w = &self.0;
+        let data = w.data.read_slice(start, count)?;
+        let (mut cs, mut cc) = (Vec::new(), Vec::new());
+        for d in &w.cdims {
+            let i = w
+                .dims
+                .iter()
+                .position(|x| x == d)
+                .ok_or_else(|| CoreError::NoSuchDim(d.clone()))?;
+            cs.push(start.get(i).copied().unwrap_or(0));
+            cc.push(count.get(i).copied().unwrap_or(0));
+        }
+        let cond = match w.cond.read_slice(&cs, &cc)? {
+            TypedArray::Bool(c) => c,
+            other => {
+                return Err(CoreError::DTypeMismatch {
+                    expected: DType::Bool,
+                    found: other.dtype(),
+                });
+            }
+        };
+        w.apply(data, &cond)
+    }
+    fn chunking(&self, axis: usize) -> Option<(usize, usize)> {
+        self.0.data.chunking(axis)
+    }
 }
 
 impl<S: Repr> DataArrayBase<S> {
@@ -206,12 +312,45 @@ impl<S: Repr> DataArrayBase<S> {
                 "the condition has dimension {d:?}, which the data lacks"
             )));
         }
+        if cond.dtype() != DType::Bool {
+            return Err(CoreError::DTypeMismatch {
+                expected: DType::Bool,
+                found: cond.dtype(),
+            });
+        }
+        if data.variable().is_lazy() || cond.variable().is_lazy() {
+            let src = WhereSource {
+                data: data.variable().as_lazy_source()?,
+                dims: data.dims().to_vec(),
+                cond: cond.variable().as_lazy_source()?,
+                cdims: cond.dims().to_vec(),
+                other,
+            };
+            // The element type, from the same selection on empty data.
+            let probe = src.apply(
+                TypedArray::empty(src.data.dtype(), &vec![0; src.dims.len().max(1)])
+                    .ok_or_else(|| CoreError::Read("where: empty probe".into()))?,
+                &ArrayD::from_elem(IxDyn(&vec![0; src.cdims.len()]), true),
+            )?;
+            let dtype = probe.dtype();
+            let mut v = Variable::from_lazy(
+                data.dims().iter().cloned(),
+                crate::LazyArray::new(std::sync::Arc::new(TypedWhere(src, dtype))),
+            )?;
+            v.set_unit(data.unit().cloned());
+            v.attrs_mut()
+                .extend(data.attrs().iter().map(|(k, a)| (k.clone(), a.clone())));
+            return data.with_data(v);
+        }
         let c = cond.data::<bool>()?;
-        let c = broadcast_to_dims(c, cond.dims(), data.dims());
+        let c = broadcast_to_dims(c, cond.dims(), data.dims())?;
         let c = c
             .broadcast(IxDyn(data.shape()))
             .ok_or_else(|| CoreError::InvalidReduction("cannot broadcast the condition".into()))?;
-        let out = like(data.variable(), where_data(data.variable(), &c, other)?)?;
+        let out = like(
+            data.variable(),
+            where_data(data.variable().typed()?, &c, other)?,
+        )?;
         data.with_data(out)
     }
 

@@ -60,7 +60,7 @@ pub use missing::How;
 pub use name::{Dims, Name};
 pub use nat::NaT;
 pub use ops::{BinOp, variables_equal};
-pub use reduce::{ReduceDims, ReduceOptions, Reduction};
+pub use reduce::{ReduceDims, ReduceOptions, Reduction, set_stream_bytes, stream_bytes};
 pub use repr::{Owned, Repr, ReprMut, View, ViewMut};
 pub use rolling::{DataArrayRolling, DatasetRolling, RollingOptions};
 pub use tree::DataTree;

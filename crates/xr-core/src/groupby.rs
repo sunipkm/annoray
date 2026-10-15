@@ -53,6 +53,13 @@ fn stack_as<T: crate::Element>(
         .map(T::wrap)
 }
 
+/// A data variable of a grouped dataset, with its per-group results if it was streamed.
+type PerVar<'a> = (
+    &'a Name,
+    &'a VariableBase<crate::Owned>,
+    Option<Vec<Result<Variable>>>,
+);
+
 fn to_isize(v: &[usize]) -> Result<Vec<isize>> {
     v.iter()
         .map(|i| isize::try_from(*i).map_err(|_| CoreError::ArithmeticOverflow("groupby")))
@@ -501,13 +508,16 @@ fn range_indexer(dim: &Name, (start, end): (usize, usize)) -> Result<[(Name, cra
 }
 
 /// Reduce every group (`one` reduces the group at the given positions).
-fn reduce_groups<O: GroupOut>(g: &Grouper, one: impl Fn(&[usize]) -> Result<O>) -> Result<O> {
+fn reduce_groups<O: GroupOut>(
+    g: &Grouper,
+    one: impl Fn(usize, &[usize]) -> Result<O>,
+) -> Result<O> {
     let mut parts = Vec::new();
     let mut kept = Vec::new();
     for (i, idx) in g.groups.iter().enumerate() {
         // An empty group reduces like any empty array (a sum of 0, a count of 0, a NaN
         // mean); where that is undefined (the minimum of nothing) it becomes NaN.
-        match one(idx) {
+        match one(i, idx) {
             Ok(r) => {
                 parts.push(r);
                 kept.push(i);
@@ -699,7 +709,30 @@ impl<'a, S: Repr> DataArrayGroupBy<'a, S> {
 
     fn reduce_impl(&self, op: Reduction, opts: &ReduceOptions) -> Result<DataArray> {
         let dim = &self.g.dim;
-        let out = reduce_groups(&self.g, |idx| match contiguous(idx) {
+        // Lazy data: every group in one streamed pass.
+        if let Some(vars) =
+            crate::reduce::stream_groups(self.obj.variable(), dim, &self.g.groups, op, opts)
+        {
+            let vars = vars?;
+            let coords: crate::Coords<crate::Owned> = self
+                .obj
+                .coords()
+                .iter()
+                .filter(|(_, c)| !c.dims().contains(dim))
+                .map(|(k, c)| (k.clone(), c.to_owned()))
+                .collect();
+            let out = reduce_groups(&self.g, |i, _| match vars.get(i) {
+                Some(Ok(v)) => Ok(DataArrayBase::from_parts(
+                    self.obj.name().cloned(),
+                    v.clone(),
+                    coords.clone(),
+                )),
+                Some(Err(CoreError::EmptyReduction(op))) => Err(CoreError::EmptyReduction(op)),
+                _ => Err(invalid("group")),
+            })?;
+            return self.finish(out);
+        }
+        let out = reduce_groups(&self.g, |_, idx| match contiguous(idx) {
             // Runs (all of resample's groups): reduce a view, copying nothing.
             Some(r) => self
                 .obj
@@ -802,7 +835,8 @@ impl<'a, S: Repr> DataArrayGroupBy<'a, S> {
                 rhs = rhs.with_coord(k.clone(), c.to_owned())?;
             }
         }
-        let mut out = self.obj.binary(op, &rhs, policy)?;
+        // `rhs` is ours (made by the take above): the result can go into its buffer.
+        let mut out = self.obj.binary_reusing_rhs(op, rhs, policy)?;
         // The grouping variable as a coordinate, as xarray adds it.
         if !out.coords().contains_key(name) {
             out = out.with_coord(name.clone(), self.g.key.clone())?;
@@ -899,7 +933,58 @@ impl<'a, S: Repr> DatasetGroupBy<'a, S> {
                 }
             }
         }
-        let mut out = reduce_groups(&self.g, |idx| match contiguous(idx) {
+        // Lazy data: every group of each streamable variable in one streamed pass; other
+        // variables group by group.
+        let per_var: Vec<PerVar<'_>> = sub
+            .data_vars()
+            .iter()
+            .filter(|(_, v)| !op.numeric_only() || crate::reduce::is_numeric(v.dtype()))
+            .map(|(k, v)| {
+                let s =
+                    crate::reduce::stream_groups(v, dim, &self.g.groups, op, opts).transpose()?;
+                Ok((k, v, s))
+            })
+            .collect::<Result<_>>()?;
+        if per_var.iter().any(|(_, _, s)| s.is_some()) {
+            let coords: Vec<(Name, Variable)> = sub
+                .coords()
+                .iter()
+                .filter(|(_, c)| !c.dims().contains(dim))
+                .map(|(k, c)| (k.clone(), c.to_owned()))
+                .collect();
+            let mut out = reduce_groups(&self.g, |i, idx| {
+                let mut ds = Dataset::new();
+                for (k, c) in &coords {
+                    ds.add_coord(k.clone(), c.clone())?;
+                }
+                for (k, v, streamed) in &per_var {
+                    let r = match streamed {
+                        Some(vs) => match vs.get(i) {
+                            Some(Ok(r)) => r.clone(),
+                            Some(Err(CoreError::EmptyReduction(op))) => {
+                                return Err(CoreError::EmptyReduction(op));
+                            }
+                            _ => return Err(invalid("group")),
+                        },
+                        None => {
+                            v.take(dim, &to_isize(idx)?)?
+                                .reduce(op, vec![dim.clone()], opts)?
+                        }
+                    };
+                    ds.add_var((*k).clone(), r)?;
+                }
+                if opts.keep_attrs {
+                    ds.attrs_mut()
+                        .extend(sub.attrs().iter().map(|(k, a)| (k.clone(), a.clone())));
+                }
+                Ok(ds)
+            })?;
+            for (k, v) in kept {
+                out.add_var(k, v)?;
+            }
+            return Ok(out);
+        }
+        let mut out = reduce_groups(&self.g, |_, idx| match contiguous(idx) {
             Some(r) => sub
                 .isel(range_indexer(dim, r)?)?
                 .reduce(op, vec![dim.clone()], opts),
