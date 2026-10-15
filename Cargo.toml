@@ -1,17 +1,17 @@
 [workspace]
 resolver = "3"
 members = [
-    "crates/xr-cf",
-    "crates/xr-core",
-    "crates/xr-hdf5",
-    "crates/xr-io",
-    "crates/xr-io-c",
-    "crates/xr-macros",
-    "crates/xr-netcdf3",
-    "crates/xr-netcdf4",
-    "crates/xr-units",
-    "xarray-rs",
-    "rarray",
+    "crates/annoray-cf",
+    "crates/annoray-core",
+    "crates/annoray-hdf5",
+    "crates/annoray-io",
+    "crates/annoray-io-c",
+    "crates/annoray-macros",
+    "crates/annoray-netcdf3",
+    "crates/annoray-netcdf4",
+    "crates/annoray-units",
+    "annoray",
+    "annoray-python",
 ]
 
 [workspace.package]
@@ -22,16 +22,16 @@ license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
 libc = "0.2"
-xarray-rs = { path = "xarray-rs", version = "0.0.1" }
-xr-core = { path = "crates/xr-core", version = "0.0.1" }
-xr-macros = { path = "crates/xr-macros", version = "0.0.1" }
-xr-units = { path = "crates/xr-units", version = "0.0.1" }
-xr-io = { path = "crates/xr-io", version = "0.0.1" }
-xr-cf = { path = "crates/xr-cf", version = "0.0.1" }
-xr-io-c = { path = "crates/xr-io-c", version = "0.0.1" }
-xr-netcdf3 = { path = "crates/xr-netcdf3", version = "0.0.1" }
-xr-hdf5 = { path = "crates/xr-hdf5", version = "0.0.1" }
-xr-netcdf4 = { path = "crates/xr-netcdf4", version = "0.0.1" }
+annoray = { path = "annoray", version = "0.0.1" }
+annoray-core = { path = "crates/annoray-core", version = "0.0.1" }
+annoray-macros = { path = "crates/annoray-macros", version = "0.0.1" }
+annoray-units = { path = "crates/annoray-units", version = "0.0.1" }
+annoray-io = { path = "crates/annoray-io", version = "0.0.1" }
+annoray-cf = { path = "crates/annoray-cf", version = "0.0.1" }
+annoray-io-c = { path = "crates/annoray-io-c", version = "0.0.1" }
+annoray-netcdf3 = { path = "crates/annoray-netcdf3", version = "0.0.1" }
+annoray-hdf5 = { path = "crates/annoray-hdf5", version = "0.0.1" }
+annoray-netcdf4 = { path = "crates/annoray-netcdf4", version = "0.0.1" }
 
 chrono = { version = "0.4", default-features = false, features = ["std"] }
 indexmap = "2"

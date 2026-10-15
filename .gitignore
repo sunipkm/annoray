@@ -2,5 +2,5 @@
 **/*.rs.bk
 __pycache__/
 # maturin develop builds the extension module in place
-rarray/python/rarray/*.so
-rarray/python/rarray/*.pyd
+annoray-python/python/annoray/*.so
+annoray-python/python/annoray/*.pyd

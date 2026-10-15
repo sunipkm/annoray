@@ -1,0 +1,19 @@
+[package]
+name = "annoray-netcdf3"
+description = "Pure-Rust netCDF-3 (classic, 64-bit offset, CDF-5) reader and writer for annoray"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+ndarray.workspace = true
+annoray-core.workspace = true
+annoray-io.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+annoray-io-c.workspace = true
+
+[lints]
+workspace = true

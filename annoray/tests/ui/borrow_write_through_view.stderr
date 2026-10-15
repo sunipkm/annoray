@@ -1,0 +1,13 @@
+error[E0599]: the method `data_mut` exists for struct `VariableBase<annoray::View<'_>>`, but its trait bounds were not satisfied
+ --> tests/ui/borrow_write_through_view.rs:5:15
+  |
+5 |     let _ = v.data_mut::<f64>();
+  |               ^^^^^^^^
+  |
+ ::: $WORKSPACE/crates/annoray-core/src/repr.rs
+  |
+  | pub struct View<'a>(PhantomData<&'a ()>);
+  | ------------------- doesn't satisfy `annoray::View<'_>: ReprMut`
+  |
+  = note: the following trait bounds were not satisfied:
+          `annoray::View<'_>: ReprMut`

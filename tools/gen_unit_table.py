@@ -1,8 +1,8 @@
-"""Generate crates/xr-units/src/table.rs from the UDUNITS-2 XML database.
+"""Generate crates/annoray-units/src/table.rs from the UDUNITS-2 XML database.
 
 Usage (from the repository root):
 
-    python3 tools/gen_unit_table.py <dir-with-udunits2-*.xml> > crates/xr-units/src/table.rs
+    python3 tools/gen_unit_table.py <dir-with-udunits2-*.xml> > crates/annoray-units/src/table.rs
 
 The XML files are lib/udunits2-{base,derived,accepted,common,prefixes}.xml from
 https://github.com/Unidata/UDUNITS-2. The output is committed, so the build never needs them.

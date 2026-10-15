@@ -1,0 +1,20 @@
+error[E0599]: the method `__xr_isel_pos_mut` exists for struct `VariableBase<annoray::View<'_>>`, but its trait bounds were not satisfied
+ --> tests/ui/borrow_isel_mut_on_view.rs:5:13
+  |
+5 |     let _ = isel!(mut v[0]);
+  |             ^^^^^^^^^^^^^^^
+  |
+ ::: $WORKSPACE/crates/annoray-core/src/repr.rs
+  |
+  | pub struct View<'a>(PhantomData<&'a ()>);
+  | ------------------- doesn't satisfy `annoray::View<'_>: ReprMut`
+  |
+ ::: $WORKSPACE/crates/annoray-core/src/variable.rs
+  |
+  | pub struct VariableBase<S: Repr> {
+  | -------------------------------- doesn't satisfy `_: IselMut`
+  |
+  = note: the following trait bounds were not satisfied:
+          `annoray::View<'_>: ReprMut`
+          which is required by `VariableBase<annoray::View<'_>>: annoray::__rt::IselMut`
+  = note: this error originates in the macro `isel` (in Nightly builds, run with -Z macro-backtrace for more info)

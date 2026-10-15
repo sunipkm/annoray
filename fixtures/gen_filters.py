@@ -1,4 +1,4 @@
-"""HDF5 file with compressed and packed chunks, for xr-hdf5/tests/filters.rs.
+"""HDF5 file with compressed and packed chunks, for annoray-hdf5/tests/filters.rs.
 
 Needs h5py and hdf5plugin (which bundles HDF5's filter plugins), e.g. in a throwaway venv:
     python3 -m venv /tmp/v && /tmp/v/bin/pip install h5py hdf5plugin
@@ -9,7 +9,7 @@ Writes fixtures/h5/filters.h5. Every dataset `<name>` has an uncompressed copy
 
 With `--big <out.h5>` it instead writes large 1024x1024 chunks (several Blosc blocks and
 streams, many Bitshuffle blocks, multi-block bzip2 streams, ragged edge chunks) to a
-scratch file, for the ignored test `xr-hdf5/tests/filters.rs::big_chunks`.
+scratch file, for the ignored test `annoray-hdf5/tests/filters.rs::big_chunks`.
 """
 
 import ctypes

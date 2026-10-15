@@ -1,0 +1,28 @@
+[package]
+name = "annoray-python"
+description = "Python bindings of annoray: units-aware labelled arrays and pure-Rust netCDF/HDF5 I/O"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+name = "_annoray"
+crate-type = ["cdylib", "rlib"]
+# Tested from Python (tests/, pytest): the extension module needs a Python to load into.
+test = false
+doctest = false
+
+[dependencies]
+chrono.workspace = true
+ndarray.workspace = true
+numpy.workspace = true
+pyo3 = { workspace = true, features = ["multiple-pymethods"] }
+annoray.workspace = true
+
+[target.'cfg(target_os = "linux")'.dependencies]
+libc.workspace = true
+
+[lints]
+workspace = true

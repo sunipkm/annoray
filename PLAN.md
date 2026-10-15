@@ -1,4 +1,4 @@
-# xarray-rs — Plan
+# annoray — Plan
 
 A units-aware port of Python's xarray in Rust. It reads and writes netCDF-3, netCDF-4 and HDF5.
 The data model copies ndarray's owned/view split: `Dataset`, `DatasetView`, `DatasetViewMut`.
@@ -7,6 +7,7 @@ The data model copies ndarray's owned/view split: `Dataset`, `DatasetView`, `Dat
 
 | Topic | Decision |
 |---|---|
+| Name | **annoray** (annotated arrays): the Rust crate `annoray` (a facade over the `annoray-*` crates: core, units, io, io-c, cf, hdf5, netcdf3, netcdf4, macros, published first since `annoray` depends on them) and the Python package `annoray` (crate `annoray-python`, module `annoray._annoray`). The project began as `xarray-rs` (crates `xr-*`) and the Python package as `rarray` |
 | View naming | ndarray style: `DatasetView<'a>`, `DatasetViewMut<'a>`, `DataArrayView<'a>`, … |
 | Units | Runtime port of **whippyunits'** model: prime-factorized scales, data kept in the unit it is declared in, exact unit equality, affine units, angle as its own dimension |
 | Time | **chrono**: `NaiveDateTime` for real-world calendars, `TimeDelta` for durations. Non-Gregorian CF calendars use our own `CfDate` type, which converts to and from chrono where possible |
@@ -20,26 +21,26 @@ The data model copies ndarray's owned/view split: `Dataset`, `DatasetView`, `Dat
 ## 1. Workspace layout
 
 ```
-xarray-rs/
+annoray/
 ├── crates/
-│   ├── xr-units       # Unit, Scale, Dimension, parser (UDUNITS/CF + UCUM), conversion, CF time (chrono)
+│   ├── annoray-units       # Unit, Scale, Dimension, parser (UDUNITS/CF + UCUM), conversion, CF time (chrono)
 │   │                  #   features: `uom`, `whippyunits` → StaticUnit impls + conversions
-│   ├── xr-core        # Repr GAT, Variable/DataArray/Dataset (+View/ViewMut), indexes, alignment, ops
-│   ├── xr-macros      # proc macros: isel!/sel! with Python-style slices (syn + quote)
-│   ├── xr-cf          # CF encode/decode: mask_and_scale, _FillValue, time, `coordinates`, units attr
-│   ├── xr-io          # Backend trait, lazy BackendArray, Hyperslab, open_dataset / to_netcdf
-│   ├── xr-io-c        # [feature c-backend] adapters over `netcdf` + `hdf5-metno` (C libs)
-│   ├── xr-netcdf3     # pure Rust classic / 64-bit offset / CDF-5
-│   ├── xr-hdf5        # pure Rust HDF5 (superblock, object headers, B-trees, heaps, chunking, filters)
-│   └── xr-netcdf4     # netCDF-4 data model on xr-hdf5 (dim scales, groups, _NCProperties)
-├── xarray-rs/         # facade crate that re-exports everything
+│   ├── annoray-core        # Repr GAT, Variable/DataArray/Dataset (+View/ViewMut), indexes, alignment, ops
+│   ├── annoray-macros      # proc macros: isel!/sel! with Python-style slices (syn + quote)
+│   ├── annoray-cf          # CF encode/decode: mask_and_scale, _FillValue, time, `coordinates`, units attr
+│   ├── annoray-io          # Backend trait, lazy BackendArray, Hyperslab, open_dataset / to_netcdf
+│   ├── annoray-io-c        # [feature c-backend] adapters over `netcdf` + `hdf5-metno` (C libs)
+│   ├── annoray-netcdf3     # pure Rust classic / 64-bit offset / CDF-5
+│   ├── annoray-hdf5        # pure Rust HDF5 (superblock, object headers, B-trees, heaps, chunking, filters)
+│   └── annoray-netcdf4     # netCDF-4 data model on annoray-hdf5 (dim scales, groups, _NCProperties)
+├── annoray/         # facade crate that re-exports everything
 └── fixtures/          # gen.py (Python xarray/netCDF4) → golden files; test-only
 ```
 
-The C backend and the pure-Rust backends implement the same `xr-io::Backend` trait. That lets the
+The C backend and the pure-Rust backends implement the same `annoray-io::Backend` trait. That lets the
 whole test suite run against both, and lets us diff their outputs.
 
-## 2. Core data model (`xr-core`)
+## 2. Core data model (`annoray-core`)
 
 A single generic base type, with the storage kind (owned, view, mutable view) chosen through a GAT:
 
@@ -119,7 +120,7 @@ and benches may unwrap, but library code may not.
 **Error types:**
 - Each crate has its own `thiserror` enum: `UnitError`, `CoreError`, `CfError`, `Nc3Error`,
   `Hdf5Error`, …
-- The facade crate's `xarray_rs::Error` wraps them all with `#[from]`, so `?` works everywhere.
+- The facade crate's `annoray::Error` wraps them all with `#[from]`, so `?` works everywhere.
 - Errors carry context (variable name, dimension, file offset, HDF5 object address) so failures in
   large files can be located. A small `ResultExt::context()` helper adds it.
 - Enums are `#[non_exhaustive]`. No `Box<dyn Error>` in public APIs.
@@ -149,7 +150,7 @@ locally `#[allow(clippy::indexing_slicing)]`, even where a shape check came firs
 constructors. We use the non-panicking variants (`from_shape_vec`, `checked_add_signed`,
 `NaiveDate::from_ymd_opt`, …) and check shapes before calling anything that can panic.
 
-## 3. Units (`xr-units`), modelled on whippyunits
+## 3. Units (`annoray-units`), modelled on whippyunits
 
 whippyunits checks units at compile time. Units in netCDF files are only known once the file is read,
 so we keep its **algebra** and evaluate it at runtime.
@@ -256,7 +257,7 @@ chrono only knows the proleptic Gregorian calendar, while CF files also use othe
 
 ### Interop with typed unit libraries (features `uom`, `whippyunits`)
 
-A shared bridge trait in `xr-units`, implemented by each feature:
+A shared bridge trait in `annoray-units`, implemented by each feature:
 
 ```rust
 /// A unit known at compile time.
@@ -297,7 +298,7 @@ ds.sel(("height", Q::new(...)))                            // query converted in
 
 ## 4. I/O
 
-### Backend abstraction (`xr-io`)
+### Backend abstraction (`annoray-io`)
 ```rust
 pub trait Backend {
     fn open(&self, src: &Source, opts: &OpenOptions) -> Result<RawStore>;     // lazy, CF-undecoded
@@ -308,22 +309,22 @@ pub trait BackendArray: Send + Sync {
     fn read(&self, sel: &Hyperslab) -> Result<TypedArray<Owned>>;
 }
 ```
-The pipeline is `open_dataset` = backend.open, then `xr-cf` decode, then `Dataset`; writing runs the same steps in reverse.
+The pipeline is `open_dataset` = backend.open, then `annoray-cf` decode, then `Dataset`; writing runs the same steps in reverse.
 `RawStore` is the plain netCDF data model (groups, dims, vars, attrs) with no CF interpretation.
 
-### Phase A: C bindings (`xr-io-c`, feature `c-backend`)
+### Phase A: C bindings (`annoray-io-c`, feature `c-backend`)
 - netCDF via the georust `netcdf` crate, and plain HDF5 via `hdf5-metno`. Use the `static` features so
   that CI doesn't depend on system libraries.
-- Purpose: get `xr-core`, `xr-cf` and units working end to end on real files straight away.
+- Purpose: get `annoray-core`, `annoray-cf` and units working end to end on real files straight away.
 - Later this becomes a **differential-testing oracle**: write with ours, read with C (and the reverse),
   and compare.
 
 ### Phase B: pure Rust
-- **xr-netcdf3:**
+- **annoray-netcdf3:**
   - CDF-1, CDF-2 and CDF-5 headers, fixed and record variables, padding and fill values.
   - About 1.5k lines of code.
   - Done first, since it de-risks the shape of the backend trait.
-- **xr-hdf5,** built in layers:
+- **annoray-hdf5,** built in layers:
   1. Superblock v0–v3, object headers v1/v2, link messages, compact, dense and symbol-table groups.
   2. Datatypes: fixed-point, float, fixed and variable-length strings, compound, enum, references. Dataspaces.
   3. Layouts: contiguous and compact. Chunked with B-tree v1, plus the newer indexes
@@ -333,19 +334,19 @@ The pipeline is `open_dataset` = backend.open, then `xr-cf` decode, then `Datase
      with a plugin trait.
   6. Writer: we choose a small set of layouts to emit (superblock v2, v2 object headers, chunked with
      B-tree v1 for netCDF-C compatibility, dense attributes when needed), and track free space.
-- **xr-netcdf4:**
+- **annoray-netcdf4:**
   - Maps HDF5 to the netCDF data model: `DIMENSION_LIST`, `REFERENCE_LIST`, `CLASS=DIMENSION_SCALE`,
     `NAME`, `_Netcdf4Dimid`, `_Netcdf4Coordinates`, `_NCProperties`, creation-order tracking,
     phony dims for plain HDF5 files, unlimited dims, groups and user-defined types.
   - Reference documents: the netCDF-4 format spec and the HDF5 File Format Specification v3.
 
 ### Implementation notes (M3, as built)
-- **The C backend is the `netcdf-c` cargo feature** (`xr-io-c`, default off). The `netcdf` crate's
+- **The C backend is the `netcdf-c` cargo feature** (`annoray-io-c`, default off). The `netcdf` crate's
   `static` feature builds netCDF-C 4.9 and HDF5 from source, which takes about 1.5 minutes and
   needs cmake. CI's MSRV job skips that crate, since it builds C libraries. Writing `NC_CHAR` needs one `unsafe impl` (a `repr(transparent)` byte), allowed
   locally with a SAFETY comment.
 - **Plain HDF5 files are not supported through the C backend.** The `hdf5-metno` bindings were
-  skipped: pure-Rust `xr-hdf5` (M5) covers plain HDF5, tested against h5py-written fixtures.
+  skipped: pure-Rust `annoray-hdf5` (M5) covers plain HDF5, tested against h5py-written fixtures.
 - **Reads were eager here;** lazy, sliced reads came in M7.
 - **`Encoding`** on each `Variable`, and `DatasetEncoding` (unlimited dims) on `Dataset`, record how
   data was stored, as xarray's `.encoding` does. Encoding falls back to xarray's defaults when unset:
@@ -364,7 +365,7 @@ The pipeline is `open_dataset` = backend.open, then `xr-cf` decode, then `Datase
   Python xarray reads our output identically too.
 
 ### Implementation notes (M4, as built)
-- **`xr-netcdf3` reads and writes CDF-1, CDF-2 and CDF-5 in pure Rust.**
+- **`annoray-netcdf3` reads and writes CDF-1, CDF-2 and CDF-5 in pure Rust.**
   - Its output is **byte-for-byte identical to netCDF-C's**, padding included (netCDF-C pads with
     the variable's fill value), across all three versions, with one or several record variables.
   - Each library reads the other's files identically, and it reads xarray-written netCDF-3 files.
@@ -380,7 +381,7 @@ The pipeline is `open_dataset` = backend.open, then `xr-cf` decode, then `Datase
   Without the C feature, `to_netcdf` defaults to netCDF-3 (64-bit offsets).
 
 ### Implementation notes (M5, as built)
-- **The `xr-hdf5` reader handles everything HDF5 2.0 writes:**
+- **The `annoray-hdf5` reader handles everything HDF5 2.0 writes:**
   - superblock v0–v3 and object headers v1/v2 with continuation blocks;
   - symbol-table, compact and dense groups (fractal heap plus v2 B-tree), in creation order
     when the file tracks it;
@@ -414,11 +415,11 @@ The pipeline is `open_dataset` = backend.open, then `xr-cf` decode, then `Datase
 - **Readers of our output:** our reader, netCDF-C (the HDF5 C library) and h5py all read it
   identically, with h5py resolving every reference to the right object.
 - **Facade:** netCDF-4 files still go through the C backend. The pure-Rust path takes over in M6,
-  once netCDF-4 semantics (dimension scales, `_Netcdf4Dimid`, …) are on top of `xr-hdf5`.
+  once netCDF-4 semantics (dimension scales, `_Netcdf4Dimid`, …) are on top of `annoray-hdf5`.
 
 ### Implementation notes (M6, as built)
-- **`xr-netcdf4` uses netCDF-C's conventions, checked against its files with our HDF5 inspector**
-  (`cargo run -p xr-hdf5 --example inspect -- FILE`):
+- **`annoray-netcdf4` uses netCDF-C's conventions, checked against its files with our HDF5 inspector**
+  (`cargo run -p annoray-hdf5 --example inspect -- FILE`):
   - **Dimension scales:** `CLASS="DIMENSION_SCALE"` and `NAME` are NUL-terminated fixed
     strings. Dimension-only scales are empty big-endian `float32` datasets named
     `"This is a netCDF dimension but not a netCDF variable.%10d"`.
@@ -426,7 +427,7 @@ The pipeline is `open_dataset` = backend.open, then `xr-cf` decode, then `Datase
     ids, on every variable with dimensions), `DIMENSION_LIST` (reference lists) and
     `REFERENCE_LIST` (`{dataset, dimension}` pairs). A variable that clashes with a dimension
     name is stored as `_nc4_non_coord_<name>`.
-  - **Root attributes:** `_NCProperties` (we write `version=2,xarray-rs=<version>`), plus
+  - **Root attributes:** `_NCProperties` (we write `version=2,annoray=<version>`), plus
     `_nc3_strict` for the classic model.
   - **`_FillValue`** is both the dataset fill property and an attribute.
   - **Default chunking** is netCDF-C's `nc4_find_default_chunksizes2`, ported exactly (f32
@@ -440,23 +441,23 @@ The pipeline is `open_dataset` = backend.open, then `xr-cf` decode, then `Datase
   - netCDF-C reads our files exactly as it reads its own, in both the full and classic models.
   - Python xarray reads our netCDF-4 output identically (CI).
 - **The facade is now pure Rust.** `AutoBackend` picks by magic bytes: netCDF-3 goes to
-  `xr-netcdf3`, netCDF-4/HDF5 to `xr-netcdf4`. Writing netCDF-4 is pure Rust too. The
+  `annoray-netcdf3`, netCDF-4/HDF5 to `annoray-netcdf4`. Writing netCDF-4 is pure Rust too. The
   `netcdf-c` feature is now only an alternative backend (`io::c_backend()`) and the
   differential-test oracle.
 
 ### Memory-mapped I/O (added during M6, by request)
-- **`xr_io::map_file`** memory-maps files for reading, using `memmap2` with the one `unsafe`
+- **`annoray_io::map_file`** memory-maps files for reading, using `memmap2` with the one `unsafe`
   call, documented. `read_file` is the copying alternative, for files that might be modified
   while open.
 - **The HDF5, netCDF-4 and netCDF-3 readers all map by default.** Opening touches only metadata
   pages. Contiguous HDF5 data decodes straight from the map, with no intermediate copy.
-- **Hyperslab reads:** `xr_hdf5::Dataset::read_slice` and `xr_netcdf3::Netcdf3File::read_slice`
+- **Hyperslab reads:** `annoray_hdf5::Dataset::read_slice` and `annoray_netcdf3::Netcdf3File::read_slice`
   touch only the chunks, records and rows a slice spans. Property tests check them against full
   reads for every layout, chunk index, record layout and format version.
 - **Lazy since M7** (see below).
 
 ### Implementation notes (M7, lazy loading, as built)
-- **`xr_core::LazySource`** (`dtype`, `shape`, `read_slice(start, count)`) is what a backend
+- **`annoray_core::LazySource`** (`dtype`, `shape`, `read_slice(start, count)`) is what a backend
   provides for each variable. **`LazyArray`** pairs a source with a per-axis selection (an index,
   or `start`/`step`/`len`). `isel` composes selections and reads nothing. The first access reads
   the covering box once, applies the steps, drops the indexed axes, and caches the result in an
@@ -465,9 +466,9 @@ The pipeline is `open_dataset` = backend.open, then `xr-cf` decode, then `Datase
   `data()`, `typed()`, arithmetic and lookups load it. `data_mut` on lazy data is
   `CoreError::NotLoaded`, so call `Variable::load` or `Dataset::load` first. Display never
   reads: it shows `[N values with dtype=X]`.
-- **`xr_io::RawData`** is `Loaded | Lazy`. `Backend::read_lazy` defaults to `read`. netCDF-3
+- **`annoray_io::RawData`** is `Loaded | Lazy`. `Backend::read_lazy` defaults to `read`. netCDF-3
   (`Nc3Source` over an `Arc<Netcdf3File>`) and netCDF-4/HDF5 (`H5Source` over
-  `xr_hdf5::Dataset::read_slice`) implement it. Unreadable HDF5 types fall back to an eager read,
+  `annoray_hdf5::Dataset::read_slice`) implement it. Unreadable HDF5 types fall back to an eager read,
   so they are still reported as skipped.
 - **CF decoding is split into a plan and its application.** The plan (chars, `_Unsigned`, bool,
   mask/scale, times) comes from attributes and dtype alone. Lazy variables wrap their source in a
@@ -520,7 +521,7 @@ The pipeline is `open_dataset` = backend.open, then `xr-cf` decode, then `Datase
 ### Implementation notes (M8, missing times, as built)
 - **NaT is a reserved value** of each time type, as in numpy: `NaiveDateTime::MIN`,
   `TimeDelta::MIN`, and `CfDate::NAT` (whose year is reserved, so `from_ymd` rejects it). The
-  `xr_core::NaT` trait gives `NAT` and `is_nat()`. Display prints `NaT`.
+  `annoray_core::NaT` trait gives `NAT` and `is_nat()`. Display prints `NaT`.
 - **Semantics:**
   - Reductions skip NaT like NaN. An all-NaT mean is NaT, and an all-NaT sum of durations is 0.
   - Arithmetic with NaT gives NaT.
@@ -644,13 +645,16 @@ The pipeline is `open_dataset` = backend.open, then `xr-cf` decode, then `Datase
   on `align` with a right join. Integer data stays integer when nothing is missing.
 
 ### Implementation notes (M8, DataTree, as built)
-- **`xr_core::DataTree`** is a node's own `Dataset` plus named children. Its API:
+- **`annoray_core::DataTree`** is a node's own `Dataset` plus named children. Its API:
   `add_child`/`with_child`, `get(path)`, `inherited(path)`, `paths()` (depth first),
   `map_over_datasets`, `set_dataset`, `load`, and a `Display` that lists groups.
-- **Inheritance** works as in xarray. `inherited(path)` adds the ancestors' coordinates the
-  node lacks. A child must agree with them: a dimension shared with an inherited dimension
-  coordinate must have the same length, and a same-name coordinate must have equal values.
-  Whole subtrees are checked on attach.
+- **Inheritance** works as in xarray. `inherited(path)` adds the ancestors' dimension (index)
+  coordinates the node lacks, ahead of its own; other coordinates stay with the node that
+  defines them. (Until M9 every ancestor coordinate was inherited, which differed from
+  xarray; the native Python `DataTree` tests caught it.) A child must agree with what it
+  inherits: a dimension shared with an inherited dimension coordinate must have the same
+  length, and a same-name coordinate must have equal values. Whole subtrees are checked on
+  attach.
 - **I/O** (facade):
   - `open_datatree`, `open_datatree_with` (lazy by default; `group` picks the root) and
     `open_datatree_with_backend`. Warnings are prefixed with their group path.
@@ -749,7 +753,7 @@ The pipeline is `open_dataset` = backend.open, then `xr-cf` decode, then `Datase
     encoding. It checks that netCDF-4 reads exactly one chunk at a time, that netCDF-3 never
     reads it whole, and that the values read back.
 
-### CF layer (`xr-cf`)
+### CF layer (`annoray-cf`)
 - On decode: apply `_FillValue`, `missing_value`, `scale_factor`, `add_offset` and `_Unsigned`. Parse `units` into `Unit`.
   Turn time variables into `NaiveDateTime` or `CfDate` depending on the calendar (§3 Time), and resolve `coordinates` and `bounds`.
 - On encode: the exact inverse, keeping the original dtype, fill value and unit label so the file round-trips byte for byte.
@@ -789,13 +793,13 @@ The pipeline is `open_dataset` = backend.open, then `xr-cf` decode, then `Datase
 - **Fancy indexing** is `take(dim, &[i])` and `sel_take(dim, labels)`. Both return owned data
   because they must copy, so they are methods rather than macro syntax.
 
-## 5a. Indexing macros (`xr-macros`)
+## 5a. Indexing macros (`annoray-macros`)
 
 Python-style indexing that never panics. Each macro expands to calls on the `Indexer` /
 `LabelIndexer` API below and returns a `Result`, so you finish it with `?`. Anything a macro can do,
 plain functions can do too.
 
-### Runtime types (in `xr-core`, M0)
+### Runtime types (in `annoray-core`, M0)
 
 ```rust
 pub enum Indexer {                      // positional
@@ -871,15 +875,15 @@ let v = isel!(da[time = i:i + n, lat = {cfg.lat_range()}])?;
 | # | Deliverable | Exit criteria |
 |---|---|---|
 | M0 | Workspace, CI (fmt, clippy `-D warnings` with the §2a lints, test, MSRV 1.85), error-type skeleton, `Repr` GAT, `TypedArray`, `Variable{,View,ViewMut}`, `Indexer`/`PySlice` + positional `isel!` | Mutations made through `isel` on a `ViewMut` show up in the owner. Borrow-check tests with `trybuild` |
-| M1 | `xr-units`: Dimension, Scale, Unit, parsers, conversion, arithmetic rules. CF epoch units with chrono and `CfDate` (all calendars). `StaticUnit` trait | All CF standard-name table units parse. Property tests: rescale round-trips exactly, `==` matches the converted value. Calendar tests checked against Python cftime output |
+| M1 | `annoray-units`: Dimension, Scale, Unit, parsers, conversion, arithmetic rules. CF epoch units with chrono and `CfDate` (all calendars). `StaticUnit` trait | All CF standard-name table units parse. Property tests: rescale round-trips exactly, `==` matches the converted value. Calendar tests checked against Python cftime output |
 | M2 | `DataArray`, `Dataset`, coords, indexes (including datetime), `isel`/`sel` + named `isel!`/`sel!` macros, unit-aware ops, xarray-style `Display` | Ported xarray selection and arithmetic examples |
-| M3 | `xr-io` + `xr-cf` + **`xr-io-c`** (C-backed netCDF/HDF5 read and write) | Golden files from `fixtures/gen.py` open and round-trip. Units decode from attrs |
-| M4 | **xr-netcdf3**, pure Rust read and write | Round-trip tests. Differential tests against `xr-io-c`. `ncdump` output identical |
-| M5 | **xr-hdf5** read and write: layers 1–4, contiguous and chunked, deflate and shuffle | `h5dump` diff clean on our output. Reads files written by h5py and netCDF-C |
-| M6 | **xr-netcdf4** read and write | Files we write open in netCDF-C/`ncdump` and Python xarray with no warnings, and the reverse also holds. Real files (ERA5, CMIP6, GOES) open |
+| M3 | `annoray-io` + `annoray-cf` + **`annoray-io-c`** (C-backed netCDF/HDF5 read and write) | Golden files from `fixtures/gen.py` open and round-trip. Units decode from attrs |
+| M4 | **annoray-netcdf3**, pure Rust read and write | Round-trip tests. Differential tests against `annoray-io-c`. `ncdump` output identical |
+| M5 | **annoray-hdf5** read and write: layers 1–4, contiguous and chunked, deflate and shuffle | `h5dump` diff clean on our output. Reads files written by h5py and netCDF-C |
+| M6 | **annoray-netcdf4** read and write | Files we write open in netCDF-C/`ncdump` and Python xarray with no warnings, and the reverse also holds. Real files (ERA5, CMIP6, GOES) open |
 | M7 | Alignment, reductions, concat/merge, lazy chunked reads, `rayon` | Ported subset of xarray's test suite |
 | M8 | groupby/resample/rolling (chrono-based time bins), DataTree, more filters; also NaT, where/fillna/dropna/reindex | Oracle tests against xarray for each |
-| M9 | **Python bindings: `rarray`** (PyO3 + maturin), see §9: (1) an xarray backend engine, `xr.open_dataset(path, engine="rarray")`, plus writing; (2) native unit-aware `Dataset`/`DataArray`/`Variable` with xarray's method names, zero-copy numpy, `to_xarray`/`from_xarray`, pint interop; (3) differential tests against xarray | Engine reads every fixture identically to xarray's own engines. Ported subset of xarray's test suite passes, deviations listed |
+| M9 | **Python bindings: `annoray`** (PyO3 + maturin), see §9: (1) an xarray backend engine, `xr.open_dataset(path, engine="annoray")`, plus writing; (2) native unit-aware `Dataset`/`DataArray`/`Variable` with xarray's method names, zero-copy numpy, `to_xarray`/`from_xarray`, pint interop; (3) differential tests against xarray | Engine reads every fixture identically to xarray's own engines. Ported subset of xarray's test suite passes, deviations listed |
 | M10 | **`uom` and `whippyunits` features** (last, once everything else is done): `StaticUnit` impls, `to_typed`, `view_typed`, `from_typed`, typed `sel` | Feature-powerset CI. Typed round-trip tests for each feature |
 
 At M6 the C backend becomes optional (`default-features = false` gives a fully pure-Rust build). It stays enabled in CI as the oracle.
@@ -908,7 +912,7 @@ At M6 the C backend becomes optional (`default-features = false` gives a fully p
 
 ## 9. Python bindings (M9)
 
-**rarray**: a Python package (`import rarray`; crate `rarray` in `rarray/`, PyO3 + maturin;
+**annoray** for Python (`import annoray`; crate `annoray-python` in `annoray-python/`, PyO3 + maturin;
 one wheel per Python version, since rust-numpy does not support abi3) that brings the Rust implementation to Python users, named in the spirit of
 xarray. It aims to be **safer** and, where it counts,
 **faster** than xarray:
@@ -923,9 +927,9 @@ xarray. It aims to be **safer** and, where it counts,
 plotting, so nothing may be a dead end.
 
 Stages:
-1. **xarray backend engine.** An `xarray.backends` entry point (`engine="rarray"`) built
+1. **xarray backend engine.** An `xarray.backends` entry point (`engine="annoray"`) built
    on our lazy readers (a `BackendArray` reading slices), and a writer
-   (`rarray.to_netcdf(ds, path)`). Users keep xarray's API and get our I/O: every codec,
+   (`annoray.to_netcdf(ds, path)`). Users keep xarray's API and get our I/O: every codec,
    NaT, DataTree groups and `open_mfdataset`. This stage proves out packaging, numpy
    conversion and GIL handling.
 2. **Native objects.** `Dataset`, `DataArray` and `Variable` mirror xarray's method names and
@@ -991,7 +995,7 @@ Stages:
      - Median and integer reductions of lazy data still load.
 
    **Implementation notes (done: elementwise, reductions, encoding):**
-   - **Lazy elementwise operations:** `BinarySource` and `ConvertSource` (xr-core
+   - **Lazy elementwise operations:** `BinarySource` and `ConvertSource` (annoray-core
      `ops.rs`).
      - `DataArray::binary` returns a lazy result whenever an operand is lazy, once
        alignment is a no-op. Each operand reads its part of the requested box (dimensions
@@ -1020,30 +1024,58 @@ Stages:
 
      Streaming memory does not depend on the size of the data.
    - **Tests:**
-     - xr-core `tests/lazy_compute.rs`: a source that records its largest read checks that
+     - annoray-core `tests/lazy_compute.rs`: a source that records its largest read checks that
        expressions stay lazy, read only the boxes asked for, and match in-memory results
        bit for bit; and that reductions stay within the budget and match bit for bit.
      - pytest: lazy arithmetic, unit conversion and streamed reductions against xarray, and
        `encoding=` round trips.
 
+**annoray stands alone (M9).** annoray is its own library, not a layer over xarray.
+xarray is not natively unit-aware, so annoray's objects, units and computation never go
+through it.
+- `import annoray` loads neither xarray nor pandas, and the only dependency is numpy.
+  xarray is the optional extra `annoray[xarray]`, and cftime the extra `annoray[cftime]`
+  (dates in non-standard calendars).
+- Interop is loaded on use: `engine="annoray"` (the `annoray.backend` entry point),
+  `to_xarray`/`from_xarray`, and writing xarray datasets with `annoray.to_netcdf`.
+- `annoray.DataTree` is native (core `DataTree`). It offers `open_datatree`,
+  `DataTree.from_dict`, `tree[path]`, `paths` (depth first), `children`, `dataset`,
+  `to_dataset(path, inherit=True)`, `load`, `to_netcdf` and `to_xarray`/`from_xarray`. Its
+  tests found that the core inherited every ancestor coordinate; xarray inherits only
+  dimension coordinates, and the core now does too (see M8).
+- **Library helpers instead of example helpers:**
+  - `to_f64()` on variables and data arrays (numbers and booleans as f64; xarray's
+    `.astype(float)`).
+  - `DataArray::scalar(v)`.
+  - `annoray::date_range(start, periods, freq)` (Python `annoray.date_range`), after
+    xarray's `date_range`: fixed steps and period starts; period ends and weeks are not
+    supported yet.
+- **Examples in pairs:** `annoray/examples/{quickstart,weather,disk_to_disk}.rs` and
+  `annoray-python/examples/*.py`, after xarray's quick overview and toy weather data, plus
+  the disk-to-disk pipeline. Each pair prints the same text. `tests/test_examples.py`
+  checks that, and that the Python examples run with xarray and pandas unimportable. Data
+  is generated deterministically (no random numbers), following numpy's evaluation order.
+- Unit errors name operands in their order (`incompatible units: m and s`). They had come
+  out reversed for addition and subtraction.
+
 **Stage 1 implementation notes (done):**
-- Rust side (`rarray/src/lib.rs`, module `rarray._rarray`): `RawGroup` opens a file with
+- Rust side (`annoray-python/src/lib.rs`, module `annoray._annoray`): `RawGroup` opens a file with
   `read_lazy` and serves **raw** variables (dims, attributes, storage details, and `read(name,
-  start, count)` for one box). `write(...)` builds an xarray-rs `Dataset` from values the
+  start, count)` for one box). `write(...)` builds an annoray `Dataset` from values the
   Python side prepared (numbers, ns-since-epoch datetimes and timedeltas with `i64::MIN` as
   NaT, strings, cftime dates as components) and writes it with our CF encoder. The GIL is
   released for every read and write. `MemorySource` became public for in-memory slices.
-- Python side (`rarray/python/rarray/`): `backend.py` holds the entry point (`engine="rarray"`,
+- Python side (`annoray-python/python/annoray/`): `backend.py` holds the entry point (`engine="annoray"`,
   `open_dataset`, `open_groups_as_dict`, `open_datatree`, and `guess_can_open` by magic
   number). Raw variables go through xarray's own `StoreBackendEntrypoint`, so xarray's decoder
   runs on top and the results are xarray's own. Arrays support basic indexing: only the
   bounding box is read, and steps and negative steps are applied in numpy. No lock is used,
-  since reads are thread-safe, and dask chunks work. `writer.py` holds `rarray.to_netcdf`,
+  since reads are thread-safe, and dask chunks work. `writer.py` holds `annoray.to_netcdf`,
   which takes netCDF4-python encoding names (zlib, complevel, shuffle, chunksizes, dtype,
   packing, fill, time units and calendar, and the compression codecs).
-- Tests (`rarray/tests/`, 41 tests): reads must be `identical` to `engine="netcdf4"` on every
+- Tests (`annoray-python/tests/`, 41 tests): reads must be `identical` to `engine="netcdf4"` on every
   fixture, decoded and raw, and under 9 kinds of selection, dask and 8 threads. A variable
-  xarray cannot decode (a masked noleap time) must fail the same way. Files written by rarray
+  xarray cannot decode (a masked noleap time) must fail the same way. Files written by annoray
   in all five formats must read back identical with netcdf4 and match xarray's own output.
   Packing, time encodings, unlimited dimensions and every codec are covered.
 - **Found upstream:** re-opening a file at a second group with `engine="netcdf4"` (after
@@ -1056,7 +1088,7 @@ Stages:
   byte-identical to the serial writer.
 
 **Performance work in stage 2.** Measured with `perf` against xarray's tutorial datasets
-(`rarray/bench/bench_tutorial.py`, Ryzen 7 9700X with 16 threads; every rarray result is
+(`annoray-python/bench/bench_tutorial.py`, Ryzen 7 9700X with 16 threads; every annoray result is
 checked against xarray's before it is timed). Causes found and fixed:
 - **Rolling:** each window was found with `skip()` on a strided lane, which is O(n²) per
   lane. Windows are now O(1) slices, and lanes run in parallel. 40× slower than xarray became
@@ -1086,11 +1118,11 @@ checked against xarray's before it is timed). Causes found and fixed:
 - **Benchmark hygiene:** scipy's OpenBLAS threads spin idle and take cores, so the benchmark
   sets `OPENBLAS_NUM_THREADS=1`.
 
-- **Huge pages:** rarray's global allocator is the system allocator, but on Linux it advises
+- **Huge pages:** annoray's global allocator is the system allocator, but on Linux it advises
   transparent huge pages (`MADV_HUGEPAGE`) for blocks of 4 MiB or more, as numpy does
-  (`rarray/src/alloc.rs`, one scoped `unsafe`). Faults on fresh large results fell from one
+  (`annoray-python/src/alloc.rs`, one scoped `unsafe`). Faults on fresh large results fell from one
   per 4 KiB to one per 2 MiB. Libraries do not set a global allocator; Rust programs using
-  xarray-rs choose their own.
+  annoray choose their own.
 - **Reusing buffers the core owns:** `binary_reusing_rhs` writes `lhs op rhs` into the right
   operand's buffer when no aligning, broadcasting or unit conversion is needed. It is used
   for group arithmetic (the expanded climatology) and for operands that `binary` has just

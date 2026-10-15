@@ -1,0 +1,23 @@
+[package]
+name = "annoray-cf"
+description = "CF conventions for annoray: decoding and encoding of fill values, packing, units and times"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+chrono.workspace = true
+indexmap.workspace = true
+ndarray.workspace = true
+thiserror.workspace = true
+annoray-core.workspace = true
+annoray-io.workspace = true
+rayon = { workspace = true, optional = true }
+
+[features]
+# Decode (unpack and mask) large arrays on several threads.
+rayon = ["dep:rayon", "ndarray/rayon"]
+
+[lints]
+workspace = true

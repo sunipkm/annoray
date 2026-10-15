@@ -1,7 +1,7 @@
-"""Golden DataTree file for xarray-rs/xarray-rs/tests/tree.rs, and a checker for ours.
+"""Golden DataTree file for annoray/tests/tree.rs, and a checker for ours.
 
 Write the golden file (from the repository root):  python3 fixtures/gen_tree.py
-Check a file written by xarray-rs:                  python3 fixtures/gen_tree.py <ours.nc>
+Check a file written by annoray:                  python3 fixtures/gen_tree.py <ours.nc>
 (prints OK or raises)
 
 Tree:

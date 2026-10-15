@@ -1,4 +1,4 @@
-"""Check that Python xarray decodes NaT in a file written by xarray-rs like fixtures/nc/nat.nc.
+"""Check that Python xarray decodes NaT in a file written by annoray like fixtures/nc/nat.nc.
 
 Usage: python3 fixtures/check_nat_output.py <written.nc>   (prints OK or raises)
 

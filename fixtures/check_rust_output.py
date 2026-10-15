@@ -1,4 +1,4 @@
-"""Check that Python xarray decodes a file written by xarray-rs like the golden file it came from.
+"""Check that Python xarray decodes a file written by annoray like the golden file it came from.
 
 Usage: python3 fixtures/check_rust_output.py <written.nc>   (prints OK or raises)
 """

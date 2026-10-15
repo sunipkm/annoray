@@ -1,4 +1,4 @@
-"""Reference rolling results from Python xarray for xarray-rs/crates/xr-core/tests/rolling.rs.
+"""Reference rolling results from Python xarray for annoray/crates/annoray-core/tests/rolling.rs.
 
 Run from the repository root:  python3 fixtures/gen_rolling.py > fixtures/rolling.txt
 

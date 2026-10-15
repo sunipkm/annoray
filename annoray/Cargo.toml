@@ -1,0 +1,39 @@
+[package]
+name = "annoray"
+description = "A units-aware, xarray-like library for labelled n-dimensional arrays, with netCDF and HDF5 I/O"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+glob.workspace = true
+annoray-core.workspace = true
+annoray-macros.workspace = true
+annoray-units.workspace = true
+annoray-io.workspace = true
+annoray-cf.workspace = true
+annoray-io-c = { workspace = true, optional = true }
+annoray-netcdf3.workspace = true
+annoray-netcdf4.workspace = true
+thiserror.workspace = true
+annoray-hdf5.workspace = true
+
+[features]
+default = ["rayon", "zstd", "lz4"]
+# Decompress HDF5/netCDF-4 chunks, and compute rolling windows, reductions and arithmetic,
+# in parallel.
+rayon = ["annoray-hdf5/rayon", "annoray-core/rayon", "annoray-cf/rayon"]
+# Read Zstandard- and LZ4-compressed HDF5/netCDF-4 chunks (pure Rust). LZF is always read.
+zstd = ["annoray-hdf5/zstd"]
+lz4 = ["annoray-hdf5/lz4"]
+# The netCDF-C/HDF5 C libraries as an alternative backend (built from source; needs cmake).
+# Not needed for I/O: netCDF-3, netCDF-4 and HDF5 are read and written in pure Rust.
+netcdf-c = ["dep:annoray-io-c"]
+
+[dev-dependencies]
+chrono.workspace = true
+trybuild.workspace = true
+
+[lints]
+workspace = true

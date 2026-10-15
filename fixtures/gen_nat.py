@@ -1,4 +1,4 @@
-"""Golden file with missing times (NaT) for xarray-rs/xarray-rs/tests/nat.rs.
+"""Golden file with missing times (NaT) for annoray/tests/nat.rs.
 
 Run from the repository root:  python3 fixtures/gen_nat.py
 
@@ -48,7 +48,7 @@ with netCDF4.Dataset(OUT, "a") as nc:
     v[:] = np.ma.masked_array([1_700_000_000_123_456_789, 0, 1], mask=[False, True, False])
 
 # How xarray decodes them. The masked `t_noleap` raises an OverflowError in xarray (a bug
-# xarray-rs does not copy: it decodes to a NaT).
+# annoray does not copy: it decodes to a NaT).
 back = xr.open_dataset(OUT)
 for name in ["t", "t_ns", "t_float", "t_noleap", "d"]:
     try:

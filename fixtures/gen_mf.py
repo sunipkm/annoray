@@ -1,4 +1,4 @@
-"""Files for open_mfdataset (xarray-rs/xarray-rs/tests/mfdataset.rs).
+"""Files for open_mfdataset (annoray/tests/mfdataset.rs).
 
 Run from the repository root:  python3 fixtures/gen_mf.py
 

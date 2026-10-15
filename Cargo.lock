@@ -18,6 +18,141 @@ dependencies = [
 ]
 
 [[package]]
+name = "annoray"
+version = "0.0.1"
+dependencies = [
+ "annoray-cf",
+ "annoray-core",
+ "annoray-hdf5",
+ "annoray-io",
+ "annoray-io-c",
+ "annoray-macros",
+ "annoray-netcdf3",
+ "annoray-netcdf4",
+ "annoray-units",
+ "chrono",
+ "glob",
+ "thiserror",
+ "trybuild",
+]
+
+[[package]]
+name = "annoray-cf"
+version = "0.0.1"
+dependencies = [
+ "annoray-core",
+ "annoray-io",
+ "chrono",
+ "indexmap",
+ "ndarray",
+ "rayon",
+ "thiserror",
+]
+
+[[package]]
+name = "annoray-core"
+version = "0.0.1"
+dependencies = [
+ "annoray-units",
+ "chrono",
+ "indexmap",
+ "ndarray",
+ "rayon",
+ "smallvec",
+ "thiserror",
+]
+
+[[package]]
+name = "annoray-hdf5"
+version = "0.0.1"
+dependencies = [
+ "annoray-core",
+ "annoray-io",
+ "annoray-io-c",
+ "indexmap",
+ "lz4_flex",
+ "miniz_oxide",
+ "ndarray",
+ "proptest",
+ "rayon",
+ "ruzstd",
+]
+
+[[package]]
+name = "annoray-io"
+version = "0.0.1"
+dependencies = [
+ "annoray-core",
+ "indexmap",
+ "memmap2",
+ "thiserror",
+]
+
+[[package]]
+name = "annoray-io-c"
+version = "0.0.1"
+dependencies = [
+ "annoray-core",
+ "annoray-io",
+ "indexmap",
+ "ndarray",
+ "netcdf",
+ "thiserror",
+]
+
+[[package]]
+name = "annoray-macros"
+version = "0.0.1"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
+]
+
+[[package]]
+name = "annoray-netcdf3"
+version = "0.0.1"
+dependencies = [
+ "annoray-core",
+ "annoray-io",
+ "annoray-io-c",
+ "ndarray",
+ "proptest",
+]
+
+[[package]]
+name = "annoray-netcdf4"
+version = "0.0.1"
+dependencies = [
+ "annoray-core",
+ "annoray-hdf5",
+ "annoray-io",
+ "annoray-io-c",
+ "ndarray",
+]
+
+[[package]]
+name = "annoray-python"
+version = "0.0.1"
+dependencies = [
+ "annoray",
+ "chrono",
+ "libc",
+ "ndarray",
+ "numpy",
+ "pyo3",
+]
+
+[[package]]
+name = "annoray-units"
+version = "0.0.1"
+dependencies = [
+ "chrono",
+ "proptest",
+ "thiserror",
+]
+
+[[package]]
 name = "autocfg"
 version = "1.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -666,18 +801,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rarray"
-version = "0.0.1"
-dependencies = [
- "chrono",
- "libc",
- "ndarray",
- "numpy",
- "pyo3",
- "xarray-rs",
-]
-
-[[package]]
 name = "rawpointer"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1071,129 +1194,6 @@ name = "wit-bindgen"
 version = "0.46.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f17a85883d4e6d00e8a97c586de764dabcc06133f7f1d55dce5cdc070ad7fe59"
-
-[[package]]
-name = "xarray-rs"
-version = "0.0.1"
-dependencies = [
- "chrono",
- "glob",
- "thiserror",
- "trybuild",
- "xr-cf",
- "xr-core",
- "xr-hdf5",
- "xr-io",
- "xr-io-c",
- "xr-macros",
- "xr-netcdf3",
- "xr-netcdf4",
- "xr-units",
-]
-
-[[package]]
-name = "xr-cf"
-version = "0.0.1"
-dependencies = [
- "chrono",
- "indexmap",
- "ndarray",
- "rayon",
- "thiserror",
- "xr-core",
- "xr-io",
-]
-
-[[package]]
-name = "xr-core"
-version = "0.0.1"
-dependencies = [
- "chrono",
- "indexmap",
- "ndarray",
- "rayon",
- "smallvec",
- "thiserror",
- "xr-units",
-]
-
-[[package]]
-name = "xr-hdf5"
-version = "0.0.1"
-dependencies = [
- "indexmap",
- "lz4_flex",
- "miniz_oxide",
- "ndarray",
- "proptest",
- "rayon",
- "ruzstd",
- "xr-core",
- "xr-io",
- "xr-io-c",
-]
-
-[[package]]
-name = "xr-io"
-version = "0.0.1"
-dependencies = [
- "indexmap",
- "memmap2",
- "thiserror",
- "xr-core",
-]
-
-[[package]]
-name = "xr-io-c"
-version = "0.0.1"
-dependencies = [
- "indexmap",
- "ndarray",
- "netcdf",
- "thiserror",
- "xr-core",
- "xr-io",
-]
-
-[[package]]
-name = "xr-macros"
-version = "0.0.1"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.119",
-]
-
-[[package]]
-name = "xr-netcdf3"
-version = "0.0.1"
-dependencies = [
- "ndarray",
- "proptest",
- "xr-core",
- "xr-io",
- "xr-io-c",
-]
-
-[[package]]
-name = "xr-netcdf4"
-version = "0.0.1"
-dependencies = [
- "ndarray",
- "xr-core",
- "xr-hdf5",
- "xr-io",
- "xr-io-c",
-]
-
-[[package]]
-name = "xr-units"
-version = "0.0.1"
-dependencies = [
- "chrono",
- "proptest",
- "thiserror",
-]
 
 [[package]]
 name = "zerocopy"

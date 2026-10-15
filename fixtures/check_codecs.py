@@ -1,4 +1,4 @@
-"""Check a file of plugin-compressed datasets written by xarray-rs (xr-hdf5/tests/write_codecs.rs)
+"""Check a file of plugin-compressed datasets written by annoray (annoray-hdf5/tests/write_codecs.rs)
 with h5py and hdf5plugin (the HDF5 C library's own filter plugins).
 
 Usage: python3 fixtures/check_codecs.py <written.h5>   (prints OK or raises)

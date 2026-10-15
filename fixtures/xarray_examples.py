@@ -1,4 +1,4 @@
-"""Reference results from Python xarray for xarray-rs/tests/xarray_examples.rs.
+"""Reference results from Python xarray for annoray/tests/xarray_examples.rs.
 
 Run from the repository root:  python3 fixtures/xarray_examples.py
 Each line prints a case name and the resulting values; the Rust tests hardcode them.

@@ -1,0 +1,32 @@
+[package]
+name = "annoray-hdf5"
+description = "Pure-Rust HDF5 reader and writer for annoray"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+indexmap.workspace = true
+miniz_oxide.workspace = true
+ndarray.workspace = true
+lz4_flex = { workspace = true, optional = true }
+rayon = { workspace = true, optional = true }
+ruzstd = { workspace = true, optional = true }
+annoray-core.workspace = true
+annoray-io.workspace = true
+
+[features]
+# Decompress chunks in parallel.
+rayon = ["dep:rayon"]
+# Read Zstandard-compressed chunks (HDF5 filter 32015, as netCDF-C writes), in pure Rust.
+zstd = ["dep:ruzstd"]
+# Read LZ4-compressed chunks (HDF5 filter 32004), in pure Rust.
+lz4 = ["dep:lz4_flex"]
+
+[dev-dependencies]
+proptest.workspace = true
+annoray-io-c.workspace = true
+
+[lints]
+workspace = true

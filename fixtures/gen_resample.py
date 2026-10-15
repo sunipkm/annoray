@@ -1,10 +1,10 @@
-"""Reference resample results from Python xarray for xarray-rs/crates/xr-core/tests/resample.rs.
+"""Reference resample results from Python xarray for annoray/crates/annoray-core/tests/resample.rs.
 
 Run from the repository root:  python3 fixtures/gen_resample.py > fixtures/resample.txt
 
 Each line: series|freq|labels|mean|sum|count|first. xarray gives NaN for the sum and count of
-an empty bin; xarray-rs gives 0, like any empty sum (and pandas), so those are printed with
-NaN replaced by 0. xarray needs a monotonic time index (so no NaT); xarray-rs does not, and
+an empty bin; annoray gives 0, like any empty sum (and pandas), so those are printed with
+NaN replaced by 0. xarray needs a monotonic time index (so no NaT); annoray does not, and
 tests that separately.
 """
 

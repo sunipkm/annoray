@@ -33,7 +33,7 @@ jobs:
       # `--all-features` builds netCDF-C and HDF5 from source (cmake is preinstalled on all runners).
       - run: cargo test --workspace --all-features
       # Without C libraries: netCDF-3 must work in pure Rust, netCDF-4 must fail clearly.
-      - run: cargo test -p xarray-rs
+      - run: cargo test -p annoray
       - uses: actions/setup-python@v5
         if: matrix.os == 'ubuntu-latest'
         with:
@@ -42,14 +42,15 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: |
           pip install xarray netCDF4 cftime h5py hdf5plugin
-          cargo test -p xarray-rs --features netcdf-c --test netcdf_io -- --ignored python
-          cargo test -p xr-hdf5 --test write_round_trip -- --ignored
-          cargo test -p xarray-rs --test nat -- --ignored
-          cargo test -p xarray-rs --test tree -- --ignored
-          cargo test -p xr-hdf5 --all-features --test write_codecs -- --ignored
+          cargo test -p annoray --features netcdf-c --test netcdf_io -- --ignored python
+          cargo test -p annoray-hdf5 --test write_round_trip -- --ignored
+          cargo test -p annoray --test nat -- --ignored
+          cargo test -p annoray --test tree -- --ignored
+          cargo test -p annoray-hdf5 --all-features --test write_codecs -- --ignored
 
   python:
-    # rarray (M9): the xarray engine and writer, tested against xarray's own engines.
+    # annoray for Python (M9): native objects and the xarray engine, tested against xarray;
+    # the examples must also run without xarray and match their Rust twins.
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
@@ -61,8 +62,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      - run: pip install "./rarray[test]" dask
-      - run: pytest rarray/tests
+      - run: pip install "./annoray-python[test]" dask
+      - run: pytest annoray-python/tests
 
   msrv:
     runs-on: ubuntu-latest
@@ -72,5 +73,5 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       # trybuild's expected compiler output is pinned to stable, so MSRV only builds and runs unit
       # tests. The optional netcdf-c backend (which builds the C libraries) is not part of this job.
-      - run: cargo check --workspace --exclude xr-io-c --all-targets
-      - run: cargo test --workspace --exclude xr-io-c --lib
+      - run: cargo check --workspace --exclude annoray-io-c --all-targets
+      - run: cargo test --workspace --exclude annoray-io-c --lib

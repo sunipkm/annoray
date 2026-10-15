@@ -1,10 +1,10 @@
-"""Reference groupby results from Python xarray for xarray-rs/crates/xr-core/tests/groupby.rs.
+"""Reference groupby results from Python xarray for annoray/crates/annoray-core/tests/groupby.rs.
 
 Run from the repository root:  python3 fixtures/gen_groupby.py > fixtures/groupby.txt
 
 Each line: case|dims|labels|values. Inputs are rebuilt identically in the Rust test.
 Missing labels are covered by `num` (NaN); Rust strings have no missing value. For
-`include_lowest`, pandas labels the first bin "(9.999, 30.0]"; xarray-rs says "[10, 30]".
+`include_lowest`, pandas labels the first bin "(9.999, 30.0]"; annoray says "[10, 30]".
 """
 
 import warnings
