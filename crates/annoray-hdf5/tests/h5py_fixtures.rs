@@ -9,8 +9,7 @@
 
 use std::path::PathBuf;
 
-use annoray_core::{Owned, TypedArray};
-use annoray_hdf5::{File, Group, Node};
+use annoray_hdf5::{Array, File, Group, Node};
 use proptest::prelude::*;
 
 fn fixtures() -> PathBuf {
@@ -62,7 +61,7 @@ fn py_json(s: &str) -> String {
     out
 }
 
-fn dump_array(a: &TypedArray<Owned>, scalar: bool) -> String {
+fn dump_array(a: &Array, scalar: bool) -> String {
     let shape = if scalar {
         "scalar".to_string()
     } else {
@@ -73,17 +72,17 @@ fn dump_array(a: &TypedArray<Owned>, scalar: bool) -> String {
             .join("x")
     };
     let (dtype, vals): (&str, Vec<String>) = match a {
-        TypedArray::I8(x) => ("i8", x.iter().map(i8::to_string).collect()),
-        TypedArray::I16(x) => ("i16", x.iter().map(i16::to_string).collect()),
-        TypedArray::I32(x) => ("i32", x.iter().map(i32::to_string).collect()),
-        TypedArray::I64(x) => ("i64", x.iter().map(i64::to_string).collect()),
-        TypedArray::U8(x) => ("u8", x.iter().map(u8::to_string).collect()),
-        TypedArray::U16(x) => ("u16", x.iter().map(u16::to_string).collect()),
-        TypedArray::U32(x) => ("u32", x.iter().map(u32::to_string).collect()),
-        TypedArray::U64(x) => ("u64", x.iter().map(u64::to_string).collect()),
-        TypedArray::F32(x) => ("f32", x.iter().map(|v| py_float(f64::from(*v))).collect()),
-        TypedArray::F64(x) => ("f64", x.iter().map(|v| py_float(*v)).collect()),
-        TypedArray::Str(x) => ("str", x.iter().map(|s| py_json(s)).collect()),
+        Array::I8(x) => ("i8", x.iter().map(i8::to_string).collect()),
+        Array::I16(x) => ("i16", x.iter().map(i16::to_string).collect()),
+        Array::I32(x) => ("i32", x.iter().map(i32::to_string).collect()),
+        Array::I64(x) => ("i64", x.iter().map(i64::to_string).collect()),
+        Array::U8(x) => ("u8", x.iter().map(u8::to_string).collect()),
+        Array::U16(x) => ("u16", x.iter().map(u16::to_string).collect()),
+        Array::U32(x) => ("u32", x.iter().map(u32::to_string).collect()),
+        Array::U64(x) => ("u64", x.iter().map(u64::to_string).collect()),
+        Array::F32(x) => ("f32", x.iter().map(|v| py_float(f64::from(*v))).collect()),
+        Array::F64(x) => ("f64", x.iter().map(|v| py_float(*v)).collect()),
+        Array::Str(x) => ("str", x.iter().map(|s| py_json(s)).collect()),
         other => panic!("unexpected {other:?}"),
     };
     format!("{dtype} {shape} {}", vals.join(" "))
@@ -324,6 +323,20 @@ fn checksums_match_hdf5() {
     }
 }
 
+/// The box `[start, start + count)` of `a`.
+fn cut(a: &Array, start: &[usize], count: &[usize]) -> Array {
+    let ax = |i: usize| ndarray::Slice::from(start[i]..start[i] + count[i]);
+    macro_rules! each {
+        ($($v:ident),*) => {
+            match a {
+                $(Array::$v(x) => Array::$v(x.slice_each_axis(|d| ax(d.axis.index())).to_owned()),)*
+                _ => panic!("an element type this test does not know"),
+            }
+        };
+    }
+    each!(I8, U8, I16, U16, I32, U32, I64, U64, F32, F64, Str)
+}
+
 fn datasets(g: &Group, out: &mut Vec<annoray_hdf5::Dataset>) {
     for (_, n) in g.members().unwrap() {
         match n {
@@ -353,15 +366,10 @@ proptest! {
             let count: Vec<usize> = shape.iter().zip(&start).map(|(s, st)| next(s - st + 1)).collect();
             let Ok(full) = d.read() else { continue };
             let slice = d.read_slice(&start, &count).unwrap();
-            let expect = annoray_core::Variable::from_typed((0..shape.len()).map(|i| format!("d{i}")), full).unwrap();
-            let idx: Vec<(String, annoray_core::Indexer)> = start.iter().zip(&count).enumerate()
-                .map(|(i, (s, c))| (format!("d{i}"), annoray_core::Indexer::Slice(annoray_core::PySlice::new(Some(*s as isize), Some((s + c) as isize), None))))
-                .collect();
-            let cut = expect.isel(idx).unwrap();
-            let got = annoray_core::Variable::from_typed((0..shape.len()).map(|i| format!("d{i}")), slice).unwrap();
+            let cut = cut(&full, &start, &count);
             // Compare values and shape (ndarray's Debug also prints strides, which differ for empty arrays).
             let key = |t: String| t.split(", strides=").next().unwrap_or_default().to_string();
-            prop_assert_eq!(key(format!("{:?}", cut.typed().unwrap())), key(format!("{:?}", got.typed().unwrap())), "{} {:?}+{:?}", d.path(), start, count);
+            prop_assert_eq!(key(format!("{cut:?}")), key(format!("{slice:?}")), "{} {:?}+{:?}", d.path(), start, count);
         }
     }
 }

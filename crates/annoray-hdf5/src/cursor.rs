@@ -1,6 +1,6 @@
 //! Bounds-checked little-endian reading of HDF5 structures.
 
-use annoray_io::IoError;
+use crate::Error;
 
 use crate::bad;
 
@@ -37,7 +37,7 @@ impl<'a> Cursor<'a> {
         self.pos
     }
 
-    pub(crate) fn bytes(&mut self, n: usize) -> Result<&'a [u8], IoError> {
+    pub(crate) fn bytes(&mut self, n: usize) -> Result<&'a [u8], Error> {
         let end = self
             .pos
             .checked_add(n)
@@ -50,7 +50,7 @@ impl<'a> Cursor<'a> {
         Ok(s)
     }
 
-    pub(crate) fn skip(&mut self, n: usize) -> Result<(), IoError> {
+    pub(crate) fn skip(&mut self, n: usize) -> Result<(), Error> {
         self.bytes(n).map(drop)
     }
 
@@ -58,30 +58,30 @@ impl<'a> Cursor<'a> {
         self.buf.get(self.pos..).unwrap_or_default()
     }
 
-    pub(crate) fn u8(&mut self) -> Result<u8, IoError> {
+    pub(crate) fn u8(&mut self) -> Result<u8, Error> {
         Ok(self.bytes(1)?.first().copied().unwrap_or(0))
     }
 
-    pub(crate) fn u16(&mut self) -> Result<u16, IoError> {
+    pub(crate) fn u16(&mut self) -> Result<u16, Error> {
         Ok(u16::from_le_bytes(
             self.bytes(2)?.try_into().map_err(|_| bad("short read"))?,
         ))
     }
 
-    pub(crate) fn u32(&mut self) -> Result<u32, IoError> {
+    pub(crate) fn u32(&mut self) -> Result<u32, Error> {
         Ok(u32::from_le_bytes(
             self.bytes(4)?.try_into().map_err(|_| bad("short read"))?,
         ))
     }
 
-    pub(crate) fn u64(&mut self) -> Result<u64, IoError> {
+    pub(crate) fn u64(&mut self) -> Result<u64, Error> {
         Ok(u64::from_le_bytes(
             self.bytes(8)?.try_into().map_err(|_| bad("short read"))?,
         ))
     }
 
     /// An unsigned little-endian integer of `n` (≤ 8) bytes.
-    pub(crate) fn uvar(&mut self, n: usize) -> Result<u64, IoError> {
+    pub(crate) fn uvar(&mut self, n: usize) -> Result<u64, Error> {
         if n > 8 {
             return Err(bad(format!("integer field of {n} bytes")));
         }
@@ -93,24 +93,24 @@ impl<'a> Cursor<'a> {
     }
 
     /// A file address; `None` for the undefined address.
-    pub(crate) fn addr(&mut self) -> Result<Option<u64>, IoError> {
+    pub(crate) fn addr(&mut self) -> Result<Option<u64>, Error> {
         let w = self.sizes.offset;
         let v = self.uvar(usize::from(w))?;
         Ok((v != undefined(w)).then_some(v))
     }
 
     /// A length field.
-    pub(crate) fn length(&mut self) -> Result<u64, IoError> {
+    pub(crate) fn length(&mut self) -> Result<u64, Error> {
         self.uvar(usize::from(self.sizes.length))
     }
 
     /// A length field that must fit in memory.
-    pub(crate) fn len_usize(&mut self) -> Result<usize, IoError> {
+    pub(crate) fn len_usize(&mut self) -> Result<usize, Error> {
         usize::try_from(self.length()?).map_err(|_| bad("length too large"))
     }
 
     /// Check a 4-byte signature.
-    pub(crate) fn expect(&mut self, sig: &[u8; 4]) -> Result<(), IoError> {
+    pub(crate) fn expect(&mut self, sig: &[u8; 4]) -> Result<(), Error> {
         let got = self.bytes(4)?;
         if got == sig {
             Ok(())

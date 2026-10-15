@@ -1,19 +1,19 @@
 //! Bit-transposition (the bitshuffle library's layout), and the Bitshuffle HDF5 filter (32008)
 //! with no compression, LZ4 or Zstandard.
 
-use annoray_io::IoError;
+use crate::Error;
 
 use super::{be, corrupt};
 use crate::ck::Ck;
 
 const CODEC: &str = "bitshuffle";
 
-fn err() -> IoError {
+fn err() -> Error {
     corrupt(CODEC)
 }
 
 /// A checked size.
-fn z(c: Ck) -> Result<usize, IoError> {
+fn z(c: Ck) -> Result<usize, Error> {
     c.usize().ok_or_else(err)
 }
 
@@ -30,7 +30,7 @@ fn transpose8(mut x: u64) -> u64 {
 /// The bitshuffle layout, eight bytes at a time: for byte position `b` of the elements and
 /// element group `jj` (8 elements), the 8 bit-plane bytes `(b * 8 + k) * n / 8 + jj` and the 8
 /// element bytes `(jj * 8 + e) * size + b` are each other's bit transpose.
-fn regroup(data: &[u8], n: usize, size: usize, planes_in: bool) -> Result<Vec<u8>, IoError> {
+fn regroup(data: &[u8], n: usize, size: usize, planes_in: bool) -> Result<Vec<u8>, Error> {
     let total = n.checked_mul(size).ok_or_else(err)?;
     if !n.is_multiple_of(8) || data.len() < total {
         return Err(err());
@@ -70,18 +70,18 @@ fn regroup(data: &[u8], n: usize, size: usize, planes_in: bool) -> Result<Vec<u8
 /// Undo bitshuffle's transpose of `n` elements of `size` bytes (`n` a multiple of 8): bit
 /// `k` of byte `b` of element `j` is stored at bit `j % 8` of byte
 /// `(b * 8 + k) * n / 8 + j / 8`.
-pub(crate) fn untranspose(data: &[u8], n: usize, size: usize) -> Result<Vec<u8>, IoError> {
+pub(crate) fn untranspose(data: &[u8], n: usize, size: usize) -> Result<Vec<u8>, Error> {
     regroup(data, n, size, true)
 }
 
 /// bitshuffle's transpose (the inverse of [`untranspose`]).
-pub(crate) fn transpose(data: &[u8], n: usize, size: usize) -> Result<Vec<u8>, IoError> {
+pub(crate) fn transpose(data: &[u8], n: usize, size: usize) -> Result<Vec<u8>, Error> {
     regroup(data, n, size, false)
 }
 
 /// Untranspose `data` in blocks of `block` elements; within the last block, elements past the
 /// last multiple of 8 are stored as they are.
-fn untranspose_blocks(data: &[u8], size: usize, block: usize) -> Result<Vec<u8>, IoError> {
+fn untranspose_blocks(data: &[u8], size: usize, block: usize) -> Result<Vec<u8>, Error> {
     let n = data.len().checked_div(size).ok_or_else(err)?;
     if block == 0 {
         return Err(err());
@@ -108,7 +108,7 @@ fn untranspose_blocks(data: &[u8], size: usize, block: usize) -> Result<Vec<u8>,
 }
 
 /// One compressed block of `want` bytes (2 = LZ4, 3 = Zstandard).
-fn block_codec(comp: usize, src: &[u8], want: usize) -> Result<Vec<u8>, IoError> {
+fn block_codec(comp: usize, src: &[u8], want: usize) -> Result<Vec<u8>, Error> {
     match comp {
         #[cfg(feature = "lz4")]
         2 => {
@@ -124,7 +124,7 @@ fn block_codec(comp: usize, src: &[u8], want: usize) -> Result<Vec<u8>, IoError>
         3 => crate::filters::zstd_decompress(src, want),
         other => {
             let _ = (src, want);
-            Err(IoError::Unsupported(format!(
+            Err(Error::Unsupported(format!(
                 "bitshuffle compression {other} (needs the `lz4`/`zstd` features)"
             )))
         }
@@ -141,7 +141,7 @@ fn default_block(size: usize) -> usize {
 /// Decode a chunk written by the Bitshuffle filter. `params` are its client values:
 /// version (2), element size, block size (0 = default), compression (0 none, 2 LZ4,
 /// 3 Zstandard), [level].
-pub(crate) fn decompress(data: &[u8], params: &[u32], limit: usize) -> Result<Vec<u8>, IoError> {
+pub(crate) fn decompress(data: &[u8], params: &[u32], limit: usize) -> Result<Vec<u8>, Error> {
     let p = |i: usize| {
         params
             .get(i)

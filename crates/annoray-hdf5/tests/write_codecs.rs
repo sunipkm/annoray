@@ -12,8 +12,9 @@
 
 use std::path::PathBuf;
 
-use annoray_core::{BloscCodec, BloscShuffle, Compression, TypedArray};
-use annoray_hdf5::{File, Node, WDataset, WGroup, WNode};
+use annoray_hdf5::{
+    Array, BloscCodec, BloscShuffle, Compression, File, Node, WDataset, WGroup, WNode,
+};
 use ndarray::{ArrayD, IxDyn};
 
 const SHAPE: [usize; 2] = [23, 17];
@@ -22,15 +23,15 @@ fn value(i: usize, j: usize) -> f64 {
     (i * 100 + j) as f64
 }
 
-fn data(kind: &str) -> TypedArray<annoray_core::Owned> {
+fn data(kind: &str) -> Array {
     let sh = IxDyn(&SHAPE);
     match kind {
-        "f64" => TypedArray::F64(ArrayD::from_shape_fn(sh, |ix| value(ix[0], ix[1]) / 7.0)),
-        "f32" => TypedArray::F32(ArrayD::from_shape_fn(sh, |ix| {
+        "f64" => Array::F64(ArrayD::from_shape_fn(sh, |ix| value(ix[0], ix[1]) / 7.0)),
+        "f32" => Array::F32(ArrayD::from_shape_fn(sh, |ix| {
             (value(ix[0], ix[1]) / 7.0) as f32
         })),
-        "i32" => TypedArray::I32(ArrayD::from_shape_fn(sh, |ix| value(ix[0], ix[1]) as i32)),
-        "i16" => TypedArray::I16(ArrayD::from_shape_fn(sh, |ix| value(ix[0], ix[1]) as i16)),
+        "i32" => Array::I32(ArrayD::from_shape_fn(sh, |ix| value(ix[0], ix[1]) as i32)),
+        "i16" => Array::I16(ArrayD::from_shape_fn(sh, |ix| value(ix[0], ix[1]) as i16)),
         _ => panic!("{kind}"),
     }
 }

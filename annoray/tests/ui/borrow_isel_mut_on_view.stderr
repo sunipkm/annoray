@@ -4,12 +4,12 @@ error[E0599]: the method `__xr_isel_pos_mut` exists for struct `VariableBase<ann
 5 |     let _ = isel!(mut v[0]);
   |             ^^^^^^^^^^^^^^^
   |
- ::: $WORKSPACE/crates/annoray-core/src/repr.rs
+ ::: src/repr.rs
   |
   | pub struct View<'a>(PhantomData<&'a ()>);
   | ------------------- doesn't satisfy `annoray::View<'_>: ReprMut`
   |
- ::: $WORKSPACE/crates/annoray-core/src/variable.rs
+ ::: src/variable.rs
   |
   | pub struct VariableBase<S: Repr> {
   | -------------------------------- doesn't satisfy `_: IselMut`

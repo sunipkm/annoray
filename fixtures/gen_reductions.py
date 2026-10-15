@@ -1,4 +1,4 @@
-"""Reference reductions from Python xarray for annoray/crates/annoray-core/tests/reductions.rs.
+"""Reference reductions from Python xarray for annoray/tests/reductions.rs.
 
 Run from the repository root:  python3 fixtures/gen_reductions.py > fixtures/reductions.txt
 

@@ -1,4 +1,4 @@
-"""Reference concat/merge results from Python xarray for annoray/crates/annoray-core/tests/combine.rs.
+"""Reference concat/merge results from Python xarray for annoray/tests/combine.rs.
 
 Run from the repository root:  python3 fixtures/gen_combine.py > fixtures/combine.txt
 

@@ -15,8 +15,28 @@ use std::collections::HashMap;
 use std::io::{Seek, SeekFrom, Write};
 use std::sync::Arc;
 
-use annoray_core::{AttrValue, LazySource, Owned, TypedArray};
-use annoray_io::IoError;
+use crate::{Array, BloscCodec, BloscShuffle, Compression, ValueType};
+
+/// Values read slice by slice as they are written, so a dataset need never be in memory at
+/// once.
+pub trait Source: std::fmt::Debug + Send + Sync {
+    /// The element type.
+    fn dtype(&self) -> ValueType;
+
+    /// The shape.
+    fn shape(&self) -> &[usize];
+
+    /// The values in the box `[start, start + count)`, of [`dtype`](Self::dtype).
+    ///
+    /// # Errors
+    /// Whatever stops the values being produced; writing then fails with it.
+    fn read_slice(
+        &self,
+        start: &[usize],
+        count: &[usize],
+    ) -> Result<Array, Box<dyn std::error::Error + Send + Sync>>;
+}
+use crate::Error;
 
 use crate::bad;
 use crate::checksum::lookup3;
@@ -53,10 +73,10 @@ pub struct WDataset {
     /// Values. Strings become variable-length UTF-8 unless `char_data` is set on `U8` data.
     /// With a [`source`](Self::source), only its element type matters (an empty array will
     /// do).
-    pub data: TypedArray<Owned>,
+    pub data: Array,
     /// Read the values from here instead, slice by slice, as they are written (so a dataset
     /// need never be in memory at once). Not for strings.
-    pub source: Option<Arc<dyn LazySource>>,
+    pub source: Option<Arc<dyn Source>>,
     /// Write `U8` data as 1-byte strings (netCDF's `NC_CHAR`).
     pub char_data: bool,
     /// Per dimension: unlimited (forces chunking).
@@ -68,7 +88,7 @@ pub struct WDataset {
     /// Shuffle filter.
     pub shuffle: bool,
     /// A compression codec other than deflate (Blosc brings its own shuffle).
-    pub compression: Option<annoray_core::Compression>,
+    pub compression: Option<Compression>,
     /// Fill value as raw little-endian element bytes.
     pub fill: Option<Vec<u8>>,
     /// Allocate no storage and write no values (readers see fill values). netCDF-C writes
@@ -82,14 +102,14 @@ impl WDataset {
     /// A dataset whose values are read from `source` as they are written.
     ///
     /// # Errors
-    /// [`IoError::Unsupported`] for string sources.
-    pub fn from_source(source: Arc<dyn LazySource>) -> Result<Self, IoError> {
-        if source.dtype() == annoray_core::DType::Str {
-            return Err(IoError::Unsupported(
+    /// [`Error::Unsupported`] for string sources.
+    pub fn from_source(source: Arc<dyn Source>) -> Result<Self, Error> {
+        if source.dtype() == ValueType::Str {
+            return Err(Error::Unsupported(
                 "writing strings from a lazy source".into(),
             ));
         }
-        let proto = TypedArray::empty(source.dtype(), &[0]).ok_or_else(|| bad("empty array"))?;
+        let proto = Array::empty(source.dtype(), &[0]).ok_or_else(|| bad("empty array"))?;
         let mut d = Self::new(proto);
         d.unlimited = vec![false; source.shape().len()];
         d.source = Some(source);
@@ -105,7 +125,7 @@ impl WDataset {
 
     /// A contiguous dataset with no attributes.
     #[must_use]
-    pub fn new(data: TypedArray<Owned>) -> Self {
+    pub fn new(data: Array) -> Self {
         let rank = data.ndim();
         Self {
             data,
@@ -127,9 +147,11 @@ impl WDataset {
 #[derive(Debug, Clone)]
 #[non_exhaustive]
 pub enum AttrData {
-    /// Numbers as 1-D arrays; `Str` as a scalar fixed-length string; `Strs` as variable-length
-    /// strings.
-    Value(AttrValue),
+    /// Values with the array's shape (1-D for netCDF; with no elements, the null dataspace).
+    /// Strings are variable-length.
+    Array(Array),
+    /// A scalar fixed-length string exactly as long as the text (netCDF text attributes).
+    Text(String),
     /// A scalar variable-length UTF-8 string.
     VarString(String),
     /// A scalar fixed-length string including its NUL terminator (HDF5 dimension-scale `CLASS`
@@ -225,22 +247,22 @@ struct Plan<'a> {
     pos: u64,
 }
 
-fn io(e: &std::io::Error) -> IoError {
+fn io(e: &std::io::Error) -> Error {
     bad(format!("writing: {e}"))
 }
 
 /// Bytes the data of a source take per write, at most (rows are never split).
 const SLAB_BYTES: usize = 32 << 20;
 
-fn too_big(what: &str) -> IoError {
+fn too_big(what: &str) -> Error {
     bad(format!("{what} is too large to write"))
 }
 
-fn u16_of(n: usize, what: &str) -> Result<u16, IoError> {
+fn u16_of(n: usize, what: &str) -> Result<u16, Error> {
     u16::try_from(n).map_err(|_| too_big(what))
 }
 
-fn u32_of(n: usize, what: &str) -> Result<u32, IoError> {
+fn u32_of(n: usize, what: &str) -> Result<u32, Error> {
     u32::try_from(n).map_err(|_| too_big(what))
 }
 
@@ -278,7 +300,7 @@ fn float_type(size: u8) -> Vec<u8> {
 }
 
 /// Fixed-length, null-terminated string.
-fn fixed_string_type(size: usize, utf8: bool) -> Result<Vec<u8>, IoError> {
+fn fixed_string_type(size: usize, utf8: bool) -> Result<Vec<u8>, Error> {
     let mut m = vec![0x13, if utf8 { 0x10 } else { 0 }, 0, 0];
     m.extend_from_slice(&u32_of(size, "string")?.to_le_bytes());
     Ok(m)
@@ -318,26 +340,20 @@ fn reference_pair_type() -> Vec<u8> {
     m
 }
 
-fn element_type(d: &TypedArray<Owned>, char_data: bool) -> Result<Vec<u8>, IoError> {
+fn element_type(d: &Array, char_data: bool) -> Result<Vec<u8>, Error> {
     Ok(match d {
-        TypedArray::U8(_) if char_data => fixed_string_type(1, false)?,
-        TypedArray::I8(_) => int_type(1, true),
-        TypedArray::U8(_) => int_type(1, false),
-        TypedArray::I16(_) => int_type(2, true),
-        TypedArray::U16(_) => int_type(2, false),
-        TypedArray::I32(_) => int_type(4, true),
-        TypedArray::U32(_) => int_type(4, false),
-        TypedArray::I64(_) => int_type(8, true),
-        TypedArray::U64(_) => int_type(8, false),
-        TypedArray::F32(_) => float_type(4),
-        TypedArray::F64(_) => float_type(8),
-        TypedArray::Str(_) => var_string_type(),
-        other => {
-            return Err(IoError::Unsupported(format!(
-                "writing HDF5 element type {}",
-                other.dtype()
-            )));
-        }
+        Array::U8(_) if char_data => fixed_string_type(1, false)?,
+        Array::I8(_) => int_type(1, true),
+        Array::U8(_) => int_type(1, false),
+        Array::I16(_) => int_type(2, true),
+        Array::U16(_) => int_type(2, false),
+        Array::I32(_) => int_type(4, true),
+        Array::U32(_) => int_type(4, false),
+        Array::I64(_) => int_type(8, true),
+        Array::U64(_) => int_type(8, false),
+        Array::F32(_) => float_type(4),
+        Array::F64(_) => float_type(8),
+        Array::Str(_) => var_string_type(),
     })
 }
 
@@ -368,30 +384,30 @@ fn dataspace(dims: Option<&[usize]>, unlimited: &[bool]) -> Vec<u8> {
     m
 }
 
-fn le_bytes(d: &TypedArray<Owned>) -> Option<Vec<u8>> {
+fn le_bytes(d: &Array) -> Option<Vec<u8>> {
     macro_rules! le {
         ($x:expr) => {
             $x.iter().flat_map(|v| v.to_le_bytes()).collect()
         };
     }
     Some(match d {
-        TypedArray::I8(x) => le!(x),
-        TypedArray::U8(x) => x.iter().copied().collect(),
-        TypedArray::I16(x) => le!(x),
-        TypedArray::U16(x) => le!(x),
-        TypedArray::I32(x) => le!(x),
-        TypedArray::U32(x) => le!(x),
-        TypedArray::I64(x) => le!(x),
-        TypedArray::U64(x) => le!(x),
-        TypedArray::F32(x) => le!(x),
-        TypedArray::F64(x) => le!(x),
+        Array::I8(x) => le!(x),
+        Array::U8(x) => x.iter().copied().collect(),
+        Array::I16(x) => le!(x),
+        Array::U16(x) => le!(x),
+        Array::I32(x) => le!(x),
+        Array::U32(x) => le!(x),
+        Array::I64(x) => le!(x),
+        Array::U64(x) => le!(x),
+        Array::F32(x) => le!(x),
+        Array::F64(x) => le!(x),
         _ => return None,
     })
 }
 
 impl Plan<'_> {
     /// Write `bytes` at the next 8-byte-aligned address; that address.
-    fn put_data(&mut self, bytes: &[u8]) -> Result<u64, IoError> {
+    fn put_data(&mut self, bytes: &[u8]) -> Result<u64, Error> {
         let at = self
             .pos
             .checked_add(7)
@@ -412,7 +428,7 @@ impl Plan<'_> {
     }
 
     /// Write `bytes` right after the previous data (continuing one contiguous region).
-    fn put_more(&mut self, bytes: &[u8]) -> Result<(), IoError> {
+    fn put_more(&mut self, bytes: &[u8]) -> Result<(), Error> {
         self.out
             .seek(SeekFrom::Start(self.pos))
             .map_err(|e| io(&e))?;
@@ -430,7 +446,7 @@ impl Plan<'_> {
     }
 
     /// A variable-length element pointing at a new heap object.
-    fn vlen(&mut self, out: &mut Bytes, len: usize, obj: HeapObj) -> Result<(), IoError> {
+    fn vlen(&mut self, out: &mut Bytes, len: usize, obj: HeapObj) -> Result<(), Error> {
         self.heap.push(obj);
         let k = self.heap.len().saturating_sub(1);
         out.u32(u32_of(len, "variable-length element")?);
@@ -439,7 +455,7 @@ impl Plan<'_> {
         Ok(())
     }
 
-    fn object(&self, path: &str) -> Result<usize, IoError> {
+    fn object(&self, path: &str) -> Result<usize, Error> {
         self.paths
             .get(path)
             .copied()
@@ -447,78 +463,52 @@ impl Plan<'_> {
     }
 
     /// Element bytes of a dataset (strings go to the global heap).
-    fn element_bytes(&mut self, data: &TypedArray<Owned>) -> Result<Bytes, IoError> {
+    fn element_bytes(&mut self, data: &Array) -> Result<Bytes, Error> {
         let mut out = Bytes::default();
-        if let TypedArray::Str(a) = data {
+        if let Array::Str(a) = data {
             for s in a {
                 self.vlen(&mut out, s.len(), HeapObj::Bytes(s.as_bytes().to_vec()))?;
             }
         } else {
             out.data = le_bytes(data)
-                .ok_or_else(|| IoError::Unsupported(format!("writing {} data", data.dtype())))?;
+                .ok_or_else(|| Error::Unsupported(format!("writing {} data", data.dtype())))?;
         }
         Ok(out)
     }
 
-    fn attribute(&mut self, name: &str, value: &AttrData) -> Result<Bytes, IoError> {
+    fn attribute(&mut self, name: &str, value: &AttrData) -> Result<Bytes, Error> {
         let (dtype, space, data) = match value {
-            AttrData::Value(v) => {
-                let num = |dt: Vec<u8>, n: usize, bytes: Vec<u8>| {
-                    let dims = [n];
-                    (
-                        dt,
-                        dataspace(if n == 0 { None } else { Some(&dims) }, &[]),
-                        Bytes {
-                            data: bytes,
-                            fixups: Vec::new(),
-                        },
-                    )
+            AttrData::Array(v) => {
+                let shape = v.shape();
+                let space = dataspace((!v.is_empty()).then_some(shape), &[]);
+                let bytes = if let Array::Str(a) = v {
+                    let mut b = Bytes::default();
+                    for s in a {
+                        self.vlen(&mut b, s.len(), HeapObj::Bytes(s.as_bytes().to_vec()))?;
+                    }
+                    b
+                } else {
+                    Bytes {
+                        data: le_bytes(v).ok_or_else(|| {
+                            Error::Unsupported(format!("attribute of {}", v.dtype()))
+                        })?,
+                        fixups: Vec::new(),
+                    }
                 };
-                macro_rules! le {
-                    ($x:expr) => {
-                        $x.iter().flat_map(|v| v.to_le_bytes()).collect::<Vec<u8>>()
-                    };
-                }
-                match v {
-                    AttrValue::Str(s) => {
-                        let size = s.len().max(1);
-                        let mut bytes = s.as_bytes().to_vec();
-                        bytes.resize(size, 0);
-                        (
-                            fixed_string_type(size, true)?,
-                            dataspace(Some(&[]), &[]),
-                            Bytes {
-                                data: bytes,
-                                fixups: Vec::new(),
-                            },
-                        )
-                    }
-                    AttrValue::Strs(v) => {
-                        let mut b = Bytes::default();
-                        for s in v {
-                            self.vlen(&mut b, s.len(), HeapObj::Bytes(s.as_bytes().to_vec()))?;
-                        }
-                        let dims = [v.len()];
-                        (
-                            var_string_type(),
-                            dataspace(if v.is_empty() { None } else { Some(&dims) }, &[]),
-                            b,
-                        )
-                    }
-                    AttrValue::I8(x) => num(int_type(1, true), x.len(), le!(x)),
-                    AttrValue::U8(x) => num(int_type(1, false), x.len(), x.clone()),
-                    AttrValue::I16(x) => num(int_type(2, true), x.len(), le!(x)),
-                    AttrValue::U16(x) => num(int_type(2, false), x.len(), le!(x)),
-                    AttrValue::I32(x) => num(int_type(4, true), x.len(), le!(x)),
-                    AttrValue::U32(x) => num(int_type(4, false), x.len(), le!(x)),
-                    AttrValue::I64(x) => num(int_type(8, true), x.len(), le!(x)),
-                    AttrValue::U64(x) => num(int_type(8, false), x.len(), le!(x)),
-                    AttrValue::F32(x) => num(float_type(4), x.len(), le!(x)),
-                    AttrValue::F64(x) => num(float_type(8), x.len(), le!(x)),
-                    other => {
-                        return Err(IoError::Unsupported(format!("attribute value {other:?}")));
-                    }
-                }
+                (element_type(v, false)?, space, bytes)
+            }
+            AttrData::Text(s) => {
+                let size = s.len().max(1);
+                let mut bytes = s.as_bytes().to_vec();
+                bytes.resize(size, 0);
+                (
+                    fixed_string_type(size, true)?,
+                    dataspace(Some(&[]), &[]),
+                    Bytes {
+                        data: bytes,
+                        fixups: Vec::new(),
+                    },
+                )
             }
             AttrData::CString(s) => {
                 let mut bytes = s.as_bytes().to_vec();
@@ -601,7 +591,7 @@ impl Plan<'_> {
         ds: &WDataset,
         cdims: &[usize],
         esize: usize,
-    ) -> Result<Option<usize>, IoError> {
+    ) -> Result<Option<usize>, Error> {
         let shape = ds.shape();
         let rank = shape.len();
         let elements = match &ds.source {
@@ -610,7 +600,7 @@ impl Plan<'_> {
         };
         let filtered = ds.deflate.is_some() || ds.shuffle || ds.compression.is_some();
         if filtered && !elements.fixups.is_empty() {
-            return Err(IoError::Unsupported(
+            return Err(Error::Unsupported(
                 "compressing variable-length strings".into(),
             ));
         }
@@ -638,7 +628,7 @@ impl Plan<'_> {
             Some(f) if f.len() == esize => f.clone(),
             _ => vec![0; esize],
         };
-        let make = |ci: usize| -> Result<(Vec<usize>, Bytes), IoError> {
+        let make = |ci: usize| -> Result<(Vec<usize>, Bytes), Error> {
             // Chunk coordinates (row-major).
             let mut idx = vec![0usize; rank];
             let mut rem = ci;
@@ -668,7 +658,7 @@ impl Plan<'_> {
                         .read_slice(&origin, &count)
                         .map_err(|e| bad(format!("reading data to write: {e}")))?;
                     let bytes = le_bytes(&slab).ok_or_else(|| {
-                        IoError::Unsupported(format!("writing {} data", slab.dtype()))
+                        Error::Unsupported(format!("writing {} data", slab.dtype()))
                     })?;
                     copy_rows(
                         &bytes,
@@ -745,18 +735,14 @@ impl Plan<'_> {
             Ok((origin, chunk))
         };
         // Filtering dominates writing: chunks are built and compressed in parallel, a batch at
-        // a time, then written in order. The batch holds at most the streaming budget
-        // (`annoray_core::set_stream_bytes`) of chunks, and at least one.
+        // a time, then written in order. The batch holds at most the budget
+        // (`set_batch_bytes`) of chunks, and at least one.
         #[cfg(feature = "rayon")]
         let batch = if filtered {
             let chunk_bytes = chunk_elems.saturating_mul(esize).max(1);
             rayon::current_num_threads()
                 .saturating_mul(2)
-                .min(
-                    annoray_core::stream_bytes()
-                        .checked_div(chunk_bytes)
-                        .unwrap_or(1),
-                )
+                .min(crate::batch_bytes().checked_div(chunk_bytes).unwrap_or(1))
                 .max(1)
         } else {
             1
@@ -774,10 +760,10 @@ impl Plan<'_> {
                 (next..end)
                     .into_par_iter()
                     .map(make)
-                    .collect::<Result<Vec<_>, IoError>>()?
+                    .collect::<Result<Vec<_>, Error>>()?
             };
             #[cfg(not(feature = "rayon"))]
-            let built = (next..end).map(make).collect::<Result<Vec<_>, IoError>>()?;
+            let built = (next..end).map(make).collect::<Result<Vec<_>, Error>>()?;
             for (origin, chunk) in built {
                 let size = u32_of(chunk.data.len(), "chunk")?;
                 let place = if chunk.fixups.is_empty() {
@@ -844,7 +830,7 @@ impl Plan<'_> {
         }
     }
 
-    fn dataset(&mut self, id: usize, ds: &WDataset) -> Result<(), IoError> {
+    fn dataset(&mut self, id: usize, ds: &WDataset) -> Result<(), Error> {
         let shape = ds.shape();
         let rank = shape.len();
         let dtype = element_type(&ds.data, ds.char_data)?;
@@ -971,15 +957,15 @@ impl Plan<'_> {
     /// Write a source's values contiguously, a slab of whole rows at a time; the address.
     fn contiguous_from(
         &mut self,
-        src: &dyn LazySource,
+        src: &dyn Source,
         shape: &[usize],
         esize: usize,
-    ) -> Result<u64, IoError> {
-        let read = |start: &[usize], count: &[usize]| -> Result<Vec<u8>, IoError> {
+    ) -> Result<u64, Error> {
+        let read = |start: &[usize], count: &[usize]| -> Result<Vec<u8>, Error> {
             let t = src
                 .read_slice(start, count)
                 .map_err(|e| bad(format!("reading data to write: {e}")))?;
-            le_bytes(&t).ok_or_else(|| IoError::Unsupported(format!("writing {} data", t.dtype())))
+            le_bytes(&t).ok_or_else(|| Error::Unsupported(format!("writing {} data", t.dtype())))
         };
         let Some((&rows, rest)) = shape.split_first() else {
             return self.put_data(&read(&[], &[])?);
@@ -1012,7 +998,7 @@ impl Plan<'_> {
         addr.ok_or_else(|| bad("empty contiguous data"))
     }
 
-    fn group(&mut self, id: usize, g: &WGroup, path: &str) -> Result<(), IoError> {
+    fn group(&mut self, id: usize, g: &WGroup, path: &str) -> Result<(), Error> {
         let mut msgs: Vec<(u8, Bytes)> = Vec::new();
         // Link info: creation order tracked, compact storage.
         let mut linfo = Bytes::default();
@@ -1055,7 +1041,7 @@ impl Plan<'_> {
         id: usize,
         mut msgs: Vec<(u8, Bytes)>,
         attrs: &[(String, AttrData)],
-    ) -> Result<(), IoError> {
+    ) -> Result<(), Error> {
         let mut ainfo = Bytes::default();
         ainfo.u8(0);
         ainfo.u8(1);
@@ -1068,7 +1054,7 @@ impl Plan<'_> {
         for (name, value) in attrs {
             let m = self.attribute(name, value)?;
             if m.data.len() > usize::from(u16::MAX) {
-                return Err(IoError::Unsupported(format!(
+                return Err(Error::Unsupported(format!(
                     "attribute {name:?} is larger than 64 KiB (dense attribute storage is not implemented)"
                 )));
             }
@@ -1116,7 +1102,7 @@ impl Plan<'_> {
         }
     }
 
-    fn walk_objects(&mut self, g: &WGroup, path: &str) -> Result<(), IoError> {
+    fn walk_objects(&mut self, g: &WGroup, path: &str) -> Result<(), Error> {
         for (name, node) in &g.members {
             let p = path_join(path, name);
             let id = self.object(&p)?;
@@ -1132,12 +1118,12 @@ impl Plan<'_> {
     }
 }
 
-fn esize_of(d: &TypedArray<Owned>) -> usize {
+fn esize_of(d: &Array) -> usize {
     match d {
-        TypedArray::I8(_) | TypedArray::U8(_) => 1,
-        TypedArray::I16(_) | TypedArray::U16(_) => 2,
-        TypedArray::I32(_) | TypedArray::U32(_) | TypedArray::F32(_) => 4,
-        TypedArray::Str(_) => 16,
+        Array::I8(_) | Array::U8(_) => 1,
+        Array::I16(_) | Array::U16(_) => 2,
+        Array::I32(_) | Array::U32(_) | Array::F32(_) => 4,
+        Array::Str(_) => 16,
         _ => 8,
     }
 }
@@ -1146,7 +1132,7 @@ fn esize_of(d: &TypedArray<Owned>) -> usize {
 ///
 /// # Errors
 /// As for [`write_to`].
-pub fn write_file(root: &WGroup) -> Result<Vec<u8>, IoError> {
+pub fn write_file(root: &WGroup) -> Result<Vec<u8>, Error> {
     let mut out = std::io::Cursor::new(Vec::new());
     write_to(root, &mut out)?;
     Ok(out.into_inner())
@@ -1158,10 +1144,10 @@ pub fn write_file(root: &WGroup) -> Result<Vec<u8>, IoError> {
 /// superblock is written last.
 ///
 /// # Errors
-/// [`IoError::Unsupported`] for element types or features the writer does not handle;
-/// [`IoError::Backend`] for sizes beyond the format's limits, dangling references, source
+/// [`Error::Unsupported`] for element types or features the writer does not handle;
+/// [`Error::Invalid`] for sizes beyond the format's limits, dangling references, source
 /// read errors, or write errors.
-pub fn write_to(root: &WGroup, out: &mut (impl Write + Seek)) -> Result<(), IoError> {
+pub fn write_to(root: &WGroup, out: &mut (impl Write + Seek)) -> Result<(), Error> {
     let mut plan = Plan {
         paths: HashMap::new(),
         blocks: Vec::new(),
@@ -1240,7 +1226,7 @@ pub fn write_to(root: &WGroup, out: &mut (impl Write + Seek)) -> Result<(), IoEr
             .ok_or_else(|| too_big("file"))?;
     }
     let eof = at as u64;
-    let object_addr = |id: usize| -> Result<u64, IoError> {
+    let object_addr = |id: usize| -> Result<u64, Error> {
         plan.headers
             .get(id)
             .and_then(|b| addrs.get(*b))
@@ -1323,7 +1309,7 @@ fn copy_rows(
     dst_shape: &[usize],
     count: &[usize],
     esize: usize,
-) -> Result<(), IoError> {
+) -> Result<(), Error> {
     let rank = count.len();
     if count.contains(&0) {
         return Ok(());
@@ -1376,35 +1362,33 @@ fn copy_rows(
 }
 
 fn blosc(ds: &WDataset) -> bool {
-    matches!(
-        ds.compression,
-        Some(annoray_core::Compression::Blosc { .. })
-    )
+    matches!(ds.compression, Some(Compression::Blosc { .. }))
 }
 
 /// Blosc's code for a codec inside its frames.
-fn blosc_code(codec: annoray_core::BloscCodec) -> Result<u8, IoError> {
+fn blosc_code(codec: BloscCodec) -> Result<u8, Error> {
     match codec {
-        annoray_core::BloscCodec::Lz4 | annoray_core::BloscCodec::Lz4Hc => Ok(1),
-        annoray_core::BloscCodec::Zlib => Ok(3),
-        annoray_core::BloscCodec::Zstd => Ok(4),
-        _ => Err(IoError::Unsupported("writing Blosc with BloscLZ".into())),
+        BloscCodec::Lz4 | BloscCodec::Lz4Hc => Ok(1),
+        BloscCodec::Zlib => Ok(3),
+        BloscCodec::Zstd => Ok(4),
+        _ => Err(Error::Unsupported("writing Blosc with BloscLZ".into())),
     }
 }
 
 /// Encode one chunk with a plugin codec.
-fn compress(c: annoray_core::Compression, data: &[u8], esize: usize) -> Result<Vec<u8>, IoError> {
+fn compress(c: Compression, data: &[u8], esize: usize) -> Result<Vec<u8>, Error> {
     match c {
         #[cfg(feature = "zstd")]
-        annoray_core::Compression::Zstd { .. } => Ok(crate::filters::zstd_compress(data)),
+        Compression::Zstd { .. } => Ok(crate::filters::zstd_compress(data)),
         #[cfg(feature = "lz4")]
-        annoray_core::Compression::Lz4 => crate::filters::lz4_compress(data),
-        annoray_core::Compression::Blosc {
+        Compression::Lz4 => crate::filters::lz4_compress(data),
+        Compression::Blosc {
             codec,
             level,
             shuffle,
         } => crate::codecs::blosc::compress(data, esize, blosc_code(codec)?, level, shuffle),
-        other => Err(IoError::Unsupported(format!(
+        #[cfg(not(all(feature = "zstd", feature = "lz4")))]
+        other => Err(Error::Unsupported(format!(
             "writing {other:?} (needs the `zstd`/`lz4` features)"
         ))),
     }
@@ -1412,35 +1396,35 @@ fn compress(c: annoray_core::Compression, data: &[u8], esize: usize) -> Result<V
 
 /// The filter id and client values that describe a codec, as the HDF5 plugins write them.
 fn filter_params(
-    c: annoray_core::Compression,
+    c: Compression,
     esize: usize,
     chunk_bytes: usize,
-) -> Result<(u16, Vec<u32>), IoError> {
+) -> Result<(u16, Vec<u32>), Error> {
     let big = || bad("chunk too large");
     Ok(match c {
-        annoray_core::Compression::Zstd { level } => (
+        Compression::Zstd { level } => (
             crate::filters::ZSTD,
             vec![u32::from_ne_bytes(level.to_ne_bytes())],
         ),
-        annoray_core::Compression::Lz4 => (
+        Compression::Lz4 => (
             crate::filters::LZ4,
             vec![u32::try_from(chunk_bytes).map_err(|_| big())?],
         ),
-        annoray_core::Compression::Blosc {
+        Compression::Blosc {
             codec,
             level,
             shuffle,
         } => {
             // Blosc's filter codes: 0 BloscLZ, 1 LZ4, 2 LZ4HC, 3 Snappy, 4 zlib, 5 Zstandard.
             let code = match codec {
-                annoray_core::BloscCodec::Lz4 | annoray_core::BloscCodec::Lz4Hc => 1,
-                annoray_core::BloscCodec::Zlib => 4,
-                annoray_core::BloscCodec::Zstd => 5,
-                _ => return Err(IoError::Unsupported("writing Blosc with BloscLZ".into())),
+                BloscCodec::Lz4 | BloscCodec::Lz4Hc => 1,
+                BloscCodec::Zlib => 4,
+                BloscCodec::Zstd => 5,
+                _ => return Err(Error::Unsupported("writing Blosc with BloscLZ".into())),
             };
             let shuffle = match shuffle {
-                annoray_core::BloscShuffle::Byte => 1,
-                annoray_core::BloscShuffle::Bit => 2,
+                BloscShuffle::Byte => 1,
+                BloscShuffle::Bit => 2,
                 _ => 0,
             };
             (
@@ -1456,6 +1440,5 @@ fn filter_params(
                 ],
             )
         }
-        other => return Err(IoError::Unsupported(format!("writing {other:?}"))),
     })
 }

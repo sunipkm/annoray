@@ -1,7 +1,7 @@
 //! Blosc (version 1 frames, HDF5 filter 32001) with its BloscLZ, LZ4, zlib and Zstandard
 //! codecs and its byte- and bit-shuffles.
 
-use annoray_io::IoError;
+use crate::{BloscShuffle, Error};
 
 use super::{bitshuffle, corrupt, le32};
 use crate::ck::Ck;
@@ -16,20 +16,20 @@ const MAX_SPLITS: usize = 16;
 const MIN_BUFFERSIZE: usize = 128;
 const MAX_DISTANCE: usize = 8191;
 
-fn err() -> IoError {
+fn err() -> Error {
     corrupt(CODEC)
 }
 
 /// A checked size.
-fn z(c: Ck) -> Result<usize, IoError> {
+fn z(c: Ck) -> Result<usize, Error> {
     c.usize().ok_or_else(err)
 }
 
 /// BloscLZ (a FastLZ derivative), producing exactly `want` bytes.
-pub(crate) fn blosclz(input: &[u8], want: usize) -> Result<Vec<u8>, IoError> {
+pub(crate) fn blosclz(input: &[u8], want: usize) -> Result<Vec<u8>, Error> {
     let mut out: Vec<u8> = Vec::with_capacity(want);
     let mut ip = 0usize;
-    let next = |ip: &mut usize| -> Result<usize, IoError> {
+    let next = |ip: &mut usize| -> Result<usize, Error> {
         let b = input.get(*ip).copied().ok_or_else(err)?;
         *ip = z(Ck::from(*ip) + 1usize)?;
         Ok(usize::from(b))
@@ -88,7 +88,7 @@ pub(crate) fn blosclz(input: &[u8], want: usize) -> Result<Vec<u8>, IoError> {
 }
 
 /// One compressed stream of `want` bytes with the frame's codec.
-fn stream(codec: u8, src: &[u8], want: usize) -> Result<Vec<u8>, IoError> {
+fn stream(codec: u8, src: &[u8], want: usize) -> Result<Vec<u8>, Error> {
     let out = match codec {
         0 => blosclz(src, want)?,
         #[cfg(feature = "lz4")]
@@ -103,9 +103,9 @@ fn stream(codec: u8, src: &[u8], want: usize) -> Result<Vec<u8>, IoError> {
             .map_err(|e| crate::bad(format!("blosc zlib: {e:?}")))?,
         #[cfg(feature = "zstd")]
         4 => crate::filters::zstd_decompress(src, want)?,
-        2 => return Err(IoError::Unsupported("Blosc with Snappy".into())),
+        2 => return Err(Error::Unsupported("Blosc with Snappy".into())),
         other => {
-            return Err(IoError::Unsupported(format!(
+            return Err(Error::Unsupported(format!(
                 "Blosc codec {other} (LZ4 and Zstandard need the `lz4`/`zstd` features)"
             )));
         }
@@ -117,7 +117,7 @@ fn stream(codec: u8, src: &[u8], want: usize) -> Result<Vec<u8>, IoError> {
 }
 
 /// Decompress a Blosc frame into at most `limit` bytes.
-pub(crate) fn decompress(src: &[u8], limit: usize) -> Result<Vec<u8>, IoError> {
+pub(crate) fn decompress(src: &[u8], limit: usize) -> Result<Vec<u8>, Error> {
     let header = src.get(..16).ok_or_else(err)?;
     let version = header.first().copied().ok_or_else(err)?;
     let flags = header.get(2).copied().ok_or_else(err)?;
@@ -198,14 +198,14 @@ pub(crate) fn compress(
     typesize: usize,
     codec: u8,
     level: u8,
-    shuffle: annoray_core::BloscShuffle,
-) -> Result<Vec<u8>, IoError> {
+    shuffle: BloscShuffle,
+) -> Result<Vec<u8>, Error> {
     let big = || crate::bad("blosc: chunk too large");
     let nbytes = u32::try_from(data.len()).map_err(|_| big())?;
     let ts = u8::try_from(typesize).map_err(|_| big())?;
     let shuffled = match shuffle {
-        annoray_core::BloscShuffle::Byte if typesize > 1 => crate::filters::shuffle(data, typesize),
-        annoray_core::BloscShuffle::Bit if typesize > 0 => {
+        BloscShuffle::Byte if typesize > 1 => crate::filters::shuffle(data, typesize),
+        BloscShuffle::Bit if typesize > 0 => {
             // Format version 2 (what this writes): only whole multiples of 8 elements.
             let n = data.len().checked_div(typesize).unwrap_or(0);
             let whole = if n.is_multiple_of(8) { n } else { 0 };
@@ -224,15 +224,15 @@ pub(crate) fn compress(
         #[cfg(feature = "zstd")]
         4 => crate::filters::zstd_compress(&shuffled),
         other => {
-            return Err(IoError::Unsupported(format!(
+            return Err(Error::Unsupported(format!(
                 "writing Blosc codec {other} (LZ4 and Zstandard need the `lz4`/`zstd` features)"
             )));
         }
     };
     let mut flags = DONT_SPLIT | (codec << 5);
     flags |= match shuffle {
-        annoray_core::BloscShuffle::Byte => SHUFFLE,
-        annoray_core::BloscShuffle::Bit => BITSHUFFLE,
+        BloscShuffle::Byte => SHUFFLE,
+        BloscShuffle::Bit => BITSHUFFLE,
         _ => 0,
     };
     let mut out = Vec::with_capacity(packed.len().saturating_add(28));

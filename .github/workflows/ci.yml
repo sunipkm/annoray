@@ -79,6 +79,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.97
       - uses: Swatinem/rust-cache@v2
       # trybuild's expected compiler output is pinned to stable, so MSRV only builds and runs unit
-      # tests. The optional netcdf-c backend (which builds the C libraries) is not part of this job.
-      - run: cargo check --workspace --exclude annoray-io-c --all-targets
-      - run: cargo test --workspace --exclude annoray-io-c --lib
+      # tests. The optional netcdf-c feature (which builds the C libraries) is not part of this job.
+      - run: cargo check --workspace --all-targets
+      - run: cargo test --workspace --lib

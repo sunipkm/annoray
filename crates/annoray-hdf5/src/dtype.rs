@@ -2,8 +2,8 @@
 
 use std::collections::HashMap;
 
-use annoray_core::{DType, Owned, TypedArray};
-use annoray_io::IoError;
+use crate::Error;
+use crate::{Array, ValueType};
 use ndarray::{ArrayD, IxDyn};
 
 use crate::cursor::{Cursor, Sizes, align8};
@@ -98,35 +98,35 @@ fn pad_of(bits: u8) -> StrPad {
 impl Datatype {
     /// The element type values are read as, or `None` if they cannot be read.
     #[must_use]
-    pub fn value_dtype(&self) -> Option<DType> {
+    pub fn value_dtype(&self) -> Option<ValueType> {
         Some(match self {
             Self::Int {
                 size: 1,
                 signed: true,
                 ..
-            } => DType::I8,
-            Self::Int { size: 1, .. } => DType::U8,
+            } => ValueType::I8,
+            Self::Int { size: 1, .. } => ValueType::U8,
             Self::Int {
                 size: 2,
                 signed: true,
                 ..
-            } => DType::I16,
-            Self::Int { size: 2, .. } => DType::U16,
+            } => ValueType::I16,
+            Self::Int { size: 2, .. } => ValueType::U16,
             Self::Int {
                 size: 4,
                 signed: true,
                 ..
-            } => DType::I32,
-            Self::Int { size: 4, .. } => DType::U32,
+            } => ValueType::I32,
+            Self::Int { size: 4, .. } => ValueType::U32,
             Self::Int {
                 size: 8,
                 signed: true,
                 ..
-            } => DType::I64,
-            Self::Int { .. } => DType::U64,
-            Self::Float { size: 4, .. } => DType::F32,
-            Self::Float { .. } => DType::F64,
-            Self::FixedString { .. } | Self::VarString { .. } => DType::Str,
+            } => ValueType::I64,
+            Self::Int { .. } => ValueType::U64,
+            Self::Float { size: 4, .. } => ValueType::F32,
+            Self::Float { .. } => ValueType::F64,
+            Self::FixedString { .. } | Self::VarString { .. } => ValueType::Str,
             Self::Enum { base, .. } => return base.value_dtype(),
             Self::PackedInt {
                 size,
@@ -146,7 +146,7 @@ impl Datatype {
     }
 
     /// Parse a datatype message.
-    pub(crate) fn parse(data: &[u8]) -> Result<Self, IoError> {
+    pub(crate) fn parse(data: &[u8]) -> Result<Self, Error> {
         let mut c = Cursor::new(
             data,
             0,
@@ -158,7 +158,7 @@ impl Datatype {
         Self::parse_from(&mut c)
     }
 
-    fn parse_from(c: &mut Cursor<'_>) -> Result<Self, IoError> {
+    fn parse_from(c: &mut Cursor<'_>) -> Result<Self, Error> {
         let cv = c.u8()?;
         let (class, version) = (cv & 0x0F, cv >> 4);
         let bits = c.bytes(3)?;
@@ -236,7 +236,7 @@ impl Datatype {
                 let members = names
                     .into_iter()
                     .map(|nm| Ok((nm, c.bytes(vsize)?.to_vec())))
-                    .collect::<Result<Vec<_>, IoError>>()?;
+                    .collect::<Result<Vec<_>, Error>>()?;
                 Self::Enum {
                     base: Box::new(base),
                     members,
@@ -291,7 +291,7 @@ impl Datatype {
 }
 
 /// Resolve a shared (committed) datatype.
-pub(crate) fn shared_datatype(file: &File, data: &[u8]) -> Result<Datatype, IoError> {
+pub(crate) fn shared_datatype(file: &File, data: &[u8]) -> Result<Datatype, Error> {
     let mut c = Cursor::new(data, 0, file.sizes);
     let version = c.u8()?;
     let kind_ = c.u8()?;
@@ -330,7 +330,7 @@ fn strip(bytes: &[u8], pad: StrPad) -> String {
 }
 
 /// Objects of one global heap collection, by index.
-fn global_heap(file: &File, addr: u64) -> Result<HashMap<u16, Vec<u8>>, IoError> {
+fn global_heap(file: &File, addr: u64) -> Result<HashMap<u16, Vec<u8>>, Error> {
     let mut c = file.cursor(addr)?;
     let start = c.pos();
     c.expect(b"GCOL")?;
@@ -377,12 +377,7 @@ macro_rules! ints {
 
 /// The `precision`-bit field at bit `offset` of every integer, sign-extended if `signed` (what
 /// HDF5's conversion of a bit-field integer type to a native one gives).
-fn unpack_bits(
-    data: TypedArray<Owned>,
-    offset: u16,
-    precision: u16,
-    signed: bool,
-) -> TypedArray<Owned> {
+fn unpack_bits(data: Array, offset: u16, precision: u16, signed: bool) -> Array {
     let (offset, precision) = (u32::from(offset), u32::from(precision));
     let field = move |raw: u64| -> i128 {
         let v = raw.checked_shr(offset).unwrap_or(0)
@@ -404,14 +399,14 @@ fn unpack_bits(
         };
     }
     match data {
-        TypedArray::I8(a) => TypedArray::I8(go!(a, i8, u8)),
-        TypedArray::U8(a) => TypedArray::U8(go!(a, u8, u8)),
-        TypedArray::I16(a) => TypedArray::I16(go!(a, i16, u16)),
-        TypedArray::U16(a) => TypedArray::U16(go!(a, u16, u16)),
-        TypedArray::I32(a) => TypedArray::I32(go!(a, i32, u32)),
-        TypedArray::U32(a) => TypedArray::U32(go!(a, u32, u32)),
-        TypedArray::I64(a) => TypedArray::I64(go!(a, i64, u64)),
-        TypedArray::U64(a) => TypedArray::U64(go!(a, u64, u64)),
+        Array::I8(a) => Array::I8(go!(a, i8, u8)),
+        Array::U8(a) => Array::U8(go!(a, u8, u8)),
+        Array::I16(a) => Array::I16(go!(a, i16, u16)),
+        Array::U16(a) => Array::U16(go!(a, u16, u16)),
+        Array::I32(a) => Array::I32(go!(a, i32, u32)),
+        Array::U32(a) => Array::U32(go!(a, u32, u32)),
+        Array::I64(a) => Array::I64(go!(a, i64, u64)),
+        Array::U64(a) => Array::U64(go!(a, u64, u64)),
         other => other,
     }
 }
@@ -422,7 +417,7 @@ pub(crate) fn decode(
     dt: &Datatype,
     bytes: &[u8],
     shape: &[usize],
-) -> Result<TypedArray<Owned>, IoError> {
+) -> Result<Array, Error> {
     let sh = IxDyn(shape);
     let err = |e: ndarray::ShapeError| bad(format!("data does not match its shape: {e}"));
     Ok(match dt {
@@ -432,34 +427,32 @@ pub(crate) fn decode(
             big_endian: be,
         } => match (size, signed) {
             (1, true) => {
-                TypedArray::I8(ArrayD::from_shape_vec(sh, ints!(bytes, i8, 1, *be)).map_err(err)?)
+                Array::I8(ArrayD::from_shape_vec(sh, ints!(bytes, i8, 1, *be)).map_err(err)?)
             }
-            (1, false) => TypedArray::U8(ArrayD::from_shape_vec(sh, bytes.to_vec()).map_err(err)?),
+            (1, false) => Array::U8(ArrayD::from_shape_vec(sh, bytes.to_vec()).map_err(err)?),
             (2, true) => {
-                TypedArray::I16(ArrayD::from_shape_vec(sh, ints!(bytes, i16, 2, *be)).map_err(err)?)
+                Array::I16(ArrayD::from_shape_vec(sh, ints!(bytes, i16, 2, *be)).map_err(err)?)
             }
             (2, false) => {
-                TypedArray::U16(ArrayD::from_shape_vec(sh, ints!(bytes, u16, 2, *be)).map_err(err)?)
+                Array::U16(ArrayD::from_shape_vec(sh, ints!(bytes, u16, 2, *be)).map_err(err)?)
             }
             (4, true) => {
-                TypedArray::I32(ArrayD::from_shape_vec(sh, ints!(bytes, i32, 4, *be)).map_err(err)?)
+                Array::I32(ArrayD::from_shape_vec(sh, ints!(bytes, i32, 4, *be)).map_err(err)?)
             }
             (4, false) => {
-                TypedArray::U32(ArrayD::from_shape_vec(sh, ints!(bytes, u32, 4, *be)).map_err(err)?)
+                Array::U32(ArrayD::from_shape_vec(sh, ints!(bytes, u32, 4, *be)).map_err(err)?)
             }
             (8, true) => {
-                TypedArray::I64(ArrayD::from_shape_vec(sh, ints!(bytes, i64, 8, *be)).map_err(err)?)
+                Array::I64(ArrayD::from_shape_vec(sh, ints!(bytes, i64, 8, *be)).map_err(err)?)
             }
-            _ => {
-                TypedArray::U64(ArrayD::from_shape_vec(sh, ints!(bytes, u64, 8, *be)).map_err(err)?)
-            }
+            _ => Array::U64(ArrayD::from_shape_vec(sh, ints!(bytes, u64, 8, *be)).map_err(err)?),
         },
         Datatype::Float {
             size: 4,
             big_endian: be,
-        } => TypedArray::F32(ArrayD::from_shape_vec(sh, ints!(bytes, f32, 4, *be)).map_err(err)?),
+        } => Array::F32(ArrayD::from_shape_vec(sh, ints!(bytes, f32, 4, *be)).map_err(err)?),
         Datatype::Float { big_endian: be, .. } => {
-            TypedArray::F64(ArrayD::from_shape_vec(sh, ints!(bytes, f64, 8, *be)).map_err(err)?)
+            Array::F64(ArrayD::from_shape_vec(sh, ints!(bytes, f64, 8, *be)).map_err(err)?)
         }
         Datatype::FixedString { size, pad } => {
             let strings: Vec<String> = if *size == 0 {
@@ -467,7 +460,7 @@ pub(crate) fn decode(
             } else {
                 bytes.chunks_exact(*size).map(|c| strip(c, *pad)).collect()
             };
-            TypedArray::Str(ArrayD::from_shape_vec(sh, strings).map_err(err)?)
+            Array::Str(ArrayD::from_shape_vec(sh, strings).map_err(err)?)
         }
         Datatype::VarString { pad } => {
             let esize = dt.element_size(file.sizes.offset);
@@ -496,7 +489,7 @@ pub(crate) fn decode(
                 };
                 strings.push(s);
             }
-            TypedArray::Str(ArrayD::from_shape_vec(sh, strings).map_err(err)?)
+            Array::Str(ArrayD::from_shape_vec(sh, strings).map_err(err)?)
         }
         Datatype::Enum { base, .. } => decode(file, base, bytes, shape)?,
         Datatype::PackedInt {
@@ -519,10 +512,10 @@ pub(crate) fn decode(
             )
         }
         Datatype::Other { class, .. } => {
-            return Err(IoError::Unsupported(format!("HDF5 datatype class {class}")));
+            return Err(Error::Unsupported(format!("HDF5 datatype class {class}")));
         }
         Datatype::ObjectReference | Datatype::ReferenceList => {
-            return Err(IoError::Unsupported(
+            return Err(Error::Unsupported(
                 "object references (use Attribute::references)".into(),
             ));
         }
@@ -530,7 +523,7 @@ pub(crate) fn decode(
 }
 
 /// Object references: one address per element (`None` for a null reference).
-pub(crate) fn decode_references(file: &File, bytes: &[u8]) -> Result<Vec<Option<u64>>, IoError> {
+pub(crate) fn decode_references(file: &File, bytes: &[u8]) -> Result<Vec<Option<u64>>, Error> {
     bytes
         .chunks_exact(usize::from(file.sizes.offset).max(8))
         .map(|c| {
@@ -542,7 +535,7 @@ pub(crate) fn decode_references(file: &File, bytes: &[u8]) -> Result<Vec<Option<
 }
 
 /// Variable-length lists of object references, read from the global heap.
-pub(crate) fn decode_reference_lists(file: &File, bytes: &[u8]) -> Result<Vec<Vec<u64>>, IoError> {
+pub(crate) fn decode_reference_lists(file: &File, bytes: &[u8]) -> Result<Vec<Vec<u64>>, Error> {
     let esize = 8usize.saturating_add(usize::from(file.sizes.offset));
     let mut heaps: HashMap<u64, HashMap<u16, Vec<u8>>> = HashMap::new();
     let mut out = Vec::new();

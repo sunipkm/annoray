@@ -1,14 +1,14 @@
 //! HDF5's scale-offset filter (6): values stored as `minbits`-bit offsets from a minimum,
 //! for integers, and for floats scaled by `10^D` (the "D-scale" method).
 
-use annoray_io::IoError;
+use crate::Error;
 
 use super::{BitReader, corrupt, le32};
 
 const CODEC: &str = "scale-offset";
 const HEADER: usize = 21;
 
-fn err() -> IoError {
+fn err() -> Error {
     corrupt(CODEC)
 }
 
@@ -25,7 +25,7 @@ struct Params {
 }
 
 impl Params {
-    fn parse(cd: &[u32]) -> Result<Self, IoError> {
+    fn parse(cd: &[u32]) -> Result<Self, Error> {
         let get = |i: usize| cd.get(i).copied().ok_or_else(err);
         let size = usize::try_from(get(4)?).map_err(|_| err())?;
         if !matches!(size, 1 | 2 | 4 | 8) {
@@ -88,7 +88,7 @@ impl Params {
 }
 
 /// Decode a scale-offset chunk into at most `limit` bytes.
-pub(crate) fn decompress(data: &[u8], cd: &[u32], limit: usize) -> Result<Vec<u8>, IoError> {
+pub(crate) fn decompress(data: &[u8], cd: &[u32], limit: usize) -> Result<Vec<u8>, Error> {
     let p = Params::parse(cd)?;
     let total = p.n.checked_mul(p.size).ok_or_else(err)?;
     if total > limit {
@@ -123,7 +123,7 @@ pub(crate) fn decompress(data: &[u8], cd: &[u32], limit: usize) -> Result<Vec<u8
             Some(f) if packed == fill_code => f,
             _ if p.float => {
                 if p.scale_type != 0 {
-                    return Err(IoError::Unsupported("scale-offset E-scaling".into()));
+                    return Err(Error::Unsupported("scale-offset E-scaling".into()));
                 }
                 // D-scale, as HDF5 computes it in the data's own type:
                 // value = offset / 10^D + minimum.

@@ -7,32 +7,33 @@ rust-version.workspace = true
 license.workspace = true
 
 [dependencies]
-glob.workspace = true
-annoray-core.workspace = true
+annoray-hdf5.workspace = true
 annoray-macros.workspace = true
 annoray-units.workspace = true
-annoray-io.workspace = true
-annoray-cf.workspace = true
-annoray-io-c = { workspace = true, optional = true }
-annoray-netcdf3.workspace = true
-annoray-netcdf4.workspace = true
+chrono.workspace = true
+glob.workspace = true
+indexmap.workspace = true
+ndarray.workspace = true
+netcdf = { workspace = true, optional = true }
+rayon = { workspace = true, optional = true }
+smallvec.workspace = true
 thiserror.workspace = true
-annoray-hdf5.workspace = true
 
 [features]
 default = ["rayon", "zstd", "lz4"]
-# Decompress HDF5/netCDF-4 chunks, and compute rolling windows, reductions and arithmetic,
-# in parallel.
-rayon = ["annoray-hdf5/rayon", "annoray-core/rayon", "annoray-cf/rayon"]
-# Read Zstandard- and LZ4-compressed HDF5/netCDF-4 chunks (pure Rust). LZF is always read.
+# Compute rolling windows, reductions and arithmetic, CF-decode, and decompress HDF5/netCDF-4
+# chunks, on several threads.
+rayon = ["dep:rayon", "ndarray/rayon", "annoray-hdf5/rayon"]
+# Read and write Zstandard- and LZ4-compressed HDF5/netCDF-4 chunks (pure Rust). LZF is always
+# read.
 zstd = ["annoray-hdf5/zstd"]
 lz4 = ["annoray-hdf5/lz4"]
 # The netCDF-C/HDF5 C libraries as an alternative backend (built from source; needs cmake).
 # Not needed for I/O: netCDF-3, netCDF-4 and HDF5 are read and written in pure Rust.
-netcdf-c = ["dep:annoray-io-c"]
+netcdf-c = ["dep:netcdf"]
 
 [dev-dependencies]
-chrono.workspace = true
+proptest.workspace = true
 trybuild.workspace = true
 
 [lints]

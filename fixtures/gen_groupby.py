@@ -1,4 +1,4 @@
-"""Reference groupby results from Python xarray for annoray/crates/annoray-core/tests/groupby.rs.
+"""Reference groupby results from Python xarray for annoray/tests/groupby.rs.
 
 Run from the repository root:  python3 fixtures/gen_groupby.py > fixtures/groupby.txt
 

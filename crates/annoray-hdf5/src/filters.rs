@@ -4,7 +4,7 @@
 //! LZ4, zlib, Zstandard) and Bitshuffle; with the `zstd` and `lz4` features also Zstandard and
 //! LZ4 on their own and inside Blosc and Bitshuffle. Encoding: deflate, shuffle, fletcher32.
 
-use annoray_io::IoError;
+use crate::Error;
 
 use crate::bad;
 use crate::format::Filter;
@@ -28,7 +28,7 @@ pub(crate) fn decode(
     mask: u32,
     mut data: Vec<u8>,
     expected: usize,
-) -> Result<Vec<u8>, IoError> {
+) -> Result<Vec<u8>, Error> {
     for (i, f) in pipeline.iter().enumerate().rev() {
         if i < 32 && mask & (1u32 << i) != 0 {
             continue;
@@ -73,28 +73,28 @@ pub(crate) fn decode(
             LZ4 => lz4_decompress(&data, expected)?,
             #[cfg(not(feature = "zstd"))]
             ZSTD => {
-                return Err(IoError::Unsupported(
+                return Err(Error::Unsupported(
                     "Zstandard-compressed data (enable the `zstd` feature)".into(),
                 ));
             }
             #[cfg(not(feature = "lz4"))]
             LZ4 => {
-                return Err(IoError::Unsupported(
+                return Err(Error::Unsupported(
                     "LZ4-compressed data (enable the `lz4` feature)".into(),
                 ));
             }
-            id => return Err(IoError::Unsupported(format!("HDF5 filter {id}"))),
+            id => return Err(Error::Unsupported(format!("HDF5 filter {id}"))),
         };
     }
     Ok(data)
 }
 
 /// LZF (liblzf, as h5py writes it), producing at most `limit` bytes.
-pub(crate) fn lzf_decompress(input: &[u8], limit: usize) -> Result<Vec<u8>, IoError> {
+pub(crate) fn lzf_decompress(input: &[u8], limit: usize) -> Result<Vec<u8>, Error> {
     let corrupt = || bad("lzf: corrupt chunk");
     let mut out: Vec<u8> = Vec::with_capacity(limit);
     let mut ip = 0usize;
-    let next = |ip: &mut usize| -> Result<u8, IoError> {
+    let next = |ip: &mut usize| -> Result<u8, Error> {
         let b = input.get(*ip).copied().ok_or_else(corrupt)?;
         *ip = ip.checked_add(1).ok_or_else(corrupt)?;
         Ok(b)
@@ -136,7 +136,7 @@ pub(crate) fn lzf_decompress(input: &[u8], limit: usize) -> Result<Vec<u8>, IoEr
 /// One Zstandard frame (the HDF5 zstd filter's chunk format), producing at most `limit`
 /// bytes.
 #[cfg(feature = "zstd")]
-pub(crate) fn zstd_decompress(input: &[u8], limit: usize) -> Result<Vec<u8>, IoError> {
+pub(crate) fn zstd_decompress(input: &[u8], limit: usize) -> Result<Vec<u8>, Error> {
     use std::io::Read;
     let mut decoder =
         ruzstd::decoding::StreamingDecoder::new(input).map_err(|e| bad(format!("zstd: {e}")))?;
@@ -156,9 +156,9 @@ pub(crate) fn zstd_decompress(input: &[u8], limit: usize) -> Result<Vec<u8>, IoE
 /// big-endian, then blocks, each a 4-byte compressed size and LZ4 block data (stored raw
 /// when that size equals the block's).
 #[cfg(feature = "lz4")]
-pub(crate) fn lz4_decompress(input: &[u8], limit: usize) -> Result<Vec<u8>, IoError> {
+pub(crate) fn lz4_decompress(input: &[u8], limit: usize) -> Result<Vec<u8>, Error> {
     let corrupt = || bad("lz4: corrupt chunk");
-    let be = |at: usize, n: usize| -> Result<u64, IoError> {
+    let be = |at: usize, n: usize| -> Result<u64, Error> {
         let b = input
             .get(at..at.checked_add(n).ok_or_else(corrupt)?)
             .ok_or_else(corrupt)?;
@@ -217,7 +217,7 @@ pub(crate) fn zstd_compress(data: &[u8]) -> Vec<u8> {
 
 /// The HDF5 LZ4 filter's chunk format, as one block (stored raw if LZ4 does not shrink it).
 #[cfg(feature = "lz4")]
-pub(crate) fn lz4_compress(data: &[u8]) -> Result<Vec<u8>, IoError> {
+pub(crate) fn lz4_compress(data: &[u8]) -> Result<Vec<u8>, Error> {
     let n = u32::try_from(data.len()).map_err(|_| bad("lz4: chunk too large"))?;
     let c = lz4_flex::block::compress(data);
     let body: &[u8] = if c.len() < data.len() { &c } else { data };

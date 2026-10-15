@@ -21,82 +21,32 @@ dependencies = [
 name = "annoray"
 version = "0.0.1"
 dependencies = [
- "annoray-cf",
- "annoray-core",
  "annoray-hdf5",
- "annoray-io",
- "annoray-io-c",
  "annoray-macros",
- "annoray-netcdf3",
- "annoray-netcdf4",
  "annoray-units",
  "chrono",
  "glob",
- "thiserror",
- "trybuild",
-]
-
-[[package]]
-name = "annoray-cf"
-version = "0.0.1"
-dependencies = [
- "annoray-core",
- "annoray-io",
- "chrono",
  "indexmap",
  "ndarray",
- "rayon",
- "thiserror",
-]
-
-[[package]]
-name = "annoray-core"
-version = "0.0.1"
-dependencies = [
- "annoray-units",
- "chrono",
- "indexmap",
- "ndarray",
+ "netcdf",
+ "proptest",
  "rayon",
  "smallvec",
  "thiserror",
+ "trybuild",
 ]
 
 [[package]]
 name = "annoray-hdf5"
 version = "0.0.1"
 dependencies = [
- "annoray-core",
- "annoray-io",
- "annoray-io-c",
- "indexmap",
  "lz4_flex",
+ "memmap2",
  "miniz_oxide",
  "ndarray",
  "proptest",
  "rayon",
  "ruzstd",
-]
-
-[[package]]
-name = "annoray-io"
-version = "0.0.1"
-dependencies = [
- "annoray-core",
- "indexmap",
- "memmap2",
- "thiserror",
-]
-
-[[package]]
-name = "annoray-io-c"
-version = "0.0.1"
-dependencies = [
- "annoray-core",
- "annoray-io",
- "indexmap",
- "ndarray",
- "netcdf",
  "thiserror",
 ]
 
@@ -107,28 +57,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.119",
-]
-
-[[package]]
-name = "annoray-netcdf3"
-version = "0.0.1"
-dependencies = [
- "annoray-core",
- "annoray-io",
- "annoray-io-c",
- "ndarray",
- "proptest",
-]
-
-[[package]]
-name = "annoray-netcdf4"
-version = "0.0.1"
-dependencies = [
- "annoray-core",
- "annoray-hdf5",
- "annoray-io",
- "annoray-io-c",
- "ndarray",
 ]
 
 [[package]]

@@ -1,14 +1,8 @@
 [workspace]
 resolver = "3"
 members = [
-    "crates/annoray-cf",
-    "crates/annoray-core",
     "crates/annoray-hdf5",
-    "crates/annoray-io",
-    "crates/annoray-io-c",
     "crates/annoray-macros",
-    "crates/annoray-netcdf3",
-    "crates/annoray-netcdf4",
     "crates/annoray-units",
     "annoray",
     "annoray-python",
@@ -23,15 +17,9 @@ license = "MIT OR Apache-2.0"
 [workspace.dependencies]
 libc = "0.2"
 annoray = { path = "annoray", version = "0.0.1" }
-annoray-core = { path = "crates/annoray-core", version = "0.0.1" }
 annoray-macros = { path = "crates/annoray-macros", version = "0.0.1" }
 annoray-units = { path = "crates/annoray-units", version = "0.0.1" }
-annoray-io = { path = "crates/annoray-io", version = "0.0.1" }
-annoray-cf = { path = "crates/annoray-cf", version = "0.0.1" }
-annoray-io-c = { path = "crates/annoray-io-c", version = "0.0.1" }
-annoray-netcdf3 = { path = "crates/annoray-netcdf3", version = "0.0.1" }
 annoray-hdf5 = { path = "crates/annoray-hdf5", version = "0.0.1" }
-annoray-netcdf4 = { path = "crates/annoray-netcdf4", version = "0.0.1" }
 
 chrono = { version = "0.4", default-features = false, features = ["std"] }
 indexmap = "2"
@@ -44,6 +32,7 @@ rayon = "1.10"
 ruzstd = { version = "0.9", default-features = false, features = ["std"] }
 lz4_flex = { version = "0.14", default-features = false, features = ["safe-decode", "safe-encode", "std"] }
 ndarray = "0.17"
+netcdf = { version = "0.12", features = ["static", "ndarray"] }
 smallvec = "1"
 thiserror = "2"
 typenum = "1.18"

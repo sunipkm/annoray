@@ -12,8 +12,7 @@
 
 use std::path::PathBuf;
 
-use annoray_core::{Owned, TypedArray};
-use annoray_hdf5::{Dataset, File, Node};
+use annoray_hdf5::{Array, Dataset, File, Node};
 
 fn file() -> File {
     File::open(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/h5/filters.h5"))
@@ -33,15 +32,15 @@ fn datasets(f: &File) -> Vec<(String, Dataset)> {
         .collect()
 }
 
-fn numbers(t: &TypedArray<Owned>) -> Vec<f64> {
+fn numbers(t: &Array) -> Vec<f64> {
     match t {
-        TypedArray::F32(a) => a.iter().map(|v| f64::from(*v)).collect(),
-        TypedArray::F64(a) => a.iter().copied().collect(),
-        TypedArray::I16(a) => a.iter().map(|v| f64::from(*v)).collect(),
-        TypedArray::I32(a) => a.iter().map(|v| f64::from(*v)).collect(),
-        TypedArray::I64(a) => a.iter().map(|v| *v as f64).collect(),
-        TypedArray::U8(a) => a.iter().map(|v| f64::from(*v)).collect(),
-        TypedArray::U16(a) => a.iter().map(|v| f64::from(*v)).collect(),
+        Array::F32(a) => a.iter().map(|v| f64::from(*v)).collect(),
+        Array::F64(a) => a.iter().copied().collect(),
+        Array::I16(a) => a.iter().map(|v| f64::from(*v)).collect(),
+        Array::I32(a) => a.iter().map(|v| f64::from(*v)).collect(),
+        Array::I64(a) => a.iter().map(|v| *v as f64).collect(),
+        Array::U8(a) => a.iter().map(|v| f64::from(*v)).collect(),
+        Array::U16(a) => a.iter().map(|v| f64::from(*v)).collect(),
         other => panic!("unexpected {:?}", other.dtype()),
     }
 }

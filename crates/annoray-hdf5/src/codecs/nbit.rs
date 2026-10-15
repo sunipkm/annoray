@@ -1,7 +1,7 @@
 //! HDF5's N-bit filter (5): only each value's `precision` significant bits are stored, packed
 //! most significant first. Atomic (integer and float) types are supported.
 
-use annoray_io::IoError;
+use crate::Error;
 
 use super::{BitReader, corrupt};
 
@@ -9,15 +9,15 @@ const CODEC: &str = "n-bit";
 const ATOMIC: u32 = 1;
 const NOOP: u32 = 4;
 
-fn err() -> IoError {
+fn err() -> Error {
     corrupt(CODEC)
 }
 
 /// Decode an N-bit chunk into at most `limit` bytes. `cd`: parameter count, "needs no
 /// compression" flag, element count, then the type: class, size, byte order, precision,
 /// offset.
-pub(crate) fn decompress(data: &[u8], cd: &[u32], limit: usize) -> Result<Vec<u8>, IoError> {
-    let get = |i: usize| -> Result<usize, IoError> {
+pub(crate) fn decompress(data: &[u8], cd: &[u32], limit: usize) -> Result<Vec<u8>, Error> {
+    let get = |i: usize| -> Result<usize, Error> {
         cd.get(i)
             .copied()
             .and_then(|v| usize::try_from(v).ok())
@@ -28,7 +28,7 @@ pub(crate) fn decompress(data: &[u8], cd: &[u32], limit: usize) -> Result<Vec<u8
         return Ok(data.to_vec());
     }
     if cd.get(3) != Some(&ATOMIC) {
-        return Err(IoError::Unsupported(
+        return Err(Error::Unsupported(
             "N-bit compression of array or compound types".into(),
         ));
     }

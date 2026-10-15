@@ -1,4 +1,4 @@
-"""Reference alignment results from Python xarray for annoray/crates/annoray-core/tests/align.rs.
+"""Reference alignment results from Python xarray for annoray/tests/align.rs.
 
 Run from the repository root:  python3 fixtures/gen_align.py > fixtures/align.txt
 

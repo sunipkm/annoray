@@ -1,7 +1,7 @@
 //! HDF5 indexing structures: local and global heaps, v1 and v2 B-trees, fractal heaps, and
 //! the fixed-array and extensible-array chunk indexes.
 
-use annoray_io::IoError;
+use crate::Error;
 
 use crate::ck::Ck;
 use crate::cursor::{Cursor, enc_size};
@@ -17,7 +17,7 @@ fn log2_floor(n: u64) -> u32 {
 // ----- local heap (old-style group names) -----
 
 /// The data segment of a local heap.
-pub(crate) fn local_heap(file: &File, addr: u64) -> Result<Vec<u8>, IoError> {
+pub(crate) fn local_heap(file: &File, addr: u64) -> Result<Vec<u8>, Error> {
     let mut c = file.cursor(addr)?;
     c.expect(b"HEAP")?;
     c.skip(4)?; // version, reserved
@@ -27,7 +27,7 @@ pub(crate) fn local_heap(file: &File, addr: u64) -> Result<Vec<u8>, IoError> {
     Ok(file.cursor(data)?.bytes(size)?.to_vec())
 }
 
-fn heap_str(seg: &[u8], off: u64) -> Result<String, IoError> {
+fn heap_str(seg: &[u8], off: u64) -> Result<String, Error> {
     let off = usize::try_from(off).map_err(|_| bad("bad heap offset"))?;
     let rest = seg.get(off..).ok_or_else(|| bad("heap offset past end"))?;
     let end = rest.iter().position(|b| *b == 0).unwrap_or(rest.len());
@@ -41,7 +41,7 @@ pub(crate) fn group_btree(
     file: &File,
     addr: u64,
     heap: &[u8],
-) -> Result<Vec<(String, u64)>, IoError> {
+) -> Result<Vec<(String, u64)>, Error> {
     let mut out = Vec::new();
     group_node(file, addr, heap, &mut out, 0)?;
     Ok(out)
@@ -53,7 +53,7 @@ fn group_node(
     heap: &[u8],
     out: &mut Vec<(String, u64)>,
     depth: usize,
-) -> Result<(), IoError> {
+) -> Result<(), Error> {
     if depth > MAX_DEPTH {
         return Err(bad("group B-tree too deep"));
     }
@@ -105,7 +105,7 @@ pub(crate) struct ChunkRef {
 }
 
 /// Every chunk of a v1 chunk B-tree.
-pub(crate) fn chunk_btree(file: &File, addr: u64, rank: usize) -> Result<Vec<ChunkRef>, IoError> {
+pub(crate) fn chunk_btree(file: &File, addr: u64, rank: usize) -> Result<Vec<ChunkRef>, Error> {
     let mut out = Vec::new();
     chunk_node(file, addr, rank, &mut out, 0)?;
     Ok(out)
@@ -117,7 +117,7 @@ fn chunk_node(
     rank: usize,
     out: &mut Vec<ChunkRef>,
     depth: usize,
-) -> Result<(), IoError> {
+) -> Result<(), Error> {
     if depth > MAX_DEPTH {
         return Err(bad("chunk B-tree too deep"));
     }
@@ -157,7 +157,7 @@ fn chunk_node(
 // ----- v2 B-trees -----
 
 /// All records of a v2 B-tree: `(type, records)`.
-pub(crate) fn btree2(file: &File, addr: u64) -> Result<(u8, Vec<Vec<u8>>), IoError> {
+pub(crate) fn btree2(file: &File, addr: u64) -> Result<(u8, Vec<Vec<u8>>), Error> {
     let mut c = file.cursor(addr)?;
     c.expect(b"BTHD")?;
     c.skip(1)?;
@@ -226,7 +226,7 @@ fn bt2_node(
     cum_size: &[usize],
     out: &mut Vec<Vec<u8>>,
     guard: usize,
-) -> Result<(), IoError> {
+) -> Result<(), Error> {
     if guard > MAX_DEPTH {
         return Err(bad("v2 B-tree too deep"));
     }
@@ -285,7 +285,7 @@ pub(crate) struct FractalHeap {
 }
 
 impl FractalHeap {
-    pub(crate) fn open(file: &File, addr: u64) -> Result<Self, IoError> {
+    pub(crate) fn open(file: &File, addr: u64) -> Result<Self, Error> {
         let mut c = file.cursor(addr)?;
         c.expect(b"FRHP")?;
         c.skip(1)?;
@@ -346,7 +346,7 @@ impl FractalHeap {
     }
 
     /// The bytes of the object with heap ID `id`.
-    pub(crate) fn get(&self, file: &File, id: &[u8]) -> Result<Vec<u8>, IoError> {
+    pub(crate) fn get(&self, file: &File, id: &[u8]) -> Result<Vec<u8>, Error> {
         let mut c = Cursor::new(id, 0, file.sizes);
         let flags = c.u8()?;
         match (flags >> 4) & 3 {
@@ -368,7 +368,7 @@ impl FractalHeap {
         }
     }
 
-    fn locate(&self, file: &File, off: u64) -> Result<u64, IoError> {
+    fn locate(&self, file: &File, off: u64) -> Result<u64, Error> {
         let root = self.root.ok_or_else(|| bad("empty fractal heap"))?;
         if self.root_rows == 0 {
             return root.checked_add(off).ok_or_else(|| bad("bad heap offset"));
@@ -384,7 +384,7 @@ impl FractalHeap {
         base: u64,
         off: u64,
         depth: usize,
-    ) -> Result<u64, IoError> {
+    ) -> Result<u64, Error> {
         if depth > MAX_DEPTH {
             return Err(bad("fractal heap too deep"));
         }
@@ -431,12 +431,7 @@ pub(crate) struct Element {
     pub(crate) mask: u32,
 }
 
-fn element(
-    c: &mut Cursor<'_>,
-    filtered: bool,
-    esize: usize,
-    so: usize,
-) -> Result<Element, IoError> {
+fn element(c: &mut Cursor<'_>, filtered: bool, esize: usize, so: usize) -> Result<Element, Error> {
     let addr = c.addr()?;
     if filtered {
         let size_len = esize
@@ -469,7 +464,7 @@ fn bit(bitmap: &[u8], i: u64) -> bool {
 }
 
 /// All elements of a fixed array (index = linear chunk number).
-pub(crate) fn fixed_array(file: &File, addr: u64) -> Result<Vec<Element>, IoError> {
+pub(crate) fn fixed_array(file: &File, addr: u64) -> Result<Vec<Element>, Error> {
     let so = usize::from(file.sizes.offset);
     let mut c = file.cursor(addr)?;
     c.expect(b"FAHD")?;
@@ -530,7 +525,7 @@ pub(crate) fn fixed_array(file: &File, addr: u64) -> Result<Vec<Element>, IoErro
 }
 
 /// Elements of an extensible array, up to `n` (index = linear chunk number).
-pub(crate) fn extensible_array(file: &File, addr: u64, n: u64) -> Result<Vec<Element>, IoError> {
+pub(crate) fn extensible_array(file: &File, addr: u64, n: u64) -> Result<Vec<Element>, Error> {
     let so = usize::from(file.sizes.offset);
     let mut c = file.cursor(addr)?;
     c.expect(b"EAHD")?;
@@ -605,37 +600,36 @@ pub(crate) fn extensible_array(file: &File, addr: u64, n: u64) -> Result<Vec<Ele
         .collect::<Result<Vec<_>, _>>()?;
 
     // Data blocks in order: those listed in the index block, then those of each super block.
-    let read_dblock =
-        |addr: Option<u64>, nel: u64, out: &mut Vec<Element>| -> Result<(), IoError> {
-            let Some(a) = addr else {
-                out.extend(std::iter::repeat_n(
-                    undefined,
-                    usize::try_from(nel).unwrap_or(0),
-                ));
-                return Ok(());
-            };
-            let mut d = file.cursor(a)?;
-            d.expect(b"EADB")?;
-            d.skip(2)?;
-            d.addr()?;
-            d.uvar(blk_off_size)?;
-            if nel > page_nelmts {
-                // Paged: every page is present on disk with its own checksum.
-                d.skip(4)?;
-                let npages = nel.div_ceil(page_nelmts);
-                for _ in 0..npages {
-                    for _ in 0..page_nelmts {
-                        out.push(element(&mut d, filtered, esize, so)?);
-                    }
-                    d.skip(4)?;
-                }
-            } else {
-                for _ in 0..nel {
+    let read_dblock = |addr: Option<u64>, nel: u64, out: &mut Vec<Element>| -> Result<(), Error> {
+        let Some(a) = addr else {
+            out.extend(std::iter::repeat_n(
+                undefined,
+                usize::try_from(nel).unwrap_or(0),
+            ));
+            return Ok(());
+        };
+        let mut d = file.cursor(a)?;
+        d.expect(b"EADB")?;
+        d.skip(2)?;
+        d.addr()?;
+        d.uvar(blk_off_size)?;
+        if nel > page_nelmts {
+            // Paged: every page is present on disk with its own checksum.
+            d.skip(4)?;
+            let npages = nel.div_ceil(page_nelmts);
+            for _ in 0..npages {
+                for _ in 0..page_nelmts {
                     out.push(element(&mut d, filtered, esize, so)?);
                 }
+                d.skip(4)?;
             }
-            Ok(())
-        };
+        } else {
+            for _ in 0..nel {
+                out.push(element(&mut d, filtered, esize, so)?);
+            }
+        }
+        Ok(())
+    };
     let mut dblk_iter = dblk_addrs.into_iter();
     for (u, (ndblks, nel, _, _)) in sblk.iter().enumerate() {
         if (out.len() as u64) >= n {

@@ -1,7 +1,7 @@
 //! HDF5 on-disk structures: superblock, object headers and the messages they contain.
 //! (HDF5 File Format Specification, version 3.)
 
-use annoray_io::IoError;
+use crate::Error;
 
 use crate::ck::Ck;
 use crate::cursor::{Cursor, Sizes, align8};
@@ -20,7 +20,7 @@ pub(crate) struct Superblock {
 }
 
 /// Find and parse the superblock (at 0, 512, 1024, 2048, …).
-pub(crate) fn superblock(buf: &[u8]) -> Result<Superblock, IoError> {
+pub(crate) fn superblock(buf: &[u8]) -> Result<Superblock, Error> {
     let mut at = 0usize;
     let start = loop {
         match buf.get(at..at.checked_add(8).ok_or_else(|| bad("not an HDF5 file"))?) {
@@ -121,7 +121,7 @@ pub(crate) mod kind {
 }
 
 /// All messages of the object header at `addr`, following continuation blocks.
-pub(crate) fn object_header(file: &File, addr: u64) -> Result<Vec<Message>, IoError> {
+pub(crate) fn object_header(file: &File, addr: u64) -> Result<Vec<Message>, Error> {
     let mut c = file.cursor(addr)?;
     let mut out = Vec::new();
     let mut pending: Vec<(u64, usize)> = Vec::new();
@@ -189,7 +189,7 @@ fn push(
     out: &mut Vec<Message>,
     pending: &mut Vec<(u64, usize)>,
     sizes: Sizes,
-) -> Result<(), IoError> {
+) -> Result<(), Error> {
     if kind == kind::CONTINUATION {
         let mut c = Cursor::new(data, 0, sizes);
         let addr = c
@@ -213,7 +213,7 @@ fn read_v1_messages(
     s: Sizes,
     out: &mut Vec<Message>,
     pending: &mut Vec<(u64, usize)>,
-) -> Result<(), IoError> {
+) -> Result<(), Error> {
     let mut c = Cursor::new(block, 0, s);
     while c.rest().len() >= 8 {
         let kind = c.u16()?;
@@ -232,7 +232,7 @@ fn read_v2_messages(
     hflags: u8,
     out: &mut Vec<Message>,
     pending: &mut Vec<(u64, usize)>,
-) -> Result<(), IoError> {
+) -> Result<(), Error> {
     let mut c = Cursor::new(block, 0, s);
     let prefix = if hflags & 0x04 != 0 { 6 } else { 4 };
     while c.rest().len() >= prefix {
@@ -260,7 +260,7 @@ pub(crate) struct Space {
 }
 
 /// Dataspace: `None` for the null dataspace; empty dims for scalars.
-pub(crate) fn dataspace(data: &[u8], s: Sizes) -> Result<Option<Space>, IoError> {
+pub(crate) fn dataspace(data: &[u8], s: Sizes) -> Result<Option<Space>, Error> {
     let mut c = Cursor::new(data, 0, s);
     let version = c.u8()?;
     let rank = usize::from(c.u8()?);
@@ -291,7 +291,7 @@ pub(crate) fn dataspace(data: &[u8], s: Sizes) -> Result<Option<Space>, IoError>
 }
 
 /// Fill value bytes, if defined.
-pub(crate) fn fill_value(kind_: u16, data: &[u8], s: Sizes) -> Result<Option<Vec<u8>>, IoError> {
+pub(crate) fn fill_value(kind_: u16, data: &[u8], s: Sizes) -> Result<Option<Vec<u8>>, Error> {
     let mut c = Cursor::new(data, 0, s);
     if kind_ == kind::FILL_OLD {
         let n = usize::try_from(c.u32()?).map_err(|_| bad("fill too large"))?;
@@ -351,7 +351,7 @@ pub(crate) enum Layout {
     },
 }
 
-pub(crate) fn layout(data: &[u8], s: Sizes) -> Result<Layout, IoError> {
+pub(crate) fn layout(data: &[u8], s: Sizes) -> Result<Layout, Error> {
     let mut c = Cursor::new(data, 0, s);
     let version = c.u8()?;
     match version {
@@ -471,7 +471,7 @@ pub(crate) struct Filter {
     pub(crate) client: Vec<u32>,
 }
 
-pub(crate) fn filters(data: &[u8], s: Sizes) -> Result<Vec<Filter>, IoError> {
+pub(crate) fn filters(data: &[u8], s: Sizes) -> Result<Vec<Filter>, Error> {
     let mut c = Cursor::new(data, 0, s);
     let version = c.u8()?;
     let n = c.u8()?;
@@ -511,7 +511,7 @@ pub(crate) struct AttributeMsg {
     pub(crate) data: Vec<u8>,
 }
 
-pub(crate) fn attribute(file: &File, data: &[u8]) -> Result<AttributeMsg, IoError> {
+pub(crate) fn attribute(file: &File, data: &[u8]) -> Result<AttributeMsg, Error> {
     let mut c = Cursor::new(data, 0, file.sizes);
     let version = c.u8()?;
     let flags = if version == 1 {
@@ -556,7 +556,7 @@ pub(crate) struct Link {
     pub(crate) order: Option<u64>,
 }
 
-pub(crate) fn link(data: &[u8], s: Sizes) -> Result<Link, IoError> {
+pub(crate) fn link(data: &[u8], s: Sizes) -> Result<Link, Error> {
     let mut c = Cursor::new(data, 0, s);
     let version = c.u8()?;
     if version != 1 {
@@ -590,7 +590,7 @@ pub(crate) struct DenseInfo {
     pub(crate) name_index: Option<u64>,
 }
 
-pub(crate) fn link_info(data: &[u8], s: Sizes) -> Result<DenseInfo, IoError> {
+pub(crate) fn link_info(data: &[u8], s: Sizes) -> Result<DenseInfo, Error> {
     let mut c = Cursor::new(data, 0, s);
     c.skip(1)?;
     let flags = c.u8()?;
@@ -603,7 +603,7 @@ pub(crate) fn link_info(data: &[u8], s: Sizes) -> Result<DenseInfo, IoError> {
     })
 }
 
-pub(crate) fn attribute_info(data: &[u8], s: Sizes) -> Result<DenseInfo, IoError> {
+pub(crate) fn attribute_info(data: &[u8], s: Sizes) -> Result<DenseInfo, Error> {
     let mut c = Cursor::new(data, 0, s);
     c.skip(1)?;
     let flags = c.u8()?;
@@ -617,7 +617,7 @@ pub(crate) fn attribute_info(data: &[u8], s: Sizes) -> Result<DenseInfo, IoError
 }
 
 /// Symbol table message: (B-tree address, local heap address).
-pub(crate) fn symbol_table(data: &[u8], s: Sizes) -> Result<(u64, u64), IoError> {
+pub(crate) fn symbol_table(data: &[u8], s: Sizes) -> Result<(u64, u64), Error> {
     let mut c = Cursor::new(data, 0, s);
     let bt = c
         .addr()?

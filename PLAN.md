@@ -23,22 +23,29 @@ The data model copies ndarray's owned/view split: `Dataset`, `DatasetView`, `Dat
 ```
 annoray/
 ├── crates/
-│   ├── annoray-units       # Unit, Scale, Dimension, parser (UDUNITS/CF + UCUM), conversion, CF time (chrono)
-│   │                  #   features: `uom`, `whippyunits` → StaticUnit impls + conversions
-│   ├── annoray-core        # Repr GAT, Variable/DataArray/Dataset (+View/ViewMut), indexes, alignment, ops
-│   ├── annoray-macros      # proc macros: isel!/sel! with Python-style slices (syn + quote)
-│   ├── annoray-cf          # CF encode/decode: mask_and_scale, _FillValue, time, `coordinates`, units attr
-│   ├── annoray-io          # Backend trait, lazy BackendArray, Hyperslab, open_dataset / to_netcdf
-│   ├── annoray-io-c        # [feature c-backend] adapters over `netcdf` + `hdf5-metno` (C libs)
-│   ├── annoray-netcdf3     # pure Rust classic / 64-bit offset / CDF-5
-│   ├── annoray-hdf5        # pure Rust HDF5 (superblock, object headers, B-trees, heaps, chunking, filters)
-│   └── annoray-netcdf4     # netCDF-4 data model on annoray-hdf5 (dim scales, groups, _NCProperties)
-├── annoray/         # facade crate that re-exports everything
-└── fixtures/          # gen.py (Python xarray/netCDF4) → golden files; test-only
+│   ├── annoray-units       # Unit, Scale, Dimension, parser (UDUNITS/CF + UCUM), conversion, CF time,
+│   │                       #   typed Quantity<D>; usable on its own (depends on chrono and typenum only)
+│   ├── annoray-hdf5        # pure Rust HDF5 (superblock, object headers, B-trees, heaps, chunking,
+│   │                       #   filters, writer); usable on its own: its own Array, Error, Compression
+│   └── annoray-macros      # proc macros: isel!/sel! with Python-style slices (syn + quote)
+├── annoray/                # the library: data model at the root, plus modules
+│   │                       #   cf (CF encode/decode), io (Backend, RawDataset, open_dataset/to_netcdf),
+│   │                       #   io::netcdf3, io::netcdf4 (on annoray-hdf5), io::netcdf_c [feature netcdf-c]
+├── annoray-python/         # Python bindings (not published to crates.io)
+└── fixtures/               # Python xarray/netCDF4/h5py scripts → golden files; test-only
 ```
 
-The C backend and the pure-Rust backends implement the same `annoray-io::Backend` trait. That lets the
+The C backend and the pure-Rust backends implement the same `annoray::io::Backend` trait. That lets the
 whole test suite run against both, and lets us diff their outputs.
+
+**Why only three sibling crates** (2026-10): the data model, CF layer, I/O model and the netCDF
+backends were separate crates (`annoray-core`, `-cf`, `-io`, `-io-c`, `-netcdf3`, `-netcdf4`), but
+none was usable without the core, so they were merged into `annoray` as modules (the C backend is the
+`netcdf-c` feature). What stays separate is what is useful elsewhere: units, the HDF5 reader/writer,
+and the proc-macro crate (which must be its own crate). `annoray-hdf5` no longer depends on annoray's
+types: it has its own `Array`/`ValueType`, `Error`, `Compression` (re-exported by annoray), a `Source`
+trait for streaming writes, and `set_batch_bytes` (which `annoray::set_stream_bytes` also sets).
+Section names below that mention the old crates refer to these modules.
 
 ## 2. Core data model (`annoray-core`)
 

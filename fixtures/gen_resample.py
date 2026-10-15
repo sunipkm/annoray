@@ -1,4 +1,4 @@
-"""Reference resample results from Python xarray for annoray/crates/annoray-core/tests/resample.rs.
+"""Reference resample results from Python xarray for annoray/tests/resample.rs.
 
 Run from the repository root:  python3 fixtures/gen_resample.py > fixtures/resample.txt
 

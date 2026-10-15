@@ -1,16 +1,20 @@
-//! Pure-Rust HDF5 for annoray.
+//! A pure-Rust HDF5 reader and writer.
 //!
 //! Reads every structure current HDF5 libraries write: superblocks v0–v3, object headers v1
 //! and v2, old-style (symbol table), compact and dense (fractal heap + v2 B-tree) groups,
 //! compact and dense attributes, compact/contiguous/chunked layouts with every chunk index
 //! (v1 B-tree, single chunk, implicit, fixed array, extensible array, v2 B-tree), and the
-//! deflate, shuffle and fletcher32 filters.
+//! deflate, shuffle and fletcher32 filters. Compressed chunks are also read for LZF, N-bit,
+//! scale-offset, bzip2, Blosc and Bitshuffle, and (with the `zstd` and `lz4` features)
+//! Zstandard and LZ4. [`write_file`] writes a tree of groups and datasets.
+//!
+//! Values are read as an [`Array`]: an `ndarray` array of the element type the file stores.
 //!
 //! Files are untrusted input: every read is bounds-checked, sizes use checked arithmetic, tree
 //! walks are depth-limited, and loading refuses datasets larger than [`MAX_LOAD_BYTES`].
 //!
 //! ```no_run
-//! # fn main() -> Result<(), annoray_io::IoError> {
+//! # fn main() -> Result<(), annoray_hdf5::Error> {
 //! let file = annoray_hdf5::File::open("data.h5")?;
 //! for (name, node) in file.root()?.members()? {
 //!     if let annoray_hdf5::Node::Dataset(ds) = node {
@@ -23,12 +27,15 @@
 
 #![deny(missing_docs)]
 
-mod backend;
+mod array;
+mod bytes;
 mod checksum;
 mod ck;
 mod codecs;
+mod compression;
 mod cursor;
 mod dtype;
+mod error;
 mod filters;
 mod format;
 mod storage;
@@ -36,31 +43,38 @@ mod writer;
 
 use std::path::Path;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
-use annoray_core::{Owned, TypedArray};
-use annoray_io::{FileBytes, IoError};
-
-pub use backend::{Hdf5, attr_value};
+pub use array::{Array, ValueType};
+pub use bytes::{FileBytes, map_file, read_file};
 pub use checksum::lookup3;
 use ck::Ck;
+pub use compression::{BloscCodec, BloscShuffle, Compression};
 use cursor::{Cursor, Sizes};
 pub use dtype::{Datatype, StrPad};
+pub(crate) use error::bad;
+pub use error::{Error, Result};
 use format::{ChunkIndex, Filter, Layout, Message, Space, kind};
 use storage::{ChunkRef, Element, FractalHeap};
-pub use writer::{AttrData, WDataset, WGroup, WNode, write_file, write_to};
+pub use writer::{AttrData, Source, WDataset, WGroup, WNode, write_file, write_to};
 
 /// Default limit on the decoded size of one dataset read ([`File::with_load_limit`]).
 /// Chunked data can legitimately decode to more than the file size (unwritten chunks become
 /// fill values), so this cannot simply be the file size.
 pub const MAX_LOAD_BYTES: usize = 1 << 34;
 
-const NAME: &str = "hdf5";
+static BATCH_BYTES: AtomicUsize = AtomicUsize::new(64 << 20);
 
-pub(crate) fn bad(message: impl Into<String>) -> IoError {
-    IoError::Backend {
-        backend: NAME,
-        message: message.into(),
-    }
+/// Limit the memory that decoding or encoding chunks in parallel holds at once to about
+/// `bytes` (at least one chunk is always in flight). The default is 64 MiB.
+pub fn set_batch_bytes(bytes: usize) {
+    BATCH_BYTES.store(bytes.max(1), Ordering::Relaxed);
+}
+
+/// The limit set by [`set_batch_bytes`].
+#[must_use]
+pub fn batch_bytes() -> usize {
+    BATCH_BYTES.load(Ordering::Relaxed)
 }
 
 /// Whether `bytes` start with the HDF5 signature (at offset 0).
@@ -82,36 +96,36 @@ pub struct File {
 
 impl File {
     /// Open a file by memory-mapping it: only the metadata and the data actually read are
-    /// paged in, so opening large files is cheap. See [`annoray_io::map_file`] for the one caveat
+    /// paged in, so opening large files is cheap. See [`map_file`] for the one caveat
     /// (the file must not be modified while open) and [`File::open_in_memory`] to avoid it.
     ///
     /// # Errors
-    /// I/O errors, or [`IoError::Backend`] if it is not a readable HDF5 file.
-    pub fn open(path: impl AsRef<Path>) -> Result<Self, IoError> {
-        Self::from_file_bytes(annoray_io::map_file(path.as_ref())?)
+    /// [`Error::Io`], or [`Error::Invalid`] if it is not a readable HDF5 file.
+    pub fn open(path: impl AsRef<Path>) -> Result<Self, Error> {
+        Self::from_file_bytes(map_file(path.as_ref())?)
     }
 
     /// Open a file by reading it entirely into memory.
     ///
     /// # Errors
     /// As for [`File::open`].
-    pub fn open_in_memory(path: impl AsRef<Path>) -> Result<Self, IoError> {
-        Self::from_file_bytes(annoray_io::read_file(path.as_ref())?)
+    pub fn open_in_memory(path: impl AsRef<Path>) -> Result<Self, Error> {
+        Self::from_file_bytes(read_file(path.as_ref())?)
     }
 
     /// Parse a file held in memory.
     ///
     /// # Errors
-    /// [`IoError::Backend`] if it is not a readable HDF5 file.
-    pub fn from_bytes(buf: Vec<u8>) -> Result<Self, IoError> {
+    /// [`Error::Invalid`] if it is not a readable HDF5 file.
+    pub fn from_bytes(buf: Vec<u8>) -> Result<Self, Error> {
         Self::from_file_bytes(FileBytes::Owned(buf))
     }
 
     /// Parse mapped or in-memory file bytes.
     ///
     /// # Errors
-    /// [`IoError::Backend`] if it is not a readable HDF5 file.
-    pub fn from_file_bytes(buf: FileBytes) -> Result<Self, IoError> {
+    /// [`Error::Invalid`] if it is not a readable HDF5 file.
+    pub fn from_file_bytes(buf: FileBytes) -> Result<Self, Error> {
         let sb = format::superblock(&buf)?;
         Ok(Self {
             buf: Arc::new(buf),
@@ -137,7 +151,7 @@ impl File {
         self.superblock_version
     }
 
-    pub(crate) fn cursor(&self, addr: u64) -> Result<Cursor<'_>, IoError> {
+    pub(crate) fn cursor(&self, addr: u64) -> Result<Cursor<'_>, Error> {
         let at = addr
             .checked_add(self.base)
             .and_then(|a| usize::try_from(a).ok())
@@ -153,7 +167,7 @@ impl File {
     ///
     /// # Errors
     /// If the root object header is unreadable.
-    pub fn root(&self) -> Result<Group, IoError> {
+    pub fn root(&self) -> Result<Group, Error> {
         Ok(Group {
             file: self.clone(),
             addr: self.root,
@@ -161,7 +175,7 @@ impl File {
         })
     }
 
-    fn node(&self, addr: u64, path: String) -> Result<Node, IoError> {
+    fn node(&self, addr: u64, path: String) -> Result<Node, Error> {
         let msgs = format::object_header(self, addr)?;
         let has = |k: u16| msgs.iter().any(|m| m.kind == k);
         Ok(if has(kind::LAYOUT) {
@@ -238,7 +252,7 @@ impl Group {
     ///
     /// # Errors
     /// If the group's structures are corrupt.
-    pub fn members(&self) -> Result<Vec<(String, Node)>, IoError> {
+    pub fn members(&self) -> Result<Vec<(String, Node)>, Error> {
         let msgs = format::object_header(&self.file, self.addr)?;
         let s = self.file.sizes;
         let mut links: Vec<(String, Option<u64>, Option<u64>)> = Vec::new();
@@ -288,19 +302,19 @@ impl Group {
     /// The member at a relative `/`-separated path.
     ///
     /// # Errors
-    /// [`IoError::NoSuchGroup`] if it does not exist.
-    pub fn get(&self, path: &str) -> Result<Node, IoError> {
+    /// [`Error::NotFound`] if it does not exist.
+    pub fn get(&self, path: &str) -> Result<Node, Error> {
         let mut node = Node::Group(self.clone());
         for part in path.split('/').filter(|p| !p.is_empty()) {
             let Node::Group(g) = node else {
-                return Err(IoError::NoSuchGroup(path.to_owned()));
+                return Err(Error::NotFound(path.to_owned()));
             };
             node = g
                 .members()?
                 .into_iter()
                 .find(|(n, _)| n == part)
                 .map(|(_, n)| n)
-                .ok_or_else(|| IoError::NoSuchGroup(path.to_owned()))?;
+                .ok_or_else(|| Error::NotFound(path.to_owned()))?;
         }
         Ok(node)
     }
@@ -309,7 +323,7 @@ impl Group {
     ///
     /// # Errors
     /// If attribute storage is corrupt.
-    pub fn attrs(&self) -> Result<Vec<Attribute>, IoError> {
+    pub fn attrs(&self) -> Result<Vec<Attribute>, Error> {
         attributes(&self.file, &format::object_header(&self.file, self.addr)?)
     }
 }
@@ -331,10 +345,10 @@ impl Attribute {
     /// Object reference targets (object header addresses), for reference attributes.
     ///
     /// # Errors
-    /// [`IoError::Unsupported`] if the attribute does not hold object references.
-    pub fn references(&self) -> Result<Vec<Option<u64>>, IoError> {
+    /// [`Error::Unsupported`] if the attribute does not hold object references.
+    pub fn references(&self) -> Result<Vec<Option<u64>>, Error> {
         if self.dtype != Datatype::ObjectReference {
-            return Err(IoError::Unsupported(format!(
+            return Err(Error::Unsupported(format!(
                 "attribute {:?} does not hold references",
                 self.name
             )));
@@ -346,10 +360,10 @@ impl Attribute {
     /// `DIMENSION_LIST`.
     ///
     /// # Errors
-    /// [`IoError::Unsupported`] if the attribute does not hold reference lists.
-    pub fn reference_lists(&self) -> Result<Vec<Vec<u64>>, IoError> {
+    /// [`Error::Unsupported`] if the attribute does not hold reference lists.
+    pub fn reference_lists(&self) -> Result<Vec<Vec<u64>>, Error> {
         if self.dtype != Datatype::ReferenceList {
-            return Err(IoError::Unsupported(format!(
+            return Err(Error::Unsupported(format!(
                 "attribute {:?} does not hold reference lists",
                 self.name
             )));
@@ -360,8 +374,8 @@ impl Attribute {
     /// The value.
     ///
     /// # Errors
-    /// [`IoError::Unsupported`] for datatypes that cannot be converted.
-    pub fn value(&self) -> Result<TypedArray<Owned>, IoError> {
+    /// [`Error::Unsupported`] for datatypes that cannot be converted.
+    pub fn value(&self) -> Result<Array, Error> {
         let shape = self.shape.clone().unwrap_or_else(|| vec![0]);
         let n = shape
             .iter()
@@ -379,9 +393,9 @@ impl Attribute {
     }
 }
 
-fn attributes(file: &File, msgs: &[Message]) -> Result<Vec<Attribute>, IoError> {
+fn attributes(file: &File, msgs: &[Message]) -> Result<Vec<Attribute>, Error> {
     let mut out = Vec::new();
-    let to_attr = |a: format::AttributeMsg| -> Result<Attribute, IoError> {
+    let to_attr = |a: format::AttributeMsg| -> Result<Attribute, Error> {
         let shape = a
             .dims
             .map(|d| {
@@ -404,7 +418,7 @@ fn attributes(file: &File, msgs: &[Message]) -> Result<Vec<Attribute>, IoError> 
         match m.kind {
             kind::ATTRIBUTE => {
                 if m.flags & 2 != 0 {
-                    return Err(IoError::Unsupported("shared attribute messages".into()));
+                    return Err(Error::Unsupported("shared attribute messages".into()));
                 }
                 compact.push((m.order, to_attr(format::attribute(file, &m.data)?)?));
             }
@@ -456,12 +470,7 @@ pub struct Dataset {
 }
 
 impl Dataset {
-    fn from_messages(
-        file: File,
-        addr: u64,
-        path: String,
-        msgs: &[Message],
-    ) -> Result<Self, IoError> {
+    fn from_messages(file: File, addr: u64, path: String, msgs: &[Message]) -> Result<Self, Error> {
         let s = file.sizes;
         let find = |k: u16| msgs.iter().find(|m| m.kind == k);
         let dt_msg = find(kind::DATATYPE)
@@ -591,27 +600,27 @@ impl Dataset {
     /// A plugin compression codec in the filter pipeline (Zstandard, LZ4 or Blosc), as the
     /// writer would reproduce it.
     #[must_use]
-    pub fn codec(&self) -> Option<annoray_core::Compression> {
+    pub fn codec(&self) -> Option<Compression> {
         self.filters.iter().find_map(|f| {
             let c = |i: usize| f.client.get(i).copied();
             match f.id {
-                filters::ZSTD => Some(annoray_core::Compression::Zstd {
+                filters::ZSTD => Some(Compression::Zstd {
                     level: c(0).map_or(3, |v| i32::from_ne_bytes(v.to_ne_bytes())),
                 }),
-                filters::LZ4 => Some(annoray_core::Compression::Lz4),
-                filters::BLOSC => Some(annoray_core::Compression::Blosc {
+                filters::LZ4 => Some(Compression::Lz4),
+                filters::BLOSC => Some(Compression::Blosc {
                     codec: match c(6) {
-                        Some(0) => annoray_core::BloscCodec::BloscLz,
-                        Some(2) => annoray_core::BloscCodec::Lz4Hc,
-                        Some(4) => annoray_core::BloscCodec::Zlib,
-                        Some(5) => annoray_core::BloscCodec::Zstd,
-                        _ => annoray_core::BloscCodec::Lz4,
+                        Some(0) => BloscCodec::BloscLz,
+                        Some(2) => BloscCodec::Lz4Hc,
+                        Some(4) => BloscCodec::Zlib,
+                        Some(5) => BloscCodec::Zstd,
+                        _ => BloscCodec::Lz4,
                     },
                     level: c(4).and_then(|v| u8::try_from(v).ok()).unwrap_or(5),
                     shuffle: match c(5) {
-                        Some(1) => annoray_core::BloscShuffle::Byte,
-                        Some(2) => annoray_core::BloscShuffle::Bit,
-                        _ => annoray_core::BloscShuffle::None,
+                        Some(1) => BloscShuffle::Byte,
+                        Some(2) => BloscShuffle::Bit,
+                        _ => BloscShuffle::None,
                     },
                 }),
                 _ => None,
@@ -623,20 +632,20 @@ impl Dataset {
     ///
     /// # Errors
     /// If attribute storage is corrupt.
-    pub fn attrs(&self) -> Result<Vec<Attribute>, IoError> {
+    pub fn attrs(&self) -> Result<Vec<Attribute>, Error> {
         attributes(&self.file, &self.msgs)
     }
 
     /// Read the whole dataset.
     ///
     /// # Errors
-    /// [`IoError::Unsupported`] for unsupported types, filters or layouts; [`IoError::Backend`]
+    /// [`Error::Unsupported`] for unsupported types, filters or layouts; [`Error::Invalid`]
     /// for corrupt data or datasets over [`MAX_LOAD_BYTES`].
-    pub fn read(&self) -> Result<TypedArray<Owned>, IoError> {
+    pub fn read(&self) -> Result<Array, Error> {
         let shape = self.shape();
         let esize = self.dtype.element_size(self.file.sizes.offset);
         if esize == 0 {
-            return Err(IoError::Unsupported(format!(
+            return Err(Error::Unsupported(format!(
                 "{}: zero-sized elements",
                 self.path
             )));
@@ -698,7 +707,7 @@ impl Dataset {
         index: &ChunkIndex,
         shape: &[usize],
         esize: usize,
-    ) -> Result<Vec<ChunkRef>, IoError> {
+    ) -> Result<Vec<ChunkRef>, Error> {
         let rank = shape.len();
         let chunk_bytes = cdims
             .iter()
@@ -863,7 +872,7 @@ impl Dataset {
         lo: &[usize],
         count: &[usize],
         out: &mut [u8],
-    ) -> Result<(), IoError> {
+    ) -> Result<(), Error> {
         #[cfg(feature = "rayon")]
         if !self.filters.is_empty() && chunks.len() > 1 {
             use rayon::prelude::*;
@@ -875,8 +884,8 @@ impl Dataset {
                 .try_fold(esize, |a, c| a.checked_mul(usize::try_from(*c).ok()?))
                 .unwrap_or(usize::MAX)
                 .max(1);
-            // Within the streaming budget (`annoray_core::set_stream_bytes`), at least one.
-            let batch = annoray_core::stream_bytes()
+            // Within the budget of `set_batch_bytes`, at least one.
+            let batch = batch_bytes()
                 .checked_div(chunk_bytes)
                 .unwrap_or(0)
                 .clamp(1, threads.saturating_mul(4));
@@ -884,7 +893,7 @@ impl Dataset {
                 let decoded = group
                     .par_iter()
                     .map(|c| self.decode_chunk(c, cdims, shape, esize, lo, count))
-                    .collect::<Result<Vec<_>, IoError>>()?;
+                    .collect::<Result<Vec<_>, Error>>()?;
                 for p in decoded.into_iter().flatten() {
                     p.copy_into(out, count, lo, esize)?;
                 }
@@ -908,7 +917,7 @@ impl Dataset {
         esize: usize,
         lo: &[usize],
         count: &[usize],
-    ) -> Result<Option<Decoded<'_>>, IoError> {
+    ) -> Result<Option<Decoded<'_>>, Error> {
         let cd: Vec<usize> = cdims
             .iter()
             .map(|d| usize::try_from(*d).unwrap_or(usize::MAX))
@@ -969,13 +978,9 @@ impl Dataset {
     /// the rows) that intersect it are touched, so slices of large mapped files are cheap.
     ///
     /// # Errors
-    /// [`IoError::Backend`] if the slice is outside the dataset; otherwise as for
+    /// [`Error::Invalid`] if the slice is outside the dataset; otherwise as for
     /// [`read`](Self::read).
-    pub fn read_slice(
-        &self,
-        start: &[usize],
-        count: &[usize],
-    ) -> Result<TypedArray<Owned>, IoError> {
+    pub fn read_slice(&self, start: &[usize], count: &[usize]) -> Result<Array, Error> {
         let shape = self.shape();
         if start.len() != shape.len() || count.len() != shape.len() {
             return Err(bad(format!(
@@ -1074,7 +1079,7 @@ impl Decoded<'_> {
         count: &[usize],
         lo: &[usize],
         esize: usize,
-    ) -> Result<(), IoError> {
+    ) -> Result<(), Error> {
         copy_box(
             &self.data,
             &self.dims,
@@ -1103,7 +1108,7 @@ fn copy_box(
     from: &[usize],
     to: &[usize],
     esize: usize,
-) -> Result<(), IoError> {
+) -> Result<(), Error> {
     let rank = from.len();
     if rank == 0 {
         let (Some(d), Some(s)) = (dst.get_mut(..esize), src.get(..esize)) else {

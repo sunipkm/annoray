@@ -1,7 +1,7 @@
 //! A bzip2 decoder (HDF5 filter 307, as netCDF-C writes it): Huffman-coded MTF/RLE2 symbols,
 //! inverse Burrows–Wheeler transform, then RLE1, with every block's CRC checked.
 
-use annoray_io::IoError;
+use crate::Error;
 
 use super::{BitReader, corrupt};
 
@@ -11,7 +11,7 @@ const END_MAGIC: u64 = 0x1772_4538_5090;
 const MAX_CODE_LEN: usize = 20;
 const GROUP_SIZE: u32 = 50;
 
-fn err() -> IoError {
+fn err() -> Error {
     corrupt(CODEC)
 }
 
@@ -37,7 +37,7 @@ struct Table {
 }
 
 impl Table {
-    fn new(lens: &[u8]) -> Result<Self, IoError> {
+    fn new(lens: &[u8]) -> Result<Self, Error> {
         let min_len = usize::from(*lens.iter().min().ok_or_else(err)?);
         let max_len = usize::from(*lens.iter().max().ok_or_else(err)?);
         let mut perm = Vec::with_capacity(lens.len());
@@ -76,7 +76,7 @@ impl Table {
         })
     }
 
-    fn decode(&self, r: &mut BitReader<'_>) -> Result<u16, IoError> {
+    fn decode(&self, r: &mut BitReader<'_>) -> Result<u16, Error> {
         let mut len = self.min_len;
         let mut code =
             i64::try_from(r.bits(u32::try_from(len).map_err(|_| err())?)?).map_err(|_| err())?;
@@ -106,10 +106,10 @@ fn block(
     max_block: usize,
     out: &mut Vec<u8>,
     limit: usize,
-) -> Result<(), IoError> {
+) -> Result<(), Error> {
     let crc = u32::try_from(r.bits(32)?).map_err(|_| err())?;
     if r.bit()? {
-        return Err(IoError::Unsupported("randomised bzip2 blocks".into()));
+        return Err(Error::Unsupported("randomised bzip2 blocks".into()));
     }
     let orig_ptr = usize::try_from(r.bits(24)?).map_err(|_| err())?;
 
@@ -286,12 +286,12 @@ fn block(
     Ok(())
 }
 
-fn bad_size() -> IoError {
+fn bad_size() -> Error {
     crate::bad("bzip2: chunk larger than expected")
 }
 
 /// Decompress one or more concatenated bzip2 streams into at most `limit` bytes.
-pub(crate) fn decompress(input: &[u8], limit: usize) -> Result<Vec<u8>, IoError> {
+pub(crate) fn decompress(input: &[u8], limit: usize) -> Result<Vec<u8>, Error> {
     let mut r = BitReader::new(input, CODEC);
     let mut out = Vec::with_capacity(limit);
     while !r.at_end() {

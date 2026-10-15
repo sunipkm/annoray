@@ -1,4 +1,4 @@
-"""Reference interpolation results from Python xarray for annoray/crates/annoray-core/tests/interp.rs.
+"""Reference interpolation results from Python xarray for annoray/tests/interp.rs.
 
 Run from the repository root:  python3 fixtures/gen_interp.py > fixtures/interp.txt
 

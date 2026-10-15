@@ -16,7 +16,7 @@ fn show_attr(indent: &str, a: &Attribute) {
     );
 }
 
-fn walk(g: &Group, indent: &str) -> Result<(), annoray_io::IoError> {
+fn walk(g: &Group, indent: &str) -> Result<(), annoray_hdf5::Error> {
     println!("{indent}{} (group @{})", g.path(), g.address());
     for a in g.attrs()? {
         show_attr(&format!("{indent}  "), &a);
@@ -44,7 +44,7 @@ fn walk(g: &Group, indent: &str) -> Result<(), annoray_io::IoError> {
     Ok(())
 }
 
-fn main() -> Result<(), annoray_io::IoError> {
+fn main() -> Result<(), annoray_hdf5::Error> {
     for path in std::env::args().skip(1) {
         let f = File::open(&path)?;
         println!("== {path} (superblock v{})", f.superblock_version());

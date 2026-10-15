@@ -8,12 +8,12 @@ pub(crate) mod bzip2;
 pub(crate) mod nbit;
 pub(crate) mod scaleoffset;
 
-use annoray_io::IoError;
+use crate::Error;
 
 use crate::bad;
 
 /// An error in a named codec.
-pub(crate) fn corrupt(codec: &str) -> IoError {
+pub(crate) fn corrupt(codec: &str) -> Error {
     bad(format!("{codec}: corrupt chunk"))
 }
 
@@ -34,7 +34,7 @@ impl<'a> BitReader<'a> {
         }
     }
 
-    pub(crate) fn bit(&mut self) -> Result<bool, IoError> {
+    pub(crate) fn bit(&mut self) -> Result<bool, Error> {
         let byte = self
             .data
             .get(self.pos / 8)
@@ -46,7 +46,7 @@ impl<'a> BitReader<'a> {
     }
 
     /// `n` (at most 64) bits as a big-endian number.
-    pub(crate) fn bits(&mut self, n: u32) -> Result<u64, IoError> {
+    pub(crate) fn bits(&mut self, n: u32) -> Result<u64, Error> {
         if n > 64 {
             return Err(corrupt(self.codec));
         }
@@ -68,7 +68,7 @@ impl<'a> BitReader<'a> {
 }
 
 /// A little-endian `u32` at `at`.
-pub(crate) fn le32(data: &[u8], at: usize, codec: &str) -> Result<u32, IoError> {
+pub(crate) fn le32(data: &[u8], at: usize, codec: &str) -> Result<u32, Error> {
     let b = at
         .checked_add(4)
         .and_then(|end| data.get(at..end))
@@ -82,7 +82,7 @@ pub(crate) fn le32(data: &[u8], at: usize, codec: &str) -> Result<u32, IoError> 
 }
 
 /// A big-endian unsigned number of `n` bytes at `at`.
-pub(crate) fn be(data: &[u8], at: usize, n: usize, codec: &str) -> Result<u64, IoError> {
+pub(crate) fn be(data: &[u8], at: usize, n: usize, codec: &str) -> Result<u64, Error> {
     let b = at
         .checked_add(n)
         .and_then(|end| data.get(at..end))
