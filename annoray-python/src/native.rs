@@ -946,6 +946,12 @@ impl PyDataArray {
         })
     }
 
+    /// The values as an `astropy.units.Quantity` in this array's unit (coordinates and
+    /// attributes are dropped; needs astropy).
+    fn to_astropy<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        crate::units::to_astropy(slf.as_any())
+    }
+
     /// Plotting with matplotlib: `da.plot()` by rank, or `da.plot.pcolormesh(...)` etc.
     /// (`annoray.plot`).
     #[getter]

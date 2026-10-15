@@ -25,12 +25,18 @@
 //! ```
 
 #![deny(missing_docs)]
+// whippyunits names its temperature exponent `_Θ` (a crate-level lint).
+#![cfg_attr(feature = "whippyunits", allow(mixed_script_confusables))]
 
 // The README's examples run as doctests.
 #[cfg(doctest)]
 #[doc = include_str!("../README.md")]
 struct ReadmeDoctests;
 
+#[cfg(feature = "uom")]
+mod bridge_uom;
+#[cfg(feature = "whippyunits")]
+mod bridge_whippyunits;
 mod ck;
 mod dimension;
 pub mod dims;
@@ -50,7 +56,7 @@ pub use dimension::{BaseDim, Dimension};
 pub use error::UnitError;
 pub use quantity::{Dyn, IntoUnit, Kind, Quantity, SameDimension};
 pub use scale::{Rational, Scale};
-pub use static_unit::StaticUnit;
+pub use static_unit::{StaticUnit, StaticValue, converter_from, converter_into};
 pub use time::{Calendar, CfDate, EpochCodec, RefDate};
 pub use unit::{BinaryPlan, Converter, LogBase, LogRef, Unit, UnitKind, UnitPolicy};
 

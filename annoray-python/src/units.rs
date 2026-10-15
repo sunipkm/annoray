@@ -11,7 +11,7 @@
 
 use std::hash::{Hash, Hasher};
 
-use annoray::units::{BaseDim, Dimension};
+use annoray::units::{BaseDim, Dimension, UnitKind};
 use annoray::{Quantity, Unit, UnitError as RsUnitError};
 use pyo3::basic::CompareOp;
 use pyo3::exceptions::PyTypeError;
@@ -191,7 +191,7 @@ impl Hash for PyUnit {
     }
 }
 
-/// A unit from a string or a `Unit`.
+/// A unit from a string, a `Unit`, or an astropy unit.
 pub(crate) fn unit_from_py(u: &Bound<'_, PyAny>) -> PyResult<Unit> {
     if let Ok(u) = u.cast::<PyUnit>() {
         return Ok(u.get().inner.clone());
@@ -199,9 +199,29 @@ pub(crate) fn unit_from_py(u: &Bound<'_, PyAny>) -> PyResult<Unit> {
     if let Ok(s) = u.cast::<PyString>() {
         return s.to_str()?.parse::<Unit>().py_err();
     }
+    if is_astropy(u)? {
+        let converted = u
+            .py()
+            .import("annoray._astropy")?
+            .call_method1("unit_from_astropy", (u,))?;
+        return Ok(converted.cast::<PyUnit>()?.get().inner.clone());
+    }
     Err(PyTypeError::new_err(
-        "expected a unit (a string or annoray.Unit)",
+        "expected a unit (a string, annoray.Unit or astropy unit)",
     ))
+}
+
+/// `annoray._astropy.to_astropy(o)`.
+pub(crate) fn to_astropy<'py>(o: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+    o.py()
+        .import("annoray._astropy")?
+        .call_method1("to_astropy", (o,))
+}
+
+/// Whether `o` is an astropy object (by its type's module; astropy is not imported).
+pub(crate) fn is_astropy(o: &Bound<'_, PyAny>) -> PyResult<bool> {
+    let module: String = o.get_type().getattr("__module__")?.extract()?;
+    Ok(module == "astropy" || module.starts_with("astropy."))
 }
 
 fn rs_err(e: RsUnitError) -> PyErr {
@@ -236,10 +256,43 @@ impl PyUnit {
         self.inner.is_dimensionless()
     }
 
+    /// As an `astropy.units.UnitBase` (needs astropy). Names are kept where astropy reads
+    /// them as the same unit; otherwise the unit is composed from SI base units.
+    fn to_astropy<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        to_astropy(slf.as_any())
+    }
+
     /// The unit in canonical form (prime-factorised scale, base dimensions).
     #[getter]
     fn canonical(&self) -> String {
         self.inner.canonical()
+    }
+
+    /// `"linear"`, `"affine"` (°C), `"epoch"` (`days since …`) or `"log"` (dB).
+    #[getter]
+    fn kind(&self) -> &'static str {
+        match self.inner.kind() {
+            UnitKind::Affine { .. } => "affine",
+            UnitKind::Epoch(_) => "epoch",
+            UnitKind::Log(_) => "log",
+            _ => "linear",
+        }
+    }
+
+    /// The factor to coherent SI base units (and radians): `value_SI = (value + offset) ·
+    /// si_factor`.
+    #[getter]
+    fn si_factor(&self) -> f64 {
+        self.inner.scale().to_f64()
+    }
+
+    /// The zero offset of an affine unit, in its own scale (273.15 for °C); else `None`.
+    #[getter]
+    fn offset(&self) -> Option<f64> {
+        match self.inner.kind() {
+            UnitKind::Affine { offset } => Some(offset.to_f64()),
+            _ => None,
+        }
     }
 
     fn __mul__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
@@ -375,12 +428,26 @@ impl PyQuantity {
     /// `Quantity(magnitude, units=None)`: dimensionless without `units`.
     #[new]
     #[pyo3(signature = (magnitude, units=None))]
-    fn py_new(magnitude: f64, units: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
+    fn py_new(magnitude: &Bound<'_, PyAny>, units: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
+        if units.is_none() && is_astropy(magnitude)? {
+            // An astropy Quantity: its value and unit.
+            let (value, unit): (f64, Bound<'_, PyAny>) = magnitude
+                .py()
+                .import("annoray._astropy")?
+                .call_method1("quantity_parts", (magnitude,))?
+                .extract()?;
+            return Self::new(value, unit_from_py(&unit)?);
+        }
         let unit = match units {
             Some(u) => unit_from_py(u)?,
             None => Unit::one(),
         };
-        Self::new(magnitude, unit)
+        Self::new(magnitude.extract()?, unit)
+    }
+
+    /// As an `astropy.units.Quantity` (needs astropy).
+    fn to_astropy<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        to_astropy(slf.as_any())
     }
 
     /// The number, in this quantity's unit.

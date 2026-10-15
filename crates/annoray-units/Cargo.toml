@@ -17,6 +17,14 @@ categories = ["science", "date-and-time", "mathematics"]
 chrono = { workspace = true }
 thiserror.workspace = true
 typenum.workspace = true
+uom = { workspace = true, optional = true }
+whippyunits = { workspace = true, optional = true }
+
+[features]
+# Conversions to and from uom's SI quantities (`StaticUnit`).
+uom = ["dep:uom"]
+# Conversions to and from whippyunits quantities (`StaticUnit`, zero-copy array views).
+whippyunits = ["dep:whippyunits"]
 
 [dev-dependencies]
 proptest.workspace = true

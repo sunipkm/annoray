@@ -20,6 +20,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+      # Each typed-unit bridge on its own (the all-features run covers them together).
+      - run: cargo clippy -p annoray --all-targets --features uom -- -D warnings
+      - run: cargo clippy -p annoray --all-targets --features whippyunits -- -D warnings
 
   test:
     strategy:

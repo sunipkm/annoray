@@ -15,6 +15,11 @@ the runtime dependencies are NumPy and matplotlib.
 - **Dimension annotations:** `Quantity[Velocity]` / `DataArray[Velocity]` type hints,
   enforced at call time by `@checked`; derived dimensions are declared as `Dim` subclasses.
 - **Zero-copy NumPy interop:** `.values` exposes the Rust buffer as a read-only array.
+- **astropy interop** (`annoray[astropy]`): `to_astropy()` on units, quantities and arrays;
+  `from_astropy(...)`; astropy units accepted wherever units are. Units correspond through
+  their SI-plus-radian decomposition (angle is a dimension in both); names are kept only
+  where both systems define them identically (UDUNITS' `yr` is the tropical year, astropy's
+  the Julian year); °C/°F map to `deg_C`/`deg_F`.
 - **matplotlib plotting:** `da.plot()` dispatching on rank, `line`, `step`,
   `hist`, `scatter`, `pcolormesh`, `imshow` (incl. RGB), `contour`, `contourf`, `surface`;
   `ds.plot.scatter`/`quiver`/`streamplot`; `row`/`col` faceting via `FacetGrid` with a shared
@@ -24,7 +29,7 @@ the runtime dependencies are NumPy and matplotlib.
 > Pre-1.0: the API is unstable.
 
 ```sh
-pip install annoray            # "annoray[xarray]" adds xarray interoperability
+pip install annoray            # extras: "annoray[xarray]", "annoray[astropy]"
 ```
 
 ```python

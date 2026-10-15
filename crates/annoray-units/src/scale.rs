@@ -220,6 +220,18 @@ impl Scale {
         residual: Rational::ONE,
     };
 
+    /// `2^p2 · 3^p3 · 5^p5 · π^ppi`.
+    #[must_use]
+    pub const fn from_exponents(p2: i16, p3: i16, p5: i16, ppi: i16) -> Self {
+        Self {
+            p2,
+            p3,
+            p5,
+            ppi,
+            residual: Rational::ONE,
+        }
+    }
+
     /// The scale `π`.
     #[must_use]
     pub const fn pi() -> Self {

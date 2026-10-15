@@ -169,6 +169,9 @@ pub enum CoreError {
     /// A reduction was asked for something it cannot do.
     #[error("{0}")]
     InvalidReduction(String),
+    /// Values cannot be viewed in place as a compile-time quantity type; convert instead.
+    #[error("cannot view in place: {0}")]
+    NotViewable(String),
     /// Integer arithmetic overflowed.
     #[error("integer overflow in {0}")]
     ArithmeticOverflow(&'static str),

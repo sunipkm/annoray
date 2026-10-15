@@ -25,6 +25,8 @@ netcdf = { workspace = true, optional = true }
 rayon = { workspace = true, optional = true }
 smallvec.workspace = true
 thiserror.workspace = true
+uom = { workspace = true, optional = true }
+whippyunits = { workspace = true, optional = true }
 
 [features]
 default = ["rayon", "zstd", "lz4"]
@@ -38,6 +40,10 @@ lz4 = ["annoray-hdf5/lz4"]
 # The netCDF-C/HDF5 C libraries as an alternative backend (built from source; needs cmake).
 # Not needed for I/O: netCDF-3, netCDF-4 and HDF5 are read and written in pure Rust.
 netcdf-c = ["dep:netcdf"]
+# Arrays and `sel` labels of uom SI quantities (`to_typed`, `from_typed`).
+uom = ["dep:uom", "annoray-units/uom"]
+# Arrays and `sel` labels of whippyunits quantities, with zero-copy `view_typed`.
+whippyunits = ["dep:whippyunits", "annoray-units/whippyunits"]
 
 [dev-dependencies]
 proptest.workspace = true

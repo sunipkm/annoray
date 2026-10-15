@@ -44,6 +44,20 @@ assert_eq!(j.value(), 0.125);
 # Ok::<(), annoray_units::UnitError>(())
 ```
 
+## Compile-time unit libraries
+
+The `uom` and `whippyunits` features implement `StaticUnit` for those libraries' quantity
+types, giving `Quantity::to_static::<Q>()` / `Quantity::from_static(q)` conversions:
+
+- **whippyunits** shares this crate's model (eight dimensions including angle;
+  `2^a 3^b 5^c π^d` scales), so units map one to one and equal units convert without
+  rescaling; only the default brand is bridged.
+- **uom** stores coherent SI values and treats angle as dimensionless: conversions erase the
+  angle dimension on both sides (degrees scale to radians), angle-kind quantities without a
+  mass exponent come back in radians, `ThermodynamicTemperature` is absolute while
+  `TemperatureInterval` converts affine sources by step only, and information quantities
+  are rejected.
+
 ## License
 
 Dual-licensed under [Apache-2.0](LICENSE-APACHE) or [MIT](LICENSE-MIT), at the licensee's

@@ -71,6 +71,7 @@ pub use resample::date_range;
 mod rolling;
 mod select;
 mod tree;
+mod typed;
 mod variable;
 
 pub use align::{Join, align, align_datasets};
@@ -353,7 +354,7 @@ pub use annoray_macros::{isel, sel};
 /// Runtime units, CF calendars and dates (the `annoray-units` crate).
 pub use annoray_units as units;
 pub use annoray_units::{
-    Calendar, CfDate, Dyn, Quantity, Unit, UnitError, UnitPolicy, dimension, dims,
+    Calendar, CfDate, Dyn, Quantity, StaticUnit, Unit, UnitError, UnitPolicy, dimension, dims,
 };
 
 /// Any error from annoray.

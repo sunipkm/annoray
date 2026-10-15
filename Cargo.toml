@@ -39,6 +39,8 @@ netcdf = { version = "0.12", features = ["static", "ndarray"] }
 smallvec = "1"
 thiserror = "2"
 typenum = "1.18"
+uom = "0.38"
+whippyunits = { version = "0.3.1", default-features = false, features = ["std"] }
 
 proc-macro2 = "1"
 quote = "1"

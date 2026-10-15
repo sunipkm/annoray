@@ -39,6 +39,7 @@ from annoray._annoray import (
     set_stream_bytes,
     stream_bytes,
 )
+from annoray._astropy import from_astropy, to_astropy
 from annoray.dims import dimension
 
 # As pip reports it (PEP 440: 0.2.1.dev7, not Cargo's 0.2.1-dev.7); see tools/version.py.
@@ -60,6 +61,7 @@ __all__ = [
     "date_range",
     "dimension",
     "dims",
+    "from_astropy",
     "from_xarray",
     "merge",
     "open_dataset",
@@ -67,6 +69,7 @@ __all__ = [
     "open_mfdataset",
     "set_stream_bytes",
     "stream_bytes",
+    "to_astropy",
     "to_netcdf",
 ]
 

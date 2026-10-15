@@ -42,9 +42,11 @@ Changelog = "https://github.com/sunipkm/annoray/releases"
 [project.optional-dependencies]
 # Interoperability with xarray (engine="annoray", to_xarray/from_xarray).
 xarray = ["xarray>=2025.1"]
+# Conversions to and from astropy units and quantities (to_astropy, from_astropy).
+astropy = ["astropy>=6"]
 # Dates in non-standard CF calendars (noleap, 360_day, ...) as cftime objects.
 cftime = ["cftime"]
-test = ["pytest", "xarray>=2025.1", "pandas", "cftime", "netCDF4", "h5netcdf"]
+test = ["pytest", "xarray>=2025.1", "pandas", "cftime", "netCDF4", "h5netcdf", "astropy>=6"]
 
 # xr.open_dataset(path, engine="annoray") (used only when xarray is installed)
 [project.entry-points."xarray.backends"]

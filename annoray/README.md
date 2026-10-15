@@ -53,6 +53,8 @@ Further examples: [`examples/`](https://github.com/sunipkm/annoray/tree/main/ann
 |---|---|---|
 | `rayon` | yes | Data-parallel reductions, arithmetic, CF decoding and chunk (de)compression. |
 | `zstd`, `lz4` | yes | Zstandard (filter 32015) and LZ4 (filter 32004) chunk codecs, pure Rust. |
+| `uom` | no | Arrays and `sel` labels of uom SI quantities: `to_typed`, `from_typed` (values rescaled into coherent SI). |
+| `whippyunits` | no | Arrays and `sel` labels of whippyunits quantities; `view_typed` reinterprets data in exactly the quantity's unit without copying. |
 | `netcdf-c` | no | netCDF-C/HDF5 C libraries as an alternative backend (static build; requires cmake). |
 
 [`annoray-units`](https://docs.rs/annoray-units) and [`annoray-hdf5`](https://docs.rs/annoray-hdf5)

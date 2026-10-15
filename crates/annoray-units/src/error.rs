@@ -41,6 +41,9 @@ pub enum UnitError {
         /// The unit it was applied to.
         unit: String,
     },
+    /// A unit of another unit library that this one cannot represent.
+    #[error("unsupported: {0}")]
+    Unsupported(String),
     /// A root was taken whose result has fractional exponents or an irrational scale.
     #[error("the {n}th root of {unit} is not a unit with integer exponents")]
     InexactRoot {
