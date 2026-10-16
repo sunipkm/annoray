@@ -48,6 +48,7 @@ mod assign;
 mod attrs;
 mod broadcast;
 mod calculus;
+mod calendar;
 mod cast;
 pub mod cf;
 mod choose;
@@ -99,6 +100,7 @@ pub use array::{Arr, DType, Element, TypedArray};
 pub use attrs::{AttrValue, Attrs};
 pub use broadcast::broadcast;
 pub use calculus::{Covariance, PolyfitOptions, polyval, polyval_dataset};
+pub use calendar::{AlignOn, CalendarOptions};
 pub use choose::where_;
 pub use coarsen::{Boundary, Coarsen, CoarsenOptions, DatasetCoarsen, Side};
 pub use combine::{

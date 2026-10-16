@@ -158,3 +158,79 @@ pub(crate) fn corr(
         .py_err()?;
     new_da(py, out)
 }
+
+fn calendar_options(
+    calendar: &str,
+    align_on: Option<&str>,
+    missing: Option<f64>,
+    use_cftime: Option<bool>,
+) -> PyResult<annoray::CalendarOptions> {
+    let cal = calendar
+        .parse::<annoray::units::Calendar>()
+        .map_err(|e| crate::convert::unit_error(&e))?;
+    let mut o = annoray::CalendarOptions::new(cal);
+    match align_on {
+        None => {}
+        Some("date") => o = o.align_on(annoray::AlignOn::Date),
+        Some("year") => o = o.align_on(annoray::AlignOn::Year),
+        Some(other) => {
+            return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                "align_on must be \"date\" or \"year\", not {other:?} (\"random\" is not supported)"
+            )));
+        }
+    }
+    if let Some(m) = missing {
+        o = o.missing(m);
+    }
+    if let Some(u) = use_cftime {
+        o = o.use_cftime(u);
+    }
+    Ok(o)
+}
+
+#[pymethods]
+impl PyDataArray {
+    /// The data with its time coordinate in another CF calendar: dates that do not exist
+    /// there are dropped; to or from `360_day`, `align_on="date"` or `"year"`; `missing`
+    /// fills the gaps of a regular axis.
+    #[pyo3(signature = (calendar, dim="time", align_on=None, missing=None, use_cftime=None))]
+    fn convert_calendar(
+        &self,
+        py: Python<'_>,
+        calendar: &str,
+        dim: &str,
+        align_on: Option<&str>,
+        missing: Option<f64>,
+        use_cftime: Option<bool>,
+    ) -> PyResult<Py<PyDataArray>> {
+        let o = calendar_options(calendar, align_on, missing, use_cftime)?;
+        new_da(
+            py,
+            py.detach(|| self.inner.convert_calendar(dim, &o))
+                .py_err()?,
+        )
+    }
+}
+
+#[pymethods]
+impl PyDataset {
+    /// Every variable along the time dimension in another CF calendar; see
+    /// `DataArray.convert_calendar`.
+    #[pyo3(signature = (calendar, dim="time", align_on=None, missing=None, use_cftime=None))]
+    fn convert_calendar(
+        &self,
+        py: Python<'_>,
+        calendar: &str,
+        dim: &str,
+        align_on: Option<&str>,
+        missing: Option<f64>,
+        use_cftime: Option<bool>,
+    ) -> PyResult<Py<PyDataset>> {
+        let o = calendar_options(calendar, align_on, missing, use_cftime)?;
+        crate::native::new_ds(
+            py,
+            py.detach(|| self.inner.convert_calendar(dim, &o))
+                .py_err()?,
+        )
+    }
+}

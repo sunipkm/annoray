@@ -240,6 +240,8 @@ def _widths(obj: Any, pad_width: Any, kwargs: dict[str, Any]) -> dict[str, tuple
 
 def _pad_values(values: Any, axes: list[tuple[int, int]], mode: str, fill: Any) -> Any:
     values = np.asarray(values)
+    if not any(a or b for a, b in axes):
+        return values  # nothing to pad (0-d, or no padded dimension)
     if mode == "constant":
         if fill is None:
             fill = np.nan

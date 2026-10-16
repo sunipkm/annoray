@@ -8,11 +8,12 @@
 //!   object and of every variable; NaN attribute values equal each other, as in xarray).
 //! - `broadcast_equals`: `equals` after broadcasting the two against each other.
 //!
-//! Lazy data is read.
+//! Lazy data is compared in slabs within the streaming budget ([`crate::stream_bytes`]),
+//! stopping at the first difference.
 
 use crate::{
-    AttrValue, Attrs, CmpOp, CoreError, DataArrayBase, DataArrayView, DatasetBase, Repr, Result,
-    VariableBase,
+    AttrValue, Attrs, CmpOp, CoreError, DataArrayBase, DataArrayView, DatasetBase, Indexer,
+    PySlice, Repr, Result, VariableBase,
 };
 
 /// Whether two variables hold the same values (see the module notes); `exact` also requires
@@ -33,6 +34,43 @@ fn same_values<S: Repr, R: Repr>(
     if !units_ok {
         return Ok(false);
     }
+    // Lazy data: compared in slabs along the first axis (within the streaming budget),
+    // stopping at the first difference.
+    if (a.is_lazy() || b.is_lazy()) && a.ndim() > 0 {
+        let n0 = a.shape().first().copied().unwrap_or(0);
+        let row = a
+            .shape()
+            .iter()
+            .skip(1)
+            .try_fold(8_usize, |acc, n| acc.checked_mul(*n))
+            .unwrap_or(usize::MAX);
+        let per = crate::stream_bytes()
+            .checked_div(row)
+            .unwrap_or(1)
+            .clamp(1, n0.max(1));
+        let mut i = 0;
+        while i < n0 {
+            let end = i.saturating_add(per).min(n0);
+            let slab = || {
+                Ok::<_, CoreError>(Indexer::Slice(PySlice::new(
+                    Some(isize::try_from(i).map_err(|_| CoreError::ArithmeticOverflow("slab"))?),
+                    Some(isize::try_from(end).map_err(|_| CoreError::ArithmeticOverflow("slab"))?),
+                    None,
+                )))
+            };
+            let (pa, pb) = (a.isel_pos([slab()?])?, b.isel_pos([slab()?])?);
+            if !same_block(&pa, &pb)? {
+                return Ok(false);
+            }
+            i = end;
+        }
+        return Ok(true);
+    }
+    same_block(a, b)
+}
+
+/// [`same_values`] of data already checked for dimensions and units, read whole.
+fn same_block<S: Repr, R: Repr>(a: &VariableBase<S>, b: &VariableBase<R>) -> Result<bool> {
     if crate::variables_equal(a, b) {
         return Ok(true);
     }

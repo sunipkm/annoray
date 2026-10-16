@@ -10,7 +10,7 @@
 //!   booleans); `f64` for numbers of different types or after a unit conversion.
 //! - The name is the one the named operands share, if any; attributes and coordinates are
 //!   those of `x`, then `y`, then `cond`.
-//! - Lazy operands are read.
+//! - Lazy operands give a lazy result, computed box by box when read (as arithmetic).
 
 use annoray_units::{Converter, Unit, UnitKind};
 use ndarray::{ArrayD, ArrayViewD, IxDyn};
@@ -115,34 +115,33 @@ fn choose<C: Repr, X: Repr, Y: Repr>(
     let lead: Vec<(Name, usize)> = od.iter().cloned().zip(shape.iter().copied()).collect();
     let (od, shape) = out_dims(&lead, &sizes(&y))?;
 
-    let ct = cond.variable().typed()?;
-    let TypedArray::Bool(c) = &ct else {
-        return Err(CoreError::InvalidReduction("where: condition".into()));
-    };
-    let c = (c.view(), cond.dims());
-    let (xt, yt) = (x.variable().typed()?, y.variable().typed()?);
-    let data = if xt.dtype() == yt.dtype() && conv.is_none() {
-        same_type(c, (&xt, x.dims()), (&yt, y.dims()), &od, &shape)?
-    } else if is_number(xt.dtype()) && is_number(yt.dtype()) {
-        let (a, b) = (to_f64(&xt, None)?, to_f64(&yt, conv.as_ref())?);
-        TypedArray::F64(pick(
-            c,
-            (a.view(), x.dims()),
-            (b.view(), y.dims()),
-            &od,
-            &shape,
-        )?)
+    let lazy = [cond.variable(), x.variable(), y.variable()]
+        .iter()
+        .any(|v| v.is_lazy());
+    let mut var = if lazy {
+        let src = ChooseSource::new(
+            [
+                (cond.variable(), cond.dims()),
+                (x.variable(), x.dims()),
+                (y.variable(), y.dims()),
+            ],
+            conv,
+            od.clone(),
+            shape,
+        )?;
+        Variable::from_lazy(od, crate::LazyArray::new(std::sync::Arc::new(src)))?
     } else {
-        return Err(CoreError::UnsupportedDType {
-            op: "where (with branches of different kinds)",
-            dtype: if is_number(xt.dtype()) {
-                yt.dtype()
-            } else {
-                xt.dtype()
-            },
-        });
+        let parts = [
+            (cond.variable().typed()?, cond.dims()),
+            (x.variable().typed()?, x.dims()),
+            (y.variable().typed()?, y.dims()),
+        ];
+        let [(ct, cd), (xt, xd), (yt, yd)] = &parts;
+        Variable::from_typed(
+            od.clone(),
+            select((ct, cd), (xt, xd), (yt, yd), conv.as_ref(), &od, &shape)?,
+        )?
     };
-    let mut var = Variable::from_typed(od, data)?;
     var.set_unit(unit);
     var.attrs_mut()
         .extend(x.attrs().iter().map(|(k, a)| (k.clone(), a.clone())));
@@ -155,6 +154,164 @@ fn choose<C: Repr, X: Repr, Y: Repr>(
     let mut names = [cond.name(), x.name(), y.name()].into_iter().flatten();
     let name = names.next().filter(|n| names.all(|m| m == *n)).cloned();
     Ok(DataArrayBase::from_parts(name, var, coords))
+}
+
+/// `c ? x : y` on read data (each with its dimensions; `conv` takes `y` into `x`'s unit),
+/// laid out as `od`/`shape`.
+fn select(
+    (c, cd): (&TypedArray<View<'_>>, &[Name]),
+    (xt, xd): (&TypedArray<View<'_>>, &[Name]),
+    (yt, yd): (&TypedArray<View<'_>>, &[Name]),
+    conv: Option<&Converter>,
+    od: &[Name],
+    shape: &[usize],
+) -> Result<TypedArray<Owned>> {
+    let TypedArray::Bool(c) = c else {
+        return Err(CoreError::DTypeMismatch {
+            expected: DType::Bool,
+            found: c.dtype(),
+        });
+    };
+    let c = (c.view(), cd);
+    if xt.dtype() == yt.dtype() && conv.is_none() {
+        same_type(c, (xt, xd), (yt, yd), od, shape)
+    } else if is_number(xt.dtype()) && is_number(yt.dtype()) {
+        let (a, b) = (to_f64(xt, None)?, to_f64(yt, conv)?);
+        Ok(TypedArray::F64(pick(
+            c,
+            (a.view(), xd),
+            (b.view(), yd),
+            od,
+            shape,
+        )?))
+    } else {
+        Err(CoreError::UnsupportedDType {
+            op: "where (with branches of different kinds)",
+            dtype: if is_number(xt.dtype()) {
+                yt.dtype()
+            } else {
+                xt.dtype()
+            },
+        })
+    }
+}
+
+/// One operand of [`ChooseSource`]: its source and dimensions.
+#[derive(Debug)]
+struct Part {
+    src: std::sync::Arc<dyn crate::LazySource>,
+    dims: Vec<Name>,
+}
+
+impl Part {
+    /// The operand's part of the result box `[start, start + count)` laid out as `od`.
+    fn read(&self, od: &[Name], start: &[usize], count: &[usize]) -> Result<TypedArray<Owned>> {
+        let mut s = Vec::with_capacity(self.dims.len());
+        let mut n = Vec::with_capacity(self.dims.len());
+        for d in &self.dims {
+            let i = od
+                .iter()
+                .position(|x| x == d)
+                .ok_or_else(|| CoreError::NoSuchDim(d.clone()))?;
+            s.push(start.get(i).copied().unwrap_or(0));
+            n.push(count.get(i).copied().unwrap_or(0));
+        }
+        self.src.read_slice(&s, &n)
+    }
+
+    /// No elements of the operand (its one value for a 0-d operand), for the result type.
+    fn empty(&self) -> Result<TypedArray<Owned>> {
+        if self.dims.is_empty() {
+            return self.src.read_slice(&[], &[]);
+        }
+        TypedArray::empty(self.src.dtype(), &vec![0; self.dims.len()]).ok_or(
+            CoreError::UnsupportedDType {
+                op: "where",
+                dtype: self.src.dtype(),
+            },
+        )
+    }
+}
+
+/// `cond ? x : y` computed for whichever box is read (nothing is read when it is made).
+#[derive(Debug)]
+struct ChooseSource {
+    parts: [Part; 3],
+    conv: Option<Converter>,
+    od: Vec<Name>,
+    shape: Vec<usize>,
+    dtype: DType,
+}
+
+impl ChooseSource {
+    fn new<S: Repr>(
+        vars: [(&VariableBase<S>, &[Name]); 3],
+        conv: Option<Converter>,
+        od: Vec<Name>,
+        shape: Vec<usize>,
+    ) -> Result<Self> {
+        let part = |(v, d): (&VariableBase<S>, &[Name])| -> Result<Part> {
+            Ok(Part {
+                src: v.as_lazy_source()?,
+                dims: d.to_vec(),
+            })
+        };
+        let [c, x, y] = vars;
+        let parts = [part(c)?, part(x)?, part(y)?];
+        let [ce, xe, ye] = [parts[0].empty()?, parts[1].empty()?, parts[2].empty()?];
+        let dtype = select(
+            (&ce.view(), &parts[0].dims),
+            (&xe.view(), &parts[1].dims),
+            (&ye.view(), &parts[2].dims),
+            conv.as_ref(),
+            &od,
+            &vec![0; od.len()],
+        )?
+        .dtype();
+        Ok(Self {
+            parts,
+            conv,
+            od,
+            shape,
+            dtype,
+        })
+    }
+}
+
+impl crate::LazySource for ChooseSource {
+    fn dtype(&self) -> DType {
+        self.dtype
+    }
+    fn shape(&self) -> &[usize] {
+        &self.shape
+    }
+    fn chunking(&self, axis: usize) -> Option<(usize, usize)> {
+        let d = self.od.get(axis)?;
+        self.parts
+            .iter()
+            .skip(1)
+            .chain(self.parts.iter().take(1))
+            .find_map(|p| {
+                let a = p.dims.iter().position(|x| x == d)?;
+                p.src.chunking(a)
+            })
+    }
+    fn read_slice(&self, start: &[usize], count: &[usize]) -> Result<TypedArray<Owned>> {
+        let [c, x, y] = &self.parts;
+        let (ct, xt, yt) = (
+            c.read(&self.od, start, count)?,
+            x.read(&self.od, start, count)?,
+            y.read(&self.od, start, count)?,
+        );
+        select(
+            (&ct.view(), &c.dims),
+            (&xt.view(), &x.dims),
+            (&yt.view(), &y.dims),
+            self.conv.as_ref(),
+            &self.od,
+            count,
+        )
+    }
 }
 
 /// [`pick`] for branches of the same element type.
@@ -190,7 +347,7 @@ fn same_type(
 /// - Branches of one element type keep it (text, dates, booleans included); numbers of
 ///   different types, or converted between units, give `f64`.
 /// - The name is the one the named operands share; attributes are `x`'s; coordinates come
-///   from `x`, then `y`, then `cond`. Lazy operands are read.
+///   from `x`, then `y`, then `cond`. Lazy operands give a lazy result.
 ///
 /// # Errors
 /// [`CoreError::DTypeMismatch`] if `cond` is not boolean; unit errors; alignment errors

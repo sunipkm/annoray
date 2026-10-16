@@ -3,8 +3,9 @@
 //! The arrays are aligned (outer join), then each gains the dimensions it lacks, with their
 //! lengths and dimension coordinates from the others. As in xarray, every result has the
 //! dimensions in their order of first appearance across the arrays, followed by the array's
-//! own excluded dimensions. Data is repeated along the new dimensions (a copy; xarray
-//! returns read-only broadcast views).
+//! own excluded dimensions. In-memory data is repeated along the new dimensions (a copy;
+//! xarray returns read-only broadcast views); lazy data stays lazy, each box read from the
+//! source and spread when it is read.
 
 use indexmap::IndexMap;
 
@@ -51,6 +52,9 @@ pub fn broadcast<S: Repr>(
     aligned
         .into_iter()
         .map(|a| {
+            if a.variable().is_lazy() {
+                return spread_lazily(a, &sizes, &coords, exclude);
+            }
             let missing: Vec<(&Name, usize)> = sizes
                 .iter()
                 .filter(|(d, _)| !a.dims().contains(d))
@@ -97,5 +101,99 @@ impl<S: Repr> DataArrayBase<S> {
         both.into_iter()
             .next()
             .ok_or_else(|| CoreError::InvalidReduction("broadcast_like".into()))
+    }
+}
+
+/// `a` broadcast to `sizes` (then its own excluded dimensions) without reading it.
+fn spread_lazily(
+    a: DataArray,
+    sizes: &IndexMap<Name, usize>,
+    coords: &IndexMap<Name, Variable>,
+    exclude: &[&str],
+) -> Result<DataArray> {
+    let own: Vec<(Name, usize)> = a
+        .sizes()
+        .filter(|(d, _)| exclude.contains(&d.as_str()))
+        .map(|(d, n)| (d.clone(), n))
+        .collect();
+    let (od, shape): (Vec<Name>, Vec<usize>) = sizes
+        .iter()
+        .map(|(d, n)| (d.clone(), *n))
+        .chain(own)
+        .unzip();
+    let src = SpreadSource {
+        src: a.variable().as_lazy_source()?,
+        dims: a.dims().to_vec(),
+        od: od.clone(),
+        shape,
+    };
+    let mut var = Variable::from_lazy(od.clone(), crate::LazyArray::new(std::sync::Arc::new(src)))?;
+    var.set_unit(a.unit().cloned());
+    var.attrs_mut()
+        .extend(a.attrs().iter().map(|(k, v)| (k.clone(), v.clone())));
+    let (name, _, own_coords) = a.into_parts();
+    let mut out = DataArray::new(var);
+    for (k, c) in own_coords {
+        out = out.with_coord(k, c)?;
+    }
+    for d in &od {
+        if !out.coords().contains_key(d)
+            && let Some(c) = coords.get(d)
+        {
+            out = out.with_coord(d.clone(), c.clone())?;
+        }
+    }
+    Ok(match name {
+        Some(n) => out.with_name(n),
+        None => out,
+    })
+}
+
+/// A source spread over dimensions it lacks, read box by box.
+#[derive(Debug)]
+struct SpreadSource {
+    src: std::sync::Arc<dyn crate::LazySource>,
+    dims: Vec<Name>,
+    od: Vec<Name>,
+    shape: Vec<usize>,
+}
+
+impl crate::LazySource for SpreadSource {
+    fn dtype(&self) -> crate::DType {
+        self.src.dtype()
+    }
+    fn shape(&self) -> &[usize] {
+        &self.shape
+    }
+    fn chunking(&self, axis: usize) -> Option<(usize, usize)> {
+        let d = self.od.get(axis)?;
+        let a = self.dims.iter().position(|x| x == d)?;
+        self.src.chunking(a)
+    }
+    fn read_slice(
+        &self,
+        start: &[usize],
+        count: &[usize],
+    ) -> Result<crate::TypedArray<crate::Owned>> {
+        let mut s = Vec::with_capacity(self.dims.len());
+        let mut n = Vec::with_capacity(self.dims.len());
+        for d in &self.dims {
+            let i = self
+                .od
+                .iter()
+                .position(|x| x == d)
+                .ok_or_else(|| CoreError::NoSuchDim(d.clone()))?;
+            s.push(start.get(i).copied().unwrap_or(0));
+            n.push(count.get(i).copied().unwrap_or(0));
+        }
+        let part = self.src.read_slice(&s, &n)?;
+        let sh = ndarray::IxDyn(count);
+        let bad = || CoreError::InvalidReduction("broadcast: cannot spread".into());
+        Ok(crate::array::typed_map!(&part, x => {
+            crate::ops::broadcast_to_dims(x.view(), &self.dims, &self.od)?
+                .broadcast(sh.clone())
+                .ok_or_else(bad)?
+                .to_owned()
+        }))
     }
 }

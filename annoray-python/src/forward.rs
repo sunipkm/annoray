@@ -235,3 +235,15 @@ impl PyDataset {
         PyDict::new(py)
     }
 }
+
+#[pymethods]
+impl PyDataArray {
+    /// Vectorised string methods on text data: `da.str.upper()`, `da.str.contains("x")`, ….
+    #[getter]
+    fn str<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        slf.py()
+            .import("annoray._strings")?
+            .getattr("StringAccessor")?
+            .call1((slf,))
+    }
+}

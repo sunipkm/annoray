@@ -16,6 +16,7 @@ import numpy.typing as npt
 
 from annoray._indexing import LocIndexer
 from annoray._mapping import AttrsDict, CoordsDict, EncodingDict
+from annoray._strings import StringAccessor
 from annoray.plot import DataArrayPlotAccessor, DatasetPlotAccessor
 
 _D = TypeVar("_D")
@@ -498,6 +499,16 @@ class DataArray(_Reductions, Generic[_D]):
     def from_dict(cls, d: Mapping[str, Any]) -> DataArray[Any]: ...
     @property
     def chunks(self) -> None: ...
+    @property
+    def str(self) -> StringAccessor: ...
+    def convert_calendar(
+        self,
+        calendar: str,
+        dim: str = "time",
+        align_on: Literal["date", "year"] | None = None,
+        missing: float | None = None,
+        use_cftime: bool | None = None,
+    ) -> DataArray[_D]: ...
     def where(
         self,
         cond: DataArray[Any] | Callable[[DataArray[_D]], DataArray[Any]],
@@ -771,6 +782,14 @@ class Dataset(_Reductions):
         self, names: str | Sequence[str] | None = None, drop: bool = False
     ) -> Dataset: ...
     def filter_by_attrs(self, **kwargs: Any) -> Dataset: ...
+    def convert_calendar(
+        self,
+        calendar: str,
+        dim: str = "time",
+        align_on: Literal["date", "year"] | None = None,
+        missing: float | None = None,
+        use_cftime: bool | None = None,
+    ) -> Dataset: ...
     def _reset_coords(self, names: list[str]) -> None: ...
     def to_dataarray(self, dim: str = "variable", name: str | None = None) -> DataArray[Any]: ...
     def to_array(self, dim: str = "variable", name: str | None = None) -> DataArray[Any]: ...

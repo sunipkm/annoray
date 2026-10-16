@@ -106,3 +106,96 @@ fn covariance_and_correlation() {
     let dims = [Name::from("x")];
     assert_eq!(cov(&a, &a, Some(&dims), 0).unwrap().ndim(), 0);
 }
+
+#[test]
+fn lazy_data_stays_lazy_and_streams() {
+    let path =
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../fixtures/nc/xr_nc4.nc");
+    let open = || annoray::io::open_dataset(&path).unwrap();
+    let ds = open();
+    let t = ds.get("temp").unwrap().to_owned();
+    let k = DataArray::scalar(280.0).unwrap().with_unit(u("K"));
+    let cond = t.gt(&k).unwrap();
+    let doubled = (&t * 2.0).unwrap();
+    // Three-way where, broadcast: lazy, nothing read.
+    let w = annoray::where_(&cond, &t, &doubled).unwrap();
+    assert!(w.variable().is_lazy());
+    let flag = ds.get("flag").unwrap().to_owned();
+    let b = broadcast(&[&flag, &t], &[]).unwrap();
+    assert!(b[0].variable().is_lazy());
+    assert_eq!(
+        b[0].dims(),
+        ["lat", "time", "lon"],
+        "order of first appearance"
+    );
+    // Equality: in slabs, never holding the whole array.
+    assert!(t.equals(&open().get("temp").unwrap()).unwrap());
+    assert!(t.variable().is_lazy(), "streamed, not cached");
+    // Same results as on loaded data.
+    let loaded = open().loaded().unwrap();
+    let lt = loaded.get("temp").unwrap().to_owned();
+    let lw = annoray::where_(&lt.gt(&k).unwrap(), &lt, &(&lt * 2.0).unwrap()).unwrap();
+    assert!(w.identical(&lw).unwrap());
+    let lb = broadcast(&[&loaded.get("flag").unwrap().to_owned(), &lt], &[]).unwrap();
+    assert!(b[0].identical(&lb[0]).unwrap());
+}
+
+#[test]
+fn calendar_conversion() {
+    use annoray::units::Calendar;
+    use annoray::{AlignOn, CalendarOptions, CoreError};
+    let days: Vec<chrono::NaiveDateTime> = (0..366)
+        .map(|d| {
+            chrono::NaiveDate::from_ymd_opt(2000, 1, 1)
+                .unwrap()
+                .and_hms_opt(6, 0, 0)
+                .unwrap()
+                + chrono::TimeDelta::days(d)
+        })
+        .collect();
+    let n = days.len();
+    let a = DataArray::from_array(
+        ["time"],
+        ndarray::Array1::from_shape_fn(n, |i| i as f64).into_dyn(),
+    )
+    .unwrap()
+    .with_dim_coord("time", ndarray::Array1::from(days))
+    .unwrap();
+    // Feb 29 does not exist in noleap: dropped with its value.
+    let nl = a
+        .convert_calendar("time", &CalendarOptions::new(Calendar::NoLeap))
+        .unwrap();
+    assert_eq!(nl.len(), 365);
+    assert_eq!(nl.to_f64().unwrap()[59], 60.0);
+    // 360_day needs align_on; by year it keeps 360 dates, the time of day kept.
+    assert!(matches!(
+        a.convert_calendar("time", &CalendarOptions::new(Calendar::Day360)),
+        Err(CoreError::InvalidReduction(_))
+    ));
+    let y = a
+        .convert_calendar(
+            "time",
+            &CalendarOptions::new(Calendar::Day360).align_on(AlignOn::Year),
+        )
+        .unwrap();
+    assert_eq!(y.len(), 360);
+    let first = y
+        .coord("time")
+        .unwrap()
+        .data::<annoray::units::CfDate>()
+        .unwrap()[0];
+    assert_eq!((first.month(), first.day(), first.hour()), (1, 1, 6));
+    // Back to the standard calendar with gaps filled.
+    let back = nl
+        .convert_calendar(
+            "time",
+            &CalendarOptions::new(Calendar::Standard).missing(-1.0),
+        )
+        .unwrap();
+    assert_eq!(back.len(), 366);
+    assert_eq!(back.to_f64().unwrap()[59], -1.0);
+    assert_eq!(
+        back.coord("time").unwrap().dtype(),
+        annoray::DType::DateTime
+    );
+}

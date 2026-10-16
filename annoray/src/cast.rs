@@ -213,7 +213,15 @@ impl<S: Repr> VariableBase<S> {
                 dtype: if numeric_source { dtype } else { self.dtype() },
             });
         }
-        let mut out = if self.is_lazy() && dtype != self.dtype() {
+        if dtype == self.dtype() {
+            // Nothing to convert: lazy data stays lazy, unread.
+            let mut out = self.to_owned().with_encoding(crate::Encoding::default());
+            if dtype == DType::Bool {
+                out.set_unit(None);
+            }
+            return Ok(out);
+        }
+        let mut out = if self.is_lazy() {
             self.lazy_map("astype", move |t: TypedArray<Owned>| cast(&t.view(), dtype))?
         } else {
             let mut v =
