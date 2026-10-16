@@ -486,3 +486,15 @@ def map_blocks(
     """``func(obj, *args, **kwargs)``: a single block without dask, as xarray for unchunked
     data."""
     return func(obj, *args, **(kwargs or {}))
+
+
+def argsort(obj: DataArray, axis: int = -1, kind: Any = None, order: Any = None) -> DataArray:
+    """Positions that sort the values along numpy axis ``axis`` (NaN last), as numpy's
+    ``argsort``; dimensions, coordinates, name and attributes kept, no unit. Data is
+    read."""
+    if order is not None:
+        raise ValueError("argsort: order= applies to structured arrays, which annoray lacks")
+    idx = np.argsort(np.asarray(obj.values), axis=axis, kind=kind)
+    return DataArray(
+        idx, dims=obj.dims, coords=dict(obj.coords), name=obj.name, attrs=dict(obj.attrs)
+    )

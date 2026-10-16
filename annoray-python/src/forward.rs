@@ -247,3 +247,20 @@ impl PyDataArray {
             .call1((slf,))
     }
 }
+
+forwarders!(PyDataArray, "annoray._query":
+    /// Positions along dimensions where boolean expressions hold:
+    /// `da.query(x="x > 2")` (units-aware; `Q(value, unit)` for quantities).
+    query => "query",
+);
+
+forwarders!(PyDataset, "annoray._query":
+    /// Positions along dimensions where boolean expressions over variables hold:
+    /// `ds.query(x="a > 2 & lab == 'q'")` (units-aware; `Q(value, unit)` for quantities).
+    query => "query",
+);
+
+forwarders!(PyDataArray, "annoray._methods":
+    /// Positions that sort the values along a numpy axis (NaN last); no unit.
+    argsort => "argsort",
+);

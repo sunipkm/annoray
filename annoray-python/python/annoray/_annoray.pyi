@@ -501,6 +501,15 @@ class DataArray(_Reductions, Generic[_D]):
     def chunks(self) -> None: ...
     @property
     def str(self) -> StringAccessor: ...
+    def argsort(self, axis: int = -1, kind: Any = None, order: Any = None) -> DataArray[Any]: ...
+    def query(
+        self,
+        queries: Mapping[str, str] | None = None,
+        parser: Literal["pandas", "python"] = "pandas",
+        engine: Any = None,
+        missing_dims: Literal["raise", "ignore"] = "raise",
+        **queries_kwargs: str,
+    ) -> DataArray[_D]: ...
     def convert_calendar(
         self,
         calendar: str,
@@ -782,6 +791,14 @@ class Dataset(_Reductions):
         self, names: str | Sequence[str] | None = None, drop: bool = False
     ) -> Dataset: ...
     def filter_by_attrs(self, **kwargs: Any) -> Dataset: ...
+    def query(
+        self,
+        queries: Mapping[str, str] | None = None,
+        parser: Literal["pandas", "python"] = "pandas",
+        engine: Any = None,
+        missing_dims: Literal["raise", "ignore"] = "raise",
+        **queries_kwargs: str,
+    ) -> Dataset: ...
     def convert_calendar(
         self,
         calendar: str,
