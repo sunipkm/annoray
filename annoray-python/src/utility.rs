@@ -636,13 +636,19 @@ impl PyDataset {
     }
 
     /// This dataset merged with `other` (a dataset, or a named data array); see `merge`.
-    #[pyo3(signature = (other, *, join="exact"))]
+    #[pyo3(signature = (other, *, join="exact", compat="override"))]
     fn merge<'py>(
         slf: &Bound<'py, Self>,
         other: &Bound<'py, PyAny>,
         join: &str,
+        compat: &str,
     ) -> PyResult<Py<PyDataset>> {
-        crate::native::merge(slf.py(), vec![slf.clone().into_any(), other.clone()], join)
+        crate::native::merge(
+            slf.py(),
+            vec![slf.clone().into_any(), other.clone()],
+            join,
+            compat,
+        )
     }
 
     /// `(name, DataArray)` pairs of the data variables.

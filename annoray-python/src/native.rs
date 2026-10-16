@@ -427,6 +427,64 @@ fn do_sel<T: Select + Clone>(
     .py_err()
 }
 
+/// `args` without the names that are not dimensions: an error (`missing_dims="raise"`), a
+/// warning (`"warn"`) or silently (`"ignore"`).
+fn known_dims<'py>(
+    py: Python<'py>,
+    dims: &[Name],
+    args: IselArgs<'py>,
+    missing_dims: &str,
+) -> PyResult<IselArgs<'py>> {
+    let (known, unknown): (Vec<_>, Vec<_>) = args
+        .into_iter()
+        .partition(|(d, _)| dims.iter().any(|x| x.as_str() == d.as_str()));
+    if let Some((d, _)) = unknown.first() {
+        match missing_dims {
+            "raise" => {
+                return Err(PyValueError::new_err(format!(
+                    "{d:?} is not a dimension; dimensions: {dims:?}"
+                )));
+            }
+            "warn" => {
+                let warnings = py.import("warnings")?;
+                warnings.call_method1("warn", (format!("{d:?} is not a dimension; ignored"),))?;
+            }
+            "ignore" => {}
+            other => {
+                return Err(PyValueError::new_err(format!(
+                    "missing_dims must be \"raise\", \"warn\" or \"ignore\", not {other:?}"
+                )));
+            }
+        }
+    }
+    Ok(known)
+}
+
+/// The coordinates of `before` that indexing made 0-d.
+fn scalarized(
+    before: &annoray::Coords<annoray::Owned>,
+    after: &annoray::Coords<annoray::Owned>,
+) -> Vec<String> {
+    after
+        .iter()
+        .filter(|(k, c)| c.ndim() == 0 && before.get(*k).is_some_and(|b| b.ndim() > 0))
+        .map(|(k, _)| k.to_string())
+        .collect()
+}
+
+fn drop_scalarized_da(before: &DataArray, after: DataArray) -> PyResult<DataArray> {
+    let gone = scalarized(before.coords(), after.coords());
+    let refs: Vec<&str> = gone.iter().map(String::as_str).collect();
+    after.drop_coords(&refs).py_err()
+}
+
+fn drop_scalarized_ds(before: &Dataset, mut after: Dataset) -> PyResult<Dataset> {
+    for k in scalarized(before.coords(), after.coords()) {
+        after.remove(&k).py_err()?;
+    }
+    Ok(after)
+}
+
 // ----- reductions -----
 
 pub(crate) fn reduce_dims(dim: Option<&Bound<'_, PyAny>>) -> PyResult<Option<Vec<Name>>> {
@@ -623,7 +681,7 @@ pub(crate) fn operand<'py>(
 // ----- DataArray -----
 
 /// A labelled, units-aware N-dimensional array (xarray's `DataArray`).
-#[pyclass(name = "DataArray", module = "annoray")]
+#[pyclass(name = "DataArray", module = "annoray", weakref)]
 pub(crate) struct PyDataArray {
     pub(crate) inner: DataArray,
     pub(crate) lending: Lending,
@@ -964,36 +1022,64 @@ impl PyDataArray {
     }
 
     /// Select by position: `da.isel(time=0, x=slice(1, 3))`, lists and masks too.
-    #[pyo3(signature = (indexers=None, **kwargs))]
+    /// `drop=True` removes the coordinates a scalar index makes 0-d; `missing_dims`
+    /// (`"raise"`, `"warn"`, `"ignore"`) treats names that are not dimensions.
+    #[pyo3(signature = (indexers=None, drop=false, missing_dims="raise", **kwargs))]
     fn isel(
         &self,
         py: Python<'_>,
         indexers: Option<&Bound<'_, PyAny>>,
+        drop: bool,
+        missing_dims: &str,
         kwargs: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Py<PyDataArray>> {
+        let args = known_dims(
+            py,
+            self.inner.dims(),
+            merge_kwargs(indexers, kwargs)?,
+            missing_dims,
+        )?;
+        let out = do_isel(py, &self.inner, args)?;
         new_da(
             py,
-            do_isel(py, &self.inner, merge_kwargs(indexers, kwargs)?)?,
+            if drop {
+                drop_scalarized_da(&self.inner, out)?
+            } else {
+                out
+            },
         )
     }
 
     /// Select by label: `da.sel(time="2020-01", x=slice(0, 10))`; slices are inclusive.
-    /// `method` is `"nearest"`, `"pad"`/`"ffill"` or `"backfill"`/`"bfill"`.
-    #[pyo3(signature = (indexers=None, method=None, tolerance=None, **kwargs))]
+    /// `method` is `"nearest"`, `"pad"`/`"ffill"` or `"backfill"`/`"bfill"`; `drop=True`
+    /// removes the coordinates a scalar label makes 0-d.
+    #[pyo3(signature = (indexers=None, method=None, tolerance=None, drop=false, **kwargs))]
     fn sel(
         &self,
         py: Python<'_>,
         indexers: Option<&Bound<'_, PyAny>>,
         method: Option<&str>,
         tolerance: Option<&Bound<'_, PyAny>>,
+        drop: bool,
         kwargs: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Py<PyDataArray>> {
         let args = merge_kwargs(indexers, kwargs)?;
-        new_da(py, do_sel(py, &self.inner, args, method, tolerance)?)
+        let out = do_sel(py, &self.inner, args, method, tolerance)?;
+        new_da(
+            py,
+            if drop {
+                drop_scalarized_da(&self.inner, out)?
+            } else {
+                out
+            },
+        )
     }
 
-    /// Coordinates as attributes: `da.time`.
-    fn __getattr__(slf: &Bound<'_, Self>, name: &str) -> PyResult<Py<PyDataArray>> {
+    /// Coordinates as attributes: `da.time`; registered accessors first.
+    fn __getattr__(slf: &Bound<'_, Self>, name: &str) -> PyResult<Py<PyAny>> {
+        if let Some(acc) = accessor(slf.as_any(), "DataArray", name)? {
+            return Ok(acc);
+        }
         let coord = {
             let me = slf.borrow();
             if me.inner.coords().contains_key(name) {
@@ -1003,7 +1089,7 @@ impl PyDataArray {
             }
         };
         if let Some(c) = coord {
-            return new_child_da(slf.as_any(), name, c);
+            return Ok(new_child_da(slf.as_any(), name, c)?.into_any());
         }
         Err(pyo3::exceptions::PyAttributeError::new_err(format!(
             "'DataArray' object has no attribute {name:?}"
@@ -1021,7 +1107,7 @@ impl PyDataArray {
         let me = slf.borrow();
         let this = &*me;
         if key.is_instance_of::<PyDict>() {
-            return this.isel(py, Some(key), None);
+            return this.isel(py, Some(key), false, "raise", None);
         }
         let items: Vec<Bound<'_, PyAny>> = match key.cast::<PyTuple>() {
             Ok(t) => t.iter().collect(),
@@ -1084,20 +1170,39 @@ impl PyDataArray {
         new_da(py, self.inner.dropna(dim, how_from(how)?).py_err()?)
     }
 
-    /// Conform to new labels along dimensions, filling missing ones with NaN (NaT).
-    #[pyo3(signature = (indexers=None, **kwargs))]
+    /// Conform to new labels along dimensions, filling missing ones with NaN (NaT);
+    /// `method` (`"nearest"`, `"pad"`, `"backfill"`), `tolerance` and `fill_value` as xarray.
+    #[pyo3(signature = (indexers=None, method=None, tolerance=None, fill_value=None, **kwargs))]
     fn reindex(
-        &self,
-        py: Python<'_>,
+        slf: &Bound<'_, Self>,
         indexers: Option<&Bound<'_, PyAny>>,
+        method: Option<&Bound<'_, PyAny>>,
+        tolerance: Option<&Bound<'_, PyAny>>,
+        fill_value: Option<&Bound<'_, PyAny>>,
         kwargs: Option<&Bound<'_, PyDict>>,
-    ) -> PyResult<Py<PyDataArray>> {
-        let mut out = self.inner.clone();
+    ) -> PyResult<Py<PyAny>> {
+        let py = slf.py();
+        if method.is_some() || tolerance.is_some() || fill_value.is_some() {
+            let kw = PyDict::new(py);
+            kw.set_item("indexers", indexers)?;
+            kw.set_item("method", method)?;
+            kw.set_item("tolerance", tolerance)?;
+            kw.set_item("fill_value", fill_value)?;
+            if let Some(k) = kwargs {
+                kw.update(k.as_mapping())?;
+            }
+            return Ok(py
+                .import("annoray._methods")?
+                .getattr("reindex_method")?
+                .call((slf,), Some(&kw))?
+                .unbind());
+        }
+        let mut out = slf.borrow().inner.clone();
         for (dim, v) in merge_kwargs(indexers, kwargs)? {
             let labels = labels_var(py, &dim, &v)?;
             out = out.reindex(&dim, &labels).py_err()?;
         }
-        new_da(py, out)
+        Ok(new_da(py, out)?.into_any())
     }
 
     /// Interpolate along dimensions: `da.interp(x=[0.5, 1.5], method="linear")`.
@@ -1176,17 +1281,22 @@ impl PyDataArray {
         center: bool,
         min_periods: Option<usize>,
         kwargs: Option<&Bound<'_, PyDict>>,
-    ) -> PyResult<PyRolling> {
-        let (dim, window) = one_pair(merge_kwargs(dim, kwargs)?)?;
+    ) -> PyResult<Py<PyAny>> {
+        let pairs = merge_kwargs(dim, kwargs)?;
+        if pairs.len() > 1 {
+            return multi_rolling(slf.as_any(), pairs, center, min_periods);
+        }
+        let (dim, window) = one_pair(pairs)?;
         let window: usize = window.extract()?;
         let opts = rolling_opts(center, min_periods);
         slf.borrow().inner.rolling(&dim, window, &opts).py_err()?;
-        Ok(PyRolling {
+        let r = PyRolling {
             parent: Parent::Da(slf.clone().unbind()),
             dim,
             window,
             opts,
-        })
+        };
+        Ok(Py::new(slf.py(), r)?.into_any())
     }
 
     /// The values as an `astropy.units.Quantity` in this array's unit (coordinates and
@@ -1248,7 +1358,7 @@ impl PyDataArray {
 // ----- Dataset -----
 
 /// A units-aware collection of labelled arrays sharing dimensions (xarray's `Dataset`).
-#[pyclass(name = "Dataset", module = "annoray")]
+#[pyclass(name = "Dataset", module = "annoray", weakref)]
 pub(crate) struct PyDataset {
     pub(crate) inner: Dataset,
     pub(crate) lending: Lending,
@@ -1406,8 +1516,11 @@ impl PyDataset {
             .map(Bound::into_any)
     }
 
-    /// Variables and coordinates as attributes: `ds.temp`.
-    fn __getattr__(slf: &Bound<'_, Self>, name: &str) -> PyResult<Py<PyDataArray>> {
+    /// Variables and coordinates as attributes: `ds.temp`; registered accessors first.
+    fn __getattr__(slf: &Bound<'_, Self>, name: &str) -> PyResult<Py<PyAny>> {
+        if let Some(acc) = accessor(slf.as_any(), "Dataset", name)? {
+            return Ok(acc);
+        }
         let found = {
             let me = slf.borrow();
             if me.inner.contains(name) {
@@ -1417,7 +1530,7 @@ impl PyDataset {
             }
         };
         if let Some(a) = found {
-            return new_child_da(slf.as_any(), name, a);
+            return Ok(new_child_da(slf.as_any(), name, a)?.into_any());
         }
         Err(pyo3::exceptions::PyAttributeError::new_err(format!(
             "'Dataset' object has no attribute {name:?}"
@@ -1529,30 +1642,48 @@ impl PyDataset {
         self.load(py)
     }
 
-    #[pyo3(signature = (indexers=None, **kwargs))]
+    #[pyo3(signature = (indexers=None, drop=false, missing_dims="raise", **kwargs))]
     fn isel(
         &self,
         py: Python<'_>,
         indexers: Option<&Bound<'_, PyAny>>,
+        drop: bool,
+        missing_dims: &str,
         kwargs: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Py<PyDataset>> {
+        let dims = self.inner.dims();
+        let args = known_dims(py, &dims, merge_kwargs(indexers, kwargs)?, missing_dims)?;
+        let out = do_isel(py, &self.inner, args)?;
         new_ds(
             py,
-            do_isel(py, &self.inner, merge_kwargs(indexers, kwargs)?)?,
+            if drop {
+                drop_scalarized_ds(&self.inner, out)?
+            } else {
+                out
+            },
         )
     }
 
-    #[pyo3(signature = (indexers=None, method=None, tolerance=None, **kwargs))]
+    #[pyo3(signature = (indexers=None, method=None, tolerance=None, drop=false, **kwargs))]
     fn sel(
         &self,
         py: Python<'_>,
         indexers: Option<&Bound<'_, PyAny>>,
         method: Option<&str>,
         tolerance: Option<&Bound<'_, PyAny>>,
+        drop: bool,
         kwargs: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Py<PyDataset>> {
         let args = merge_kwargs(indexers, kwargs)?;
-        new_ds(py, do_sel(py, &self.inner, args, method, tolerance)?)
+        let out = do_sel(py, &self.inner, args, method, tolerance)?;
+        new_ds(
+            py,
+            if drop {
+                drop_scalarized_ds(&self.inner, out)?
+            } else {
+                out
+            },
+        )
     }
 
     fn _fillna_number(&self, py: Python<'_>, value: f64) -> PyResult<Py<PyDataset>> {
@@ -1564,19 +1695,37 @@ impl PyDataset {
         new_ds(py, self.inner.dropna(dim, how_from(how)?).py_err()?)
     }
 
-    #[pyo3(signature = (indexers=None, **kwargs))]
+    #[pyo3(signature = (indexers=None, method=None, tolerance=None, fill_value=None, **kwargs))]
     fn reindex(
-        &self,
-        py: Python<'_>,
+        slf: &Bound<'_, Self>,
         indexers: Option<&Bound<'_, PyAny>>,
+        method: Option<&Bound<'_, PyAny>>,
+        tolerance: Option<&Bound<'_, PyAny>>,
+        fill_value: Option<&Bound<'_, PyAny>>,
         kwargs: Option<&Bound<'_, PyDict>>,
-    ) -> PyResult<Py<PyDataset>> {
-        let mut out = self.inner.clone();
+    ) -> PyResult<Py<PyAny>> {
+        let py = slf.py();
+        if method.is_some() || tolerance.is_some() || fill_value.is_some() {
+            let kw = PyDict::new(py);
+            kw.set_item("indexers", indexers)?;
+            kw.set_item("method", method)?;
+            kw.set_item("tolerance", tolerance)?;
+            kw.set_item("fill_value", fill_value)?;
+            if let Some(k) = kwargs {
+                kw.update(k.as_mapping())?;
+            }
+            return Ok(py
+                .import("annoray._methods")?
+                .getattr("reindex_method")?
+                .call((slf,), Some(&kw))?
+                .unbind());
+        }
+        let mut out = slf.borrow().inner.clone();
         for (dim, v) in merge_kwargs(indexers, kwargs)? {
             let labels = labels_var(py, &dim, &v)?;
             out = out.reindex(&dim, &labels).py_err()?;
         }
-        new_ds(py, out)
+        Ok(new_ds(py, out)?.into_any())
     }
 
     #[pyo3(signature = (coords=None, method="linear", extrapolate=None, **kwargs))]
@@ -1648,17 +1797,22 @@ impl PyDataset {
         center: bool,
         min_periods: Option<usize>,
         kwargs: Option<&Bound<'_, PyDict>>,
-    ) -> PyResult<PyRolling> {
-        let (dim, window) = one_pair(merge_kwargs(dim, kwargs)?)?;
+    ) -> PyResult<Py<PyAny>> {
+        let pairs = merge_kwargs(dim, kwargs)?;
+        if pairs.len() > 1 {
+            return multi_rolling(slf.as_any(), pairs, center, min_periods);
+        }
+        let (dim, window) = one_pair(pairs)?;
         let window: usize = window.extract()?;
         let opts = rolling_opts(center, min_periods);
         slf.borrow().inner.rolling(&dim, window, &opts).py_err()?;
-        Ok(PyRolling {
+        let r = PyRolling {
             parent: Parent::Ds(slf.clone().unbind()),
             dim,
             window,
             opts,
-        })
+        };
+        Ok(Py::new(slf.py(), r)?.into_any())
     }
 
     /// Write to netCDF (`format` as in xarray; netCDF-4 by default), with the GIL released.
@@ -1667,21 +1821,47 @@ impl PyDataset {
     /// xarray's per-variable settings (`zlib`, `complevel`, `shuffle`, `chunksizes`,
     /// `compression`, `dtype`, `_FillValue`, `scale_factor`, `add_offset`, `units`,
     /// `calendar`); settings not given keep the variable's own.
-    #[pyo3(signature = (path, format="NETCDF4", encoding=None, unlimited_dims=None))]
+    /// `mode="a"` adds or replaces variables in an existing file (rewritten through a
+    /// temporary file, so a failed write leaves it as it was).
+    #[pyo3(signature = (path, format="NETCDF4", encoding=None, unlimited_dims=None, mode="w"))]
     fn to_netcdf(
-        &self,
-        py: Python<'_>,
+        slf: &Bound<'_, Self>,
         path: PathBuf,
         format: &str,
         encoding: Option<&Bound<'_, PyDict>>,
         unlimited_dims: Option<Vec<String>>,
+        mode: &str,
     ) -> PyResult<()> {
+        let py = slf.py();
+        match mode {
+            "w" => {}
+            "a" => {
+                let kw = PyDict::new(py);
+                kw.set_item("format", format)?;
+                if let Some(e) = encoding {
+                    kw.set_item("encoding", e)?;
+                }
+                if let Some(u) = &unlimited_dims {
+                    kw.set_item("unlimited_dims", u.clone())?;
+                }
+                py.import("annoray._io")?
+                    .getattr("append_netcdf")?
+                    .call((slf, path), Some(&kw))?;
+                return Ok(());
+            }
+            other => {
+                return Err(PyValueError::new_err(format!(
+                    "mode must be \"w\" or \"a\", not {other:?}"
+                )));
+            }
+        }
+        let this = slf.borrow();
         let opts = WriteOptions::format(crate::raw::format_from_name(format)?);
         let write = |ds: &Dataset| py.detach(|| ds.to_netcdf_with(&path, &opts));
         if encoding.is_none() && unlimited_dims.is_none() {
-            return write(&self.inner).map_err(xr_error);
+            return write(&this.inner).map_err(xr_error);
         }
-        let mut ds = self.inner.clone();
+        let mut ds = this.inner.clone();
         if let Some(u) = unlimited_dims {
             ds.encoding_mut().unlimited_dims = u.into_iter().map(Into::into).collect();
         }
@@ -1821,6 +2001,38 @@ fn rolling_opts(center: bool, min_periods: Option<usize>) -> RollingOptions {
 }
 
 /// The single `dim=value` pair of `resample` and `rolling`.
+/// The accessor registered as `name` for `kind` (`annoray.register_*_accessor`), if any.
+fn accessor(obj: &Bound<'_, PyAny>, kind: &str, name: &str) -> PyResult<Option<Py<PyAny>>> {
+    if name.starts_with("__") {
+        return Ok(None);
+    }
+    let r = obj
+        .py()
+        .import("annoray._accessors")?
+        .getattr("lookup")?
+        .call1((obj, kind, name))?;
+    Ok((!r.is_none()).then(|| r.unbind()))
+}
+
+/// Windows along several dimensions (`annoray._rolling.MultiRolling`).
+fn multi_rolling(
+    obj: &Bound<'_, PyAny>,
+    pairs: IselArgs<'_>,
+    center: bool,
+    min_periods: Option<usize>,
+) -> PyResult<Py<PyAny>> {
+    let py = obj.py();
+    let windows = PyDict::new(py);
+    for (d, w) in pairs {
+        windows.set_item(d, w.extract::<usize>()?)?;
+    }
+    Ok(py
+        .import("annoray._rolling")?
+        .getattr("MultiRolling")?
+        .call1((obj, windows, center, min_periods))?
+        .unbind())
+}
+
 fn one_pair(args: IselArgs<'_>) -> PyResult<(String, Bound<'_, PyAny>)> {
     let mut it = args.into_iter();
     match (it.next(), it.next()) {
@@ -2151,12 +2363,19 @@ pub(crate) struct PyDt {
 
 #[pymethods]
 impl PyDt {
-    fn __getattr__(&self, py: Python<'_>, name: &str) -> PyResult<Py<PyDataArray>> {
+    fn __getattr__(&self, py: Python<'_>, name: &str) -> PyResult<Py<PyAny>> {
         let da = &self.parent.borrow(py).inner;
-        let var = da
-            .variable()
-            .dt(name)
-            .map_err(|e| pyo3::exceptions::PyAttributeError::new_err(e.to_string()))?;
+        let var = match da.variable().dt(name) {
+            Ok(v) => v,
+            // Methods and duration fields written in Python (`annoray._dt`).
+            Err(_) => {
+                return Ok(py
+                    .import("annoray._dt")?
+                    .getattr("extra")?
+                    .call1((self.parent.bind(py), name))?
+                    .unbind());
+            }
+        };
         let mut out = DataArray::new(var);
         if let Some(n) = da.name() {
             out = out.with_name(n.clone());
@@ -2164,7 +2383,7 @@ impl PyDt {
         for (k, c) in da.coords() {
             out = out.with_coord(k.clone(), c.to_owned()).py_err()?;
         }
-        new_da(py, out)
+        Ok(new_da(py, out)?.into_any())
     }
 }
 
@@ -2238,6 +2457,42 @@ pub(crate) fn warn_all(py: Python<'_>, warnings: &[String]) -> PyResult<()> {
     Ok(())
 }
 
+/// CF-decode a dataset opened (or built) without decoding (xarray's `decode_cf`): times,
+/// packing, fill values, units and coordinates, by the same rules as `open_dataset`.
+#[pyfunction]
+#[pyo3(signature = (obj, *, mask_and_scale=true, decode_times=true, decode_units=true,
+    decode_coords=true, concat_characters=true))]
+#[allow(clippy::fn_params_excessive_bools)]
+pub(crate) fn decode_cf(
+    py: Python<'_>,
+    obj: &Bound<'_, PyDataset>,
+    mask_and_scale: bool,
+    decode_times: bool,
+    decode_units: bool,
+    decode_coords: bool,
+    concat_characters: bool,
+) -> PyResult<Py<PyDataset>> {
+    let mut d = DecodeOptions::default();
+    d.mask_and_scale = mask_and_scale;
+    d.decode_times = decode_times;
+    d.decode_units = decode_units;
+    d.decode_coords = decode_coords;
+    d.concat_characters = concat_characters;
+    let ds = obj.borrow();
+    let ds = &ds.inner;
+    let decoded = py
+        .detach(|| {
+            let raw = annoray::cf::encode(
+                ds,
+                &annoray::cf::EncodeOptions::format(annoray::io::Format::Netcdf4),
+            )?;
+            annoray::cf::decode(&raw, &d)
+        })
+        .map_err(|e| xr_error(e.into()))?;
+    warn_all(py, &decoded.warnings)?;
+    new_ds(py, decoded.dataset)
+}
+
 /// Open several files as one dataset: a glob pattern or a list of paths, combined by their
 /// coordinates (default) or concatenated along `concat_dim` in the order given.
 #[pyfunction]
@@ -2291,14 +2546,96 @@ pub(crate) fn date_range<'py>(
     typed_to_py(py, TypedArray::DateTime(dates.into_dyn()))
 }
 
-/// Concatenate data arrays (or datasets) along a dimension.
+fn concat_which(s: &str) -> PyResult<annoray::Concat> {
+    Ok(match s {
+        "auto" => annoray::Concat::Auto,
+        "minimal" => annoray::Concat::Minimal,
+        "different" => annoray::Concat::Different,
+        "all" => annoray::Concat::All,
+        other => {
+            return Err(PyValueError::new_err(format!(
+                "expected \"minimal\", \"different\", \"all\" or \"auto\", not {other:?}"
+            )));
+        }
+    })
+}
+
+fn compat_from(s: &str) -> PyResult<annoray::Compat> {
+    Ok(match s {
+        "override" => annoray::Compat::Override,
+        "equals" => annoray::Compat::Equals,
+        "identical" => annoray::Compat::Identical,
+        "no_conflicts" => annoray::Compat::NoConflicts,
+        other => {
+            return Err(PyValueError::new_err(format!(
+                "compat must be \"override\", \"equals\", \"identical\" or \"no_conflicts\", \
+                 not {other:?}"
+            )));
+        }
+    })
+}
+
+/// Regular dates in a CF calendar (as CF dates): `periods` of them, or up to `end`.
 #[pyfunction]
+#[pyo3(signature = (start, end, periods, freq, calendar))]
+pub(crate) fn _date_range_in<'py>(
+    py: Python<'py>,
+    start: &str,
+    end: Option<&str>,
+    periods: Option<usize>,
+    freq: &str,
+    calendar: &str,
+) -> PyResult<Bound<'py, PyAny>> {
+    let cal = calendar
+        .parse::<annoray::units::Calendar>()
+        .map_err(|e| crate::convert::unit_error(&e))?;
+    let dates = annoray::date_range_in(start, end, periods, freq, cal).py_err()?;
+    typed_to_py(py, TypedArray::CfDate(dates.into_dyn()))
+}
+
+/// Concatenate data arrays (or datasets) along a dimension (new or existing). `dim` may be
+/// a name, or a pandas Index / DataArray whose name is the dimension and whose values
+/// label it. Defaults are xarray's new ones (exact join, minimal variables, `override`).
+#[pyfunction]
+#[pyo3(signature = (objs, dim, *, data_vars="auto", coords="minimal", compat="override", join="exact"))]
 pub(crate) fn concat(
     py: Python<'_>,
     objs: Vec<Bound<'_, PyAny>>,
-    dim: &str,
+    dim: &Bound<'_, PyAny>,
+    data_vars: &str,
+    coords: &str,
+    compat: &str,
+    join: &str,
 ) -> PyResult<Py<PyAny>> {
-    let opts = ConcatOptions::default();
+    let opts = ConcatOptions::default()
+        .data_vars(concat_which(data_vars)?)
+        .coords(concat_which(coords)?)
+        .compat(compat_from(compat)?)
+        .join(join_from(join)?);
+    // A labelled dimension: concatenate, then label it.
+    if !dim.is_instance_of::<PyString>() {
+        let name: String = dim.getattr("name")?.extract().map_err(|_| {
+            PyTypeError::new_err("dim must be a name, or a named Index or DataArray")
+        })?;
+        let values = py.import("numpy")?.call_method1("asarray", (dim,))?;
+        let out = concat(
+            py,
+            objs,
+            &PyString::new(py, &name).into_any(),
+            data_vars,
+            coords,
+            compat,
+            join,
+        )?;
+        let kw = PyDict::new(py);
+        kw.set_item(&name, (name.as_str(), values))?;
+        return Ok(out
+            .bind(py)
+            .call_method("assign_coords", (), Some(&kw))?
+            .unbind());
+    }
+    let dim: String = dim.extract()?;
+    let dim = dim.as_str();
     if objs.iter().all(|o| o.is_instance_of::<PyDataArray>()) {
         let arrays: Vec<Bound<'_, PyDataArray>> = objs
             .iter()
@@ -2321,13 +2658,15 @@ pub(crate) fn concat(
     Ok(new_ds(py, out)?.into_any())
 }
 
-/// Merge datasets (or named data arrays) into one dataset.
+/// Merge datasets (or named data arrays) into one dataset; `compat` decides variables of the
+/// same name (`"override"`, `"equals"`, `"identical"`, `"no_conflicts"`).
 #[pyfunction]
-#[pyo3(signature = (objs, *, join="exact"))]
+#[pyo3(signature = (objs, *, join="exact", compat="override"))]
 pub(crate) fn merge(
     py: Python<'_>,
     objs: Vec<Bound<'_, PyAny>>,
     join: &str,
+    compat: &str,
 ) -> PyResult<Py<PyDataset>> {
     let mut sets = Vec::with_capacity(objs.len());
     for o in &objs {
@@ -2346,6 +2685,7 @@ pub(crate) fn merge(
     let refs: Vec<&Dataset> = sets.iter().collect();
     let mut opts = MergeOptions::default();
     opts.join = join_from(join)?;
+    opts.compat = compat_from(compat)?;
     new_ds(py, py.detach(|| annoray::merge(&refs, &opts)).py_err()?)
 }
 
@@ -2502,4 +2842,127 @@ pub(crate) fn from_xarray(py: Python<'_>, obj: &Bound<'_, PyAny>) -> PyResult<Py
     Err(PyTypeError::new_err(
         "expected an xarray DataArray, Dataset or DataTree",
     ))
+}
+
+/// `func(group, *args, **kwargs)` as a closure for the core's group `map`, its Python error
+/// kept in `err`.
+fn group_call<'a, T: Clone + 'a>(
+    py: Python<'a>,
+    func: &'a Bound<'a, PyAny>,
+    args: &'a Bound<'a, PyTuple>,
+    kwargs: Option<&'a Bound<'a, PyDict>>,
+    err: &'a std::cell::RefCell<Option<PyErr>>,
+    wrap: impl Fn(Python<'a>, T) -> PyResult<Bound<'a, PyAny>> + 'a,
+    unwrap: impl Fn(&Bound<'a, PyAny>) -> PyResult<T> + 'a,
+) -> impl FnMut(T) -> annoray::Result<T> + 'a {
+    move |x: T| {
+        let call = || -> PyResult<T> {
+            let mut all = vec![wrap(py, x)?];
+            all.extend(args.iter());
+            let r = func.call(PyTuple::new(py, all)?, kwargs)?;
+            unwrap(&r)
+        };
+        call().map_err(|e| {
+            let msg = e.to_string();
+            *err.borrow_mut() = Some(e);
+            annoray::CoreError::InvalidReduction(msg)
+        })
+    }
+}
+
+#[pymethods]
+impl PyGroupBy {
+    /// `func(group, *args, **kwargs)` for every group, combined: results that keep the
+    /// grouped dimension go back to the original order; others are stacked along the group
+    /// dimension (xarray's `GroupBy.map`).
+    #[pyo3(signature = (func, args=None, shortcut=None, **kwargs))]
+    fn map(
+        &self,
+        py: Python<'_>,
+        func: &Bound<'_, PyAny>,
+        args: Option<&Bound<'_, PyTuple>>,
+        shortcut: Option<bool>,
+        kwargs: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<Py<PyAny>> {
+        let _ = shortcut;
+        let empty = PyTuple::empty(py);
+        let args = args.unwrap_or(&empty);
+        let err = std::cell::RefCell::new(None);
+        macro_rules! run {
+            ($obj:expr, $wrap:ident, $cls:ty, $what:literal) => {{
+                let g = match &self.split {
+                    Split::Labels(n) => $obj.groupby(n),
+                    Split::Bins { group, bins, opts } => $obj.groupby_bins(group, bins, opts),
+                    Split::Resample { dim, freq } => $obj.resample(dim, freq),
+                }
+                .py_err()?;
+                let f = group_call(
+                    py,
+                    func,
+                    args,
+                    kwargs,
+                    &err,
+                    |py, x| Ok($wrap(py, x)?.into_bound(py).into_any()),
+                    |r| {
+                        Ok(r.cast::<$cls>()
+                            .map_err(|_| PyTypeError::new_err($what))?
+                            .borrow()
+                            .inner
+                            .clone())
+                    },
+                );
+                let out = g.map(f);
+                if let Some(e) = err.borrow_mut().take() {
+                    return Err(e);
+                }
+                Ok($wrap(py, out.py_err()?)?.into_any())
+            }};
+        }
+        match &self.parent {
+            Parent::Da(p) => {
+                let held = p.borrow(py);
+                run!(
+                    held.inner,
+                    new_da,
+                    PyDataArray,
+                    "GroupBy.map: func must return a DataArray"
+                )
+            }
+            Parent::Ds(p) => {
+                let held = p.borrow(py);
+                run!(
+                    held.inner,
+                    new_ds,
+                    PyDataset,
+                    "GroupBy.map: func must return a Dataset"
+                )
+            }
+        }
+    }
+
+    /// The dimension being grouped along.
+    #[getter]
+    fn _dim(&self, py: Python<'_>) -> PyResult<String> {
+        macro_rules! dim {
+            ($obj:expr) => {{
+                let g = match &self.split {
+                    Split::Labels(n) => $obj.groupby(n),
+                    Split::Bins { group, bins, opts } => $obj.groupby_bins(group, bins, opts),
+                    Split::Resample { dim, freq } => $obj.resample(dim, freq),
+                }
+                .py_err()?;
+                Ok(g.dim().to_string())
+            }};
+        }
+        match &self.parent {
+            Parent::Da(p) => {
+                let held = p.borrow(py);
+                dim!(held.inner)
+            }
+            Parent::Ds(p) => {
+                let held = p.borrow(py);
+                dim!(held.inner)
+            }
+        }
+    }
 }

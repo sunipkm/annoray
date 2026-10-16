@@ -19,6 +19,7 @@ from importlib.metadata import version as _version
 from typing import Any
 
 from annoray import dims, testing
+from annoray._accessors import register_dataarray_accessor, register_dataset_accessor
 from annoray._annoray import (
     Coarsen,
     DataArray,
@@ -28,23 +29,21 @@ from annoray._annoray import (
     GroupBy,
     Quantity,
     Rolling,
+    RollingExp,
     Unit,
     UnitError,
     Weighted,
-    align,
     broadcast,
     combine_by_coords,
     concat,
     corr,
     cov,
-    date_range,
+    decode_cf,
     dot,
     from_xarray,
     full_like,
     merge,
-    open_dataset,
     open_datatree,
-    open_mfdataset,
     polyval,
     set_stream_bytes,
     stream_bytes,
@@ -52,14 +51,21 @@ from annoray._annoray import (
 )
 from annoray._astropy import from_astropy, to_astropy
 from annoray._functions import (
+    align,
+    cftime_range,
     combine_nested,
     cross,
+    date_range,
+    get_options,
     infer_freq,
     map_blocks,
     open_dataarray,
     save_mfdataset,
     set_options,
+    show_versions,
+    unify_chunks,
 )
+from annoray._io import load_dataarray, load_dataset, open_dataset, open_mfdataset
 from annoray._ufunc import apply_ufunc
 from annoray.dims import dimension
 
@@ -75,6 +81,7 @@ __all__ = [
     "GroupBy",
     "Quantity",
     "Rolling",
+    "RollingExp",
     "Unit",
     "UnitError",
     "Weighted",
@@ -82,6 +89,7 @@ __all__ = [
     "align",
     "apply_ufunc",
     "broadcast",
+    "cftime_range",
     "combine_by_coords",
     "combine_nested",
     "concat",
@@ -89,13 +97,17 @@ __all__ = [
     "cov",
     "cross",
     "date_range",
+    "decode_cf",
     "dimension",
     "dims",
     "dot",
     "from_astropy",
     "from_xarray",
     "full_like",
+    "get_options",
     "infer_freq",
+    "load_dataarray",
+    "load_dataset",
     "map_blocks",
     "merge",
     "ones_like",
@@ -105,14 +117,18 @@ __all__ = [
     "open_mfdataset",
     "open_zarr",
     "polyval",
+    "register_dataarray_accessor",
+    "register_dataset_accessor",
     "save_mfdataset",
     "set_options",
     "set_stream_bytes",
+    "show_versions",
     "stream_bytes",
     "testing",
     "to_astropy",
     "to_netcdf",
     "to_zarr",
+    "unify_chunks",
     "where",
     "zeros_like",
 ]

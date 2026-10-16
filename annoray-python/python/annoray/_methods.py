@@ -498,3 +498,165 @@ def argsort(obj: DataArray, axis: int = -1, kind: Any = None, order: Any = None)
     return DataArray(
         idx, dims=obj.dims, coords=dict(obj.coords), name=obj.name, attrs=dict(obj.attrs)
     )
+
+
+def reduce_pickle(obj: Any) -> Any:
+    """``__reduce__``: rebuilt from a plain-data state (lazy data is read)."""
+    from annoray import _state
+
+    if isinstance(obj, Dataset):
+        return (_state.ds_from_state, (_state.ds_state(obj),))
+    return (_state.da_from_state, (_state.da_state(obj),))
+
+
+def deepcopy(obj: Any, memo: Any = None) -> Any:
+    """``copy.deepcopy``: a copy (data is never shared between annoray objects)."""
+    return obj.copy()
+
+
+def shallow_copy(obj: Any) -> Any:
+    """``copy.copy``."""
+    return obj.copy()
+
+
+def close(obj: Any) -> None:
+    """No-op: a file is released when the data read from it is dropped."""
+
+
+def enter(obj: Any) -> Any:
+    return obj
+
+
+def exit_(obj: Any, *exc: Any) -> None:
+    return None
+
+
+def variables(obj: Dataset) -> dict[str, DataArray]:
+    """Every variable (data variables and coordinates), by name."""
+    return {**dict(obj.coords), **dict(obj.data_vars)}
+
+
+def real(obj: Any) -> Any:
+    """The real part (annoray holds real numbers: the data itself)."""
+    return obj.copy()
+
+
+def imag(obj: Any) -> Any:
+    """The imaginary part (annoray holds real numbers: zeros, in the data's unit)."""
+    from annoray import zeros_like
+
+    return zeros_like(obj)
+
+
+def conj(obj: Any) -> Any:
+    """The complex conjugate (of real numbers: the data itself)."""
+    return obj.copy()
+
+
+def repr_html(obj: Any) -> str:
+    """The text repr, escaped, for notebooks."""
+    import html
+
+    return f"<pre>{html.escape(repr(obj))}</pre>"
+
+
+def _cdl_value(v: Any) -> str:
+    if isinstance(v, str):
+        return f'"{v}"'
+    a = np.atleast_1d(np.asarray(v))
+    return ", ".join(str(x) for x in a.tolist())
+
+
+def info(ds: Dataset, buf: Any = None) -> None:
+    """A netCDF CDL-like summary (``ncdump -h``), as xarray's ``Dataset.info``."""
+    import sys
+
+    lines = ["annoray.Dataset {", "dimensions:"]
+    lines += [f"\t{d} = {n} ;" for d, n in ds.sizes.items()]
+    lines.append("\nvariables:")
+    for name, v in variables(ds).items():
+        lines.append(f"\t{v.dtype} {name}({', '.join(v.dims)}) ;")
+        attrs = dict(v.attrs)
+        if v.units is not None:
+            attrs = {"units": v.units, **attrs}
+        lines += [f"\t\t{name}:{k} = {_cdl_value(a)} ;" for k, a in attrs.items()]
+    lines.append("\n// global attributes:")
+    lines += [f"\t:{k} = {_cdl_value(a)} ;" for k, a in ds.attrs.items()]
+    lines.append("}")
+    (buf or sys.stdout).write("\n".join(lines) + "\n")
+
+
+def groupby_reduce(gb: Any, func: Callable[..., Any], dim: Any = None, **kwargs: Any) -> Any:
+    """``func(values, axis=…)`` over each group (over the grouped dimension by default)."""
+    d = gb._dim if dim is None else dim
+    return gb.map(lambda g: g.reduce(func, d, **kwargs))
+
+
+def groupby_quantile(gb: Any, q: Any, dim: Any = None, **kwargs: Any) -> Any:
+    """Quantiles of each group (over the grouped dimension by default)."""
+    d = gb._dim if dim is None else dim
+    return gb.map(lambda g: g.quantile(q, dim=d, **kwargs))
+
+
+def drop_duplicates(obj: Any, dim: Any, *, keep: Any = "first") -> Any:
+    """Positions whose label along ``dim`` (a name, names, or ``...`` for all) repeats an
+    earlier one dropped (``keep="last"``: a later one; ``keep=False``: every repeated
+    label)."""
+    dims = list(obj.dims) if dim is ... else ([dim] if isinstance(dim, str) else list(dim))
+    sel = {}
+    for d in dims:
+        if d not in obj.coords:
+            raise ValueError(f"drop_duplicates: {d!r} has no coordinate")
+        labels = np.asarray(obj.coords[d].values)
+        if keep not in ("first", "last", False):
+            raise ValueError("keep must be 'first', 'last' or False")
+        seen: dict[Any, list[int]] = {}
+        for i, v in enumerate(labels.tolist()):
+            seen.setdefault(v, []).append(i)
+        if keep == "first":
+            kept = sorted(p[0] for p in seen.values())
+        elif keep == "last":
+            kept = sorted(p[-1] for p in seen.values())
+        else:
+            kept = sorted(p[0] for p in seen.values() if len(p) == 1)
+        sel[d] = kept
+    return obj.isel(sel)
+
+
+def reindex_method(
+    obj: Any,
+    indexers: Any = None,
+    method: str | None = None,
+    tolerance: Any = None,
+    fill_value: Any = None,
+    **kwargs: Any,
+) -> Any:
+    """``reindex`` with ``method`` (``"nearest"``, ``"pad"``/``"ffill"``,
+    ``"backfill"``/``"bfill"``), ``tolerance`` or ``fill_value``: positions from pandas'
+    ``Index.get_indexer`` (as xarray); labels with no match are missing (``fill_value``
+    where given; text coordinates get ``""``)."""
+    import pandas as pd
+
+    from annoray import DataArray
+
+    out = obj
+    for dim, labels in {**(indexers or {}), **kwargs}.items():
+        target = np.asarray(labels.values if isinstance(labels, DataArray) else labels)
+        source = pd.Index(np.asarray(out.coords[dim].values))
+        pos = source.get_indexer(pd.Index(target), method=cast(Any, method), tolerance=tolerance)
+        found = pos >= 0
+        taken = out.isel({dim: np.where(found, pos, 0)})
+        mask = DataArray(found, dims=(dim,))
+        coords = {}
+        for k, c in taken.coords.items():
+            if dim in c.dims and k != dim:
+                v = np.asarray(c.values)
+                if v.dtype.kind in "OU":
+                    coords[k] = (c.dims, np.where(np.asarray(mask.broadcast_like(c).values), v, ""))
+                else:
+                    coords[k] = c.where(mask.broadcast_like(c))
+        coords[dim] = (dim, target)
+        taken = taken.assign_coords(coords)
+        mask = mask.assign_coords({dim: (dim, target)})
+        out = taken.where(mask) if fill_value is None else taken.where(mask, fill_value)
+    return out

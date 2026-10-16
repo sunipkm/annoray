@@ -4,7 +4,7 @@
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyTuple, PyType};
 
-use crate::native::{PyDataArray, PyDataset};
+use crate::native::{PyDataArray, PyDataset, PyGroupBy};
 
 /// `<module>.<func>(*first, *args, **kwargs)`.
 fn forward<'py>(
@@ -263,4 +263,68 @@ forwarders!(PyDataset, "annoray._query":
 forwarders!(PyDataArray, "annoray._methods":
     /// Positions that sort the values along a numpy axis (NaN last); no unit.
     argsort => "argsort",
+);
+
+macro_rules! common_extras {
+    ($ty:ident) => {
+        forwarders!($ty, "annoray._methods":
+            /// Pickled as a plain-data state (values, units, attributes, encoding); lazy
+            /// data is read.
+            __reduce__ => "reduce_pickle",
+            /// A copy.
+            __copy__ => "shallow_copy",
+            /// A copy (data is never shared between annoray objects).
+            __deepcopy__ => "deepcopy",
+            /// No-op: a file is released when the data read from it is dropped.
+            close => "close",
+            __enter__ => "enter",
+            __exit__ => "exit_",
+            /// The text repr, for notebooks.
+            _repr_html_ => "repr_html",
+        );
+        getters!($ty:
+            /// The real part (annoray data is real: the data itself).
+            real => "real",
+            /// The imaginary part (zeros).
+            imag => "imag",
+            /// Dimension → pandas index, as `indexes`.
+            xindexes => "indexes",
+        );
+        forwarders!($ty, "annoray._methods":
+            /// The complex conjugate (of real data: the data itself).
+            conj => "conj",
+            /// The complex conjugate (of real data: the data itself).
+            conjugate => "conj",
+        );
+    };
+}
+
+common_extras!(PyDataArray);
+common_extras!(PyDataset);
+
+forwarders!(PyDataset, "annoray._methods":
+    /// A netCDF CDL-like summary, written to `buf` (standard output by default).
+    info => "info",
+);
+
+getters!(PyDataset:
+    /// Every variable (data variables and coordinates), by name.
+    variables => "variables",
+);
+
+forwarders!(PyGroupBy, "annoray._methods":
+    /// `func(values, axis=…)` over each group (the grouped dimension by default).
+    reduce => "groupby_reduce",
+    /// Quantiles of each group (over the grouped dimension by default).
+    quantile => "groupby_quantile",
+);
+
+forwarders!(PyDataArray, "annoray._methods":
+    /// Drop positions whose label repeats (`keep="first"`, `"last"` or `False`).
+    drop_duplicates => "drop_duplicates",
+);
+
+forwarders!(PyDataset, "annoray._methods":
+    /// Drop positions whose label repeats (`keep="first"`, `"last"` or `False`).
+    drop_duplicates => "drop_duplicates",
 );

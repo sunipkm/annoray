@@ -4,11 +4,11 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
-from typing import Any, Literal, Self
+from typing import Any, Literal, Self, cast
 
 import numpy as np
 
-from annoray._annoray import DataArray, Dataset, concat, merge, open_dataset
+from annoray._annoray import DataArray, Dataset, concat, merge
 
 
 def combine_nested(
@@ -129,6 +129,8 @@ class set_options:
 
 def open_dataarray(filename_or_obj: Any, **kwargs: Any) -> DataArray:
     """Open a file holding one data variable, as a DataArray."""
+    from annoray._io import open_dataset
+
     ds = open_dataset(filename_or_obj, **kwargs)
     names = list(ds.data_vars)
     if len(names) != 1:
@@ -166,3 +168,131 @@ def map_blocks(
     """``func(obj, *args, **kwargs)``: without dask the object is a single block, which is
     what xarray does for unchunked data."""
     return func(obj, *args, **(kwargs or {}))
+
+
+def date_range(
+    start: Any = None,
+    end: Any = None,
+    periods: Any = None,
+    freq: str | None = "D",
+    *,
+    calendar: str = "standard",
+    use_cftime: bool | None = None,
+    inclusive: str = "both",
+    normalize: bool = False,
+    name: str | None = None,
+    tz: Any = None,
+    unit: str = "ns",
+) -> Any:
+    """Regular dates (xarray's ``date_range``; annoray's ``date_range(start, periods, freq)``
+    positional form also works): numpy ``datetime64`` for the standard
+    calendars (through pandas, as xarray; ``periods`` without pandas), CF dates for other
+    calendars or with ``use_cftime=True`` (fixed steps and period starts ``MS``/``QS``/``YS``,
+    from ``start`` with ``periods`` or up to ``end``)."""
+    from annoray._annoray import _date_range_in
+    from annoray._annoray import date_range as _native
+
+    # annoray's earlier positional form, date_range(start, periods, freq): an integer
+    # second argument cannot be an end date.
+    if isinstance(end, int) and not isinstance(end, bool):
+        if isinstance(periods, str):
+            freq = periods
+        end, periods = None, end
+    freq = "D" if freq is None else freq
+    standard = calendar in ("standard", "gregorian", "proleptic_gregorian")
+    if standard and not use_cftime:
+        try:
+            import pandas as pd
+        except ImportError:
+            if start is None or periods is None or end is not None:
+                raise ImportError(
+                    "date_range needs pandas for this form; give start and periods"
+                ) from None
+            return _native(str(start), periods, freq)
+        return np.asarray(
+            pd.date_range(
+                start,
+                end,
+                periods,
+                freq,
+                tz=tz,
+                normalize=normalize,
+                name=name,
+                inclusive=cast(Any, inclusive),
+                unit=cast(Any, unit),
+            ).values
+        )
+    if use_cftime is False:
+        raise ValueError(f"use_cftime=False needs a standard calendar, not {calendar!r}")
+    if start is None:
+        raise ValueError("date_range in a CF calendar needs start")
+    dates = _date_range_in(str(start), None if end is None else str(end), periods, freq, calendar)
+    if (
+        inclusive in ("left", "neither")
+        and end is not None
+        and len(dates)
+        and str(dates[-1])[:10] == str(end)[:10]
+    ):
+        dates = dates[:-1]
+    if inclusive in ("right", "neither") and len(dates):
+        dates = dates[1:]
+    return dates
+
+
+def cftime_range(*args: Any, calendar: str = "standard", **kwargs: Any) -> Any:
+    """``date_range`` as CF dates (xarray's deprecated ``cftime_range``)."""
+    return date_range(*args, calendar=calendar, use_cftime=True, **kwargs)
+
+
+def align(
+    *objects: Any,
+    join: Literal["inner", "outer", "left", "right", "exact"] = "inner",
+    exclude: Any = (),
+    **kwargs: Any,
+) -> tuple[Any, ...]:
+    """Align objects on their shared dimension coordinates; dimensions in ``exclude`` are
+    left as they are (not aligned)."""
+    from annoray._annoray import align as _align
+
+    copy = kwargs.pop("copy", True)
+    del copy
+    if kwargs:
+        raise TypeError(f"align() got unexpected keyword arguments {sorted(kwargs)}")
+    exclude = [exclude] if isinstance(exclude, str) else list(exclude)
+    if not exclude:
+        return _align(*objects, join=join)
+    # Excluded dimensions get a distinct name per object, so nothing aligns them.
+    renamed = []
+    for i, o in enumerate(objects):
+        names = {d: f"__annoray_excluded_{i}_{d}" for d in exclude if d in o.dims}
+        renamed.append((o.rename(names) if names else o, names))
+    out = _align(*[o for o, _ in renamed], join=join)
+    return tuple(
+        o.rename({v: k for k, v in names.items()}) if names else o
+        for o, (_, names) in zip(out, renamed, strict=True)
+    )
+
+
+def unify_chunks(*objects: Any) -> tuple[Any, ...]:
+    """No-op without dask: the objects as they are."""
+    return objects
+
+
+def get_options() -> dict[str, Any]:
+    """The options annoray always uses (see ``set_options``)."""
+    return {k: v[0] for k, v in _FIXED.items()}
+
+
+def show_versions(file: Any = None) -> None:
+    """The versions of annoray, Python, numpy and the optional dependencies."""
+    import importlib.metadata
+    import platform
+    import sys
+
+    lines = [f"python: {sys.version.split()[0]} ({platform.platform()})"]
+    for pkg in ("annoray", "numpy", "pandas", "xarray", "cftime", "matplotlib", "astropy", "pint"):
+        try:
+            lines.append(f"{pkg}: {importlib.metadata.version(pkg)}")
+        except importlib.metadata.PackageNotFoundError:
+            lines.append(f"{pkg}: None")
+    print("\n".join(lines), file=file or sys.stdout)

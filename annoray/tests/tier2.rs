@@ -199,3 +199,66 @@ fn calendar_conversion() {
         annoray::DType::DateTime
     );
 }
+
+#[test]
+fn date_ranges_in_calendars() {
+    use annoray::units::Calendar;
+    let d = annoray::date_range_in("2000-02-27", None, Some(5), "D", Calendar::Day360).unwrap();
+    let days: Vec<(u8, u8)> = d.iter().map(|t| (t.month(), t.day())).collect();
+    assert_eq!(days, [(2, 27), (2, 28), (2, 29), (2, 30), (3, 1)]);
+    let m = annoray::date_range_in(
+        "2000-01-15",
+        Some("2001-01-01"),
+        None,
+        "MS",
+        Calendar::NoLeap,
+    )
+    .unwrap();
+    assert_eq!(m.len(), 12);
+    assert_eq!((m[0].month(), m[11].year()), (2, 2001));
+    // A year means its first day, as in pandas.
+    let y = annoray::date_range("2000", 2, "D").unwrap();
+    assert_eq!(y[0].to_string(), "2000-01-01 00:00:00");
+    assert!(annoray::date_range_in("2000-01-01", None, None, "D", Calendar::NoLeap).is_err());
+}
+
+#[test]
+fn exponential_moving_statistics() {
+    use annoray::WindowType;
+    // α = 1/2 (span 3): mean of [2, 4] is (2·½ + 4) / (½ + 1) = 10/3.
+    let a = DataArray::from_array(["t"], array![2.0, 4.0, f64::NAN].into_dyn()).unwrap();
+    let r = a.rolling_exp("t", 3.0, WindowType::Span, 0.0).unwrap();
+    let m = r.mean().unwrap().to_f64().unwrap();
+    assert!((m[1] - 10.0 / 3.0).abs() < 1e-14);
+    assert!((m[2] - 10.0 / 3.0).abs() < 1e-14, "a gap keeps the mean");
+    assert!(
+        r.var().unwrap().to_f64().unwrap()[0].is_nan(),
+        "one value: no variance"
+    );
+    // Large offset, small spread: the variance stays exact.
+    let off = 1e12;
+    let stored = array![off, off + 1e-3, off - 1e-3];
+    // The same data, shifted back exactly (as stored, not as written).
+    let shifted = stored.mapv(|v| v - off);
+    let b = DataArray::from_array(["t"], stored.into_dyn()).unwrap();
+    let c = DataArray::from_array(["t"], shifted.into_dyn()).unwrap();
+    let (vb, vc) = (
+        b.rolling_exp("t", 0.5, WindowType::Alpha, 0.0)
+            .unwrap()
+            .var()
+            .unwrap(),
+        c.rolling_exp("t", 0.5, WindowType::Alpha, 0.0)
+            .unwrap()
+            .var()
+            .unwrap(),
+    );
+    let (vb, vc) = (vb.to_f64().unwrap(), vc.to_f64().unwrap());
+    assert!(
+        ((vb[2] - vc[2]) / vc[2]).abs() < 1e-3,
+        "{} vs {}",
+        vb[2],
+        vc[2]
+    );
+    assert!(a.rolling_exp("t", 0.5, WindowType::Span, 0.0).is_err());
+    assert!(a.rolling_exp("t", 1.5, WindowType::Alpha, 0.0).is_err());
+}

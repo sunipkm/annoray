@@ -100,7 +100,119 @@ pub fn date_range(
     Ok(ndarray::Array1::from(out))
 }
 
+/// Regular dates in a CF `calendar` (xarray's `date_range` with `calendar`): `periods` of
+/// them, or every one up to `end` (inclusive), from `start` at a pandas frequency, as
+/// [`date_range`] (fixed steps, or period starts `MS`/`QS`/`YS`). Steps count in the
+/// calendar's own days (a `360_day` year has 360 daily steps).
+///
+/// # Errors
+/// As for [`date_range`]; [`CoreError::InvalidReduction`] without `periods` or `end`, or
+/// for a `start` that does not exist in `calendar`.
+pub fn date_range_in(
+    start: &str,
+    end: Option<&str>,
+    periods: Option<usize>,
+    freq: &str,
+    calendar: annoray_units::Calendar,
+) -> Result<ndarray::Array1<annoray_units::CfDate>> {
+    use annoray_units::CfDate;
+    use chrono::{Datelike, Timelike};
+    let in_cal = |t: NaiveDateTime| -> Result<CfDate> {
+        let to8 = |v: u32| u8::try_from(v).map_err(|_| CoreError::ArithmeticOverflow("date"));
+        Ok(CfDate::from_ymd(
+            calendar,
+            i64::from(t.year()),
+            to8(t.month())?,
+            to8(t.day())?,
+        )?
+        .and_hms_nano(
+            to8(t.hour())?,
+            to8(t.minute())?,
+            to8(t.second())?,
+            t.nanosecond(),
+        )?)
+    };
+    let first = in_cal(parse_start(start)?)?;
+    let last = end.map(|e| parse_start(e).and_then(in_cal)).transpose()?;
+    if periods.is_none() && last.is_none() {
+        return Err(invalid("date_range needs periods or end"));
+    }
+    let f: Freq = freq.parse()?;
+    let overflow = || CoreError::ArithmeticOverflow("date_range");
+    let done = |n: usize, t: &CfDate| -> Result<bool> {
+        if periods.is_some_and(|p| n >= p) {
+            return Ok(true);
+        }
+        Ok(match &last {
+            Some(l) => t.nanos_since(l)? > 0,
+            None => false,
+        })
+    };
+    let mut out = Vec::new();
+    match f.unit {
+        Unit::Tick(ns) => {
+            let step = ns.checked_mul(i128::from(f.n)).ok_or_else(overflow)?;
+            if step <= 0 {
+                return Err(invalid("date_range needs a positive step"));
+            }
+            let mut t = first;
+            while !done(out.len(), &t)? {
+                out.push(t);
+                t = t.checked_add_nanos(step)?;
+            }
+        }
+        Unit::Start { step, anchor } => {
+            let months = step.checked_mul(f.n).ok_or_else(overflow)?;
+            let mut m = first
+                .year()
+                .checked_mul(12)
+                .and_then(|y| y.checked_add(i64::from(first.month()).saturating_sub(1)))
+                .ok_or_else(overflow)?;
+            let on_start = first.day() == 1
+                && (
+                    first.hour(),
+                    first.minute(),
+                    first.second(),
+                    first.nanosecond(),
+                ) == (0, 0, 0, 0);
+            if !on_start {
+                m = m.checked_add(1).ok_or_else(overflow)?;
+            }
+            let off = m.checked_sub(anchor).ok_or_else(overflow)?.rem_euclid(step);
+            if off != 0 {
+                m = m
+                    .checked_add(step.checked_sub(off).ok_or_else(overflow)?)
+                    .ok_or_else(overflow)?;
+            }
+            loop {
+                let mo =
+                    u8::try_from(m.rem_euclid(12).saturating_add(1)).map_err(|_| overflow())?;
+                let t = CfDate::from_ymd(calendar, m.div_euclid(12), mo, 1)?;
+                if done(out.len(), &t)? {
+                    break;
+                }
+                out.push(t);
+                m = m.checked_add(months).ok_or_else(overflow)?;
+            }
+        }
+        Unit::Week(_) | Unit::End { .. } => {
+            return Err(invalid(format!(
+                "date_range supports fixed steps and period starts (MS, QS, YS), not {freq:?}"
+            )));
+        }
+    }
+    Ok(ndarray::Array1::from(out))
+}
+
 fn parse_start(s: &str) -> Result<NaiveDateTime> {
+    // A year ("2000") or a month ("2000-03") means its first day, as in pandas.
+    let digits = |t: &str| !t.is_empty() && t.bytes().all(|b| b.is_ascii_digit());
+    let full = match s.split('-').collect::<Vec<_>>().as_slice() {
+        [y] if y.len() == 4 && digits(y) => format!("{y}-01-01"),
+        [y, m] if y.len() == 4 && digits(y) && m.len() == 2 && digits(m) => format!("{y}-{m}-01"),
+        _ => s.to_owned(),
+    };
+    let s = full.as_str();
     if let Ok(d) = chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d") {
         return Ok(d.and_time(chrono::NaiveTime::MIN));
     }

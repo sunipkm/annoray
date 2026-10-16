@@ -22,6 +22,7 @@ mod native;
 mod raw;
 mod relations;
 mod reshape;
+mod rolling_exp;
 mod stack;
 mod stats;
 mod tree;
@@ -43,6 +44,7 @@ fn _annoray(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<native::PyDataset>()?;
     m.add_class::<native::PyGroupBy>()?;
     m.add_class::<native::PyRolling>()?;
+    m.add_class::<rolling_exp::PyRollingExp>()?;
     m.add_class::<stats::PyWeighted>()?;
     m.add_class::<stats::PyCoarsen>()?;
     m.add_class::<native::PyDt>()?;
@@ -53,8 +55,10 @@ fn _annoray(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(tree::open_datatree, m)?)?;
     m.add_function(wrap_pyfunction!(native::open_dataset, m)?)?;
     m.add_function(wrap_pyfunction!(native::open_mfdataset, m)?)?;
+    m.add_function(wrap_pyfunction!(native::decode_cf, m)?)?;
     m.add_function(wrap_pyfunction!(native::concat, m)?)?;
     m.add_function(wrap_pyfunction!(native::date_range, m)?)?;
+    m.add_function(wrap_pyfunction!(native::_date_range_in, m)?)?;
     m.add_function(wrap_pyfunction!(native::merge, m)?)?;
     m.add_function(wrap_pyfunction!(native::combine_by_coords, m)?)?;
     m.add_function(wrap_pyfunction!(native::align, m)?)?;
