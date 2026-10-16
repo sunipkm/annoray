@@ -187,6 +187,91 @@ impl DataTree {
         Ok(())
     }
 
+    /// The coordinates the node at `path` inherits from its ancestors (not its own).
+    fn inherited_at(&self, path: &str) -> Result<IndexMap<Name, Variable>> {
+        let mut inherited: IndexMap<Name, Variable> = IndexMap::new();
+        let mut node = self;
+        for part in split(path) {
+            inherited.extend(node.index_coords());
+            node = node
+                .children
+                .get(part)
+                .ok_or_else(|| CoreError::NoSuchVariable(Name::from(path)))?;
+        }
+        Ok(inherited)
+    }
+
+    fn node_mut(&mut self, path: &str) -> Result<&mut DataTree> {
+        let mut node = self;
+        for part in split(path) {
+            node = node
+                .children
+                .get_mut(part)
+                .ok_or_else(|| CoreError::NoSuchVariable(Name::from(path)))?;
+        }
+        Ok(node)
+    }
+
+    /// Replace the dataset of the node at `path`, returning the old one. The new dataset must
+    /// agree with the coordinates the node inherits, and its descendants with it.
+    ///
+    /// # Errors
+    /// [`CoreError::NoSuchVariable`] for a missing node; [`CoreError::CannotCombine`] for a
+    /// disagreement. The tree is unchanged on error.
+    pub fn set_dataset_at(&mut self, path: &str, dataset: Dataset) -> Result<Dataset> {
+        let inherited = self.inherited_at(path)?;
+        let node = self.node_mut(path)?;
+        let probe = DataTree {
+            dataset,
+            children: std::mem::take(&mut node.children),
+        };
+        let checked = probe.validate(&inherited, path);
+        let DataTree { dataset, children } = probe;
+        node.children = children;
+        checked?;
+        Ok(std::mem::replace(&mut node.dataset, dataset))
+    }
+
+    /// Set child `name` of the node at `path` to `child` (added, or replacing the subtree of
+    /// that name, which is returned). The subtree must agree with what it inherits there.
+    ///
+    /// # Errors
+    /// [`CoreError::NameConflict`] for a name with `/` or empty; [`CoreError::NoSuchVariable`]
+    /// for a missing node; [`CoreError::CannotCombine`] for a disagreement. The tree is
+    /// unchanged on error.
+    pub fn set_child_at(
+        &mut self,
+        path: &str,
+        name: impl Into<Name>,
+        child: DataTree,
+    ) -> Result<Option<DataTree>> {
+        let name = name.into();
+        if name.contains('/') || name.is_empty() {
+            return Err(CoreError::NameConflict(name));
+        }
+        let mut inherited = self.inherited_at(path)?;
+        let node = self.node_mut(path)?;
+        inherited.extend(node.index_coords());
+        let base = if split(path).next().is_none() {
+            String::new()
+        } else {
+            format!("/{}", split(path).collect::<Vec<_>>().join("/"))
+        };
+        child.validate(&inherited, &format!("{base}/{name}"))?;
+        Ok(node.children.insert(name, child))
+    }
+
+    /// Remove child `name` of the node at `path`, returning its subtree.
+    ///
+    /// # Errors
+    /// [`CoreError::NoSuchVariable`] if there is no such node or child.
+    pub fn remove_child_at(&mut self, path: &str, name: &str) -> Result<DataTree> {
+        self.node_mut(path)?
+            .children
+            .shift_remove(name)
+            .ok_or_else(|| CoreError::NoSuchVariable(Name::from(name)))
+    }
+
     /// The coordinates children inherit: dimension (index) coordinates only, as in xarray.
     /// Other coordinates stay with the node that defines them.
     fn index_coords(&self) -> IndexMap<Name, Variable> {

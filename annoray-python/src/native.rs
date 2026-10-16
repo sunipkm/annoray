@@ -2837,7 +2837,7 @@ pub(crate) fn from_xarray(py: Python<'_>, obj: &Bound<'_, PyAny>) -> PyResult<Py
         return Ok(new_ds(py, ds)?.into_any());
     }
     if obj.is_instance(&xr.getattr("DataTree")?)? {
-        return Ok(Py::new(py, crate::tree::tree_from_xarray(py, obj)?)?.into_any());
+        return Ok(crate::tree::tree_from_xarray(py, obj)?.into_any());
     }
     Err(PyTypeError::new_err(
         "expected an xarray DataArray, Dataset or DataTree",

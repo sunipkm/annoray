@@ -43,7 +43,6 @@ from annoray._annoray import (
     from_xarray,
     full_like,
     merge,
-    open_datatree,
     polyval,
     set_stream_bytes,
     stream_bytes,
@@ -66,6 +65,8 @@ from annoray._functions import (
     unify_chunks,
 )
 from annoray._io import load_dataarray, load_dataset, open_dataset, open_mfdataset
+from annoray._tree import group_subtrees, open_datatree, open_groups
+from annoray._tree import map_over_datasets_fn as map_over_datasets
 from annoray._ufunc import apply_ufunc
 from annoray.dims import dimension
 
@@ -105,15 +106,18 @@ __all__ = [
     "from_xarray",
     "full_like",
     "get_options",
+    "group_subtrees",
     "infer_freq",
     "load_dataarray",
     "load_dataset",
     "map_blocks",
+    "map_over_datasets",
     "merge",
     "ones_like",
     "open_dataarray",
     "open_dataset",
     "open_datatree",
+    "open_groups",
     "open_mfdataset",
     "open_zarr",
     "polyval",

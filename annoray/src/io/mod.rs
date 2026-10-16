@@ -338,6 +338,14 @@ fn encode_tree(tree: &DataTree, format: Format) -> Result<RawDataset, Error> {
     Ok(raw)
 }
 
+impl ToZarr for DataTree {
+    fn to_zarr_with(&self, path: impl AsRef<Path>, opts: &zarr::ZarrOptions) -> Result<(), Error> {
+        let raw = encode_tree(self, Format::Netcdf4)?;
+        zarr::write(&raw, path.as_ref(), opts)?;
+        Ok(())
+    }
+}
+
 impl ToNetcdf for DataTree {
     fn to_netcdf_with(&self, path: impl AsRef<Path>, opts: &WriteOptions) -> Result<(), Error> {
         let raw = encode_tree(self, opts.format)?;

@@ -522,7 +522,8 @@ def test_datatree_matches_xarray():
         xr.testing.assert_allclose(
             got.drop_attrs(deep=True), node.to_dataset().load().drop_attrs(deep=True)
         )
-    assert set(ours) == set(theirs.children)
+    # Iteration: data variables, then children (as xarray).
+    assert set(ours) == set(theirs)
     assert "obs" in ours and "nope" not in ours
     with pytest.raises(KeyError):
         ours["nope"]

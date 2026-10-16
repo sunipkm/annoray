@@ -161,3 +161,61 @@ fn python_xarray_reads_our_tree() {
     );
     assert_eq!(String::from_utf8_lossy(&out.stdout).trim(), "OK");
 }
+
+#[test]
+fn edits_by_path_are_checked_first() {
+    let root = Dataset::new()
+        .with_coord(
+            "x",
+            Variable::new(["x"], array![1.0, 2.0].into_dyn()).unwrap(),
+        )
+        .unwrap();
+    let a = Dataset::new()
+        .with_var(
+            "v",
+            Variable::new(["x"], array![3.0, 4.0].into_dyn()).unwrap(),
+        )
+        .unwrap();
+    let mut tree = DataTree::new(root)
+        .with_child("a", DataTree::new(a))
+        .unwrap();
+    // A dataset disagreeing with the inherited x (length 3): refused, tree unchanged.
+    let bad = Dataset::new()
+        .with_var(
+            "v",
+            Variable::new(["x"], array![1.0, 2.0, 3.0].into_dyn()).unwrap(),
+        )
+        .unwrap();
+    assert!(matches!(
+        tree.set_dataset_at("/a", bad.clone()),
+        Err(CoreError::CannotCombine { .. })
+    ));
+    assert_eq!(tree.get("a").unwrap().dataset().data_vars()["v"].len(), 2);
+    assert!(tree.set_child_at("/a", "b", DataTree::new(bad)).is_err());
+    assert!(tree.get("a/b").is_err());
+    // Accepted edits.
+    let ok = Dataset::new()
+        .with_var(
+            "w",
+            Variable::new(["x"], array![7.0, 8.0].into_dyn()).unwrap(),
+        )
+        .unwrap();
+    let old = tree.set_dataset_at("a", ok.clone()).unwrap();
+    assert!(old.contains("v"));
+    assert!(
+        tree.set_child_at("a", "b", DataTree::new(ok))
+            .unwrap()
+            .is_none()
+    );
+    assert!(tree.get("/a/b").unwrap().dataset().contains("w"));
+    assert!(tree.set_child_at("a", "b/c", DataTree::default()).is_err());
+    let removed = tree.remove_child_at("/a", "b").unwrap();
+    assert!(removed.dataset().contains("w"));
+    assert!(tree.remove_child_at("/a", "b").is_err());
+    // A tree as a Zarr store, groups as subgroups.
+    let store = tmp("edits.zarr");
+    let _ = std::fs::remove_dir_all(&store);
+    annoray::io::ToZarr::to_zarr(&tree, &store).unwrap();
+    let back = open_datatree(&store).unwrap();
+    assert_eq!(back.paths(), tree.paths());
+}

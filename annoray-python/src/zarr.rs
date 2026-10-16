@@ -77,3 +77,42 @@ impl PyDataset {
             .map_err(xr_error)
     }
 }
+
+#[pymethods]
+impl crate::tree::PyDataTree {
+    /// Write this node's subtree as a Zarr store, groups as subgroups (`mode`, `zarr_format`
+    /// and `consolidated` as `Dataset.to_zarr`).
+    #[pyo3(signature = (store, mode=None, consolidated=None, zarr_format=None))]
+    fn to_zarr(
+        &self,
+        py: Python<'_>,
+        store: PathBuf,
+        mode: Option<&str>,
+        consolidated: Option<bool>,
+        zarr_format: Option<u8>,
+    ) -> PyResult<()> {
+        match mode.unwrap_or("w-") {
+            "w-" if store.exists() => {
+                return Err(PyFileExistsError::new_err(format!(
+                    "{} exists; pass mode=\"w\" to replace it",
+                    store.display()
+                )));
+            }
+            "w" | "w-" => {}
+            other => {
+                return Err(PyNotImplementedError::new_err(format!(
+                    "mode={other:?} (appending is not supported)"
+                )));
+            }
+        }
+        let format = match zarr_format.unwrap_or(3) {
+            2 => ZarrFormat::V2,
+            3 => ZarrFormat::V3,
+            other => return Err(PyValueError::new_err(format!("zarr_format={other}"))),
+        };
+        let opts = ZarrOptions::format(format).consolidated(consolidated.unwrap_or(true));
+        let sub = self.subtree_copy(py)?;
+        py.detach(|| sub.to_zarr_with(&store, &opts))
+            .map_err(xr_error)
+    }
+}

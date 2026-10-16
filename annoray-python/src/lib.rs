@@ -49,6 +49,7 @@ fn _annoray(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<stats::PyCoarsen>()?;
     m.add_class::<native::PyDt>()?;
     m.add_class::<tree::PyDataTree>()?;
+    m.add_class::<tree::TreeRoot>()?;
     m.add_class::<units::PyDimension>()?;
     m.add_class::<units::PyUnit>()?;
     m.add_class::<units::PyQuantity>()?;
