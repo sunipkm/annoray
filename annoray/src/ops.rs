@@ -39,6 +39,11 @@ pub enum BinOp {
     Mul,
     /// `/`
     Div,
+    /// The elementwise maximum (numpy's `maximum`: NaN wins). Units as for a comparison:
+    /// the right operand is converted into the left's unit, which the result keeps.
+    Max,
+    /// The elementwise minimum (numpy's `minimum`: NaN wins); units as for [`Max`](Self::Max).
+    Min,
 }
 
 impl BinOp {
@@ -48,6 +53,8 @@ impl BinOp {
             Self::Sub => "subtraction",
             Self::Mul => "multiplication",
             Self::Div => "division",
+            Self::Max => "maximum",
+            Self::Min => "minimum",
         }
     }
 }
@@ -217,6 +224,8 @@ macro_rules! int_op {
                             BinOp::Sub => p.checked_sub(*q),
                             BinOp::Mul => p.checked_mul(*q),
                             BinOp::Div => None,
+                            BinOp::Max => Some(*p.max(q)),
+                            BinOp::Min => Some(*p.min(q)),
                         }
                     };
                     TypedArray::$var(zip_map(&x, &y, $shape, f, $op.name())?)
@@ -301,6 +310,8 @@ fn in_place<F: num_like::Float + Send + Sync>(x: &ArrayViewD<'_, F>, y: &mut Arr
         BinOp::Sub => go(x, y, |p, q| p.sub(q)),
         BinOp::Mul => go(x, y, |p, q| p.mul(q)),
         BinOp::Div => go(x, y, |p, q| p.div(q)),
+        BinOp::Max => go(x, y, |p, q| p.max_nan(q)),
+        BinOp::Min => go(x, y, |p, q| p.min_nan(q)),
     }
 }
 
@@ -322,6 +333,8 @@ fn float_zip<F: num_like::Float + Send + Sync>(
         BinOp::Sub => zip_with(x, y, shape, op, |p, q| p.sub(q)),
         BinOp::Mul => zip_with(x, y, shape, op, |p, q| p.mul(q)),
         BinOp::Div => zip_with(x, y, shape, op, |p, q| p.div(q)),
+        BinOp::Max => zip_with(x, y, shape, op, |p, q| p.max_nan(q)),
+        BinOp::Min => zip_with(x, y, shape, op, |p, q| p.min_nan(q)),
     }
 }
 
@@ -376,6 +389,10 @@ mod num_like {
         fn sub(self, q: Self) -> Self;
         fn mul(self, q: Self) -> Self;
         fn div(self, q: Self) -> Self;
+        /// numpy's `maximum`: NaN if either is NaN.
+        fn max_nan(self, q: Self) -> Self;
+        /// numpy's `minimum`: NaN if either is NaN.
+        fn min_nan(self, q: Self) -> Self;
     }
 
     macro_rules! float {
@@ -385,6 +402,12 @@ mod num_like {
                 fn sub(self, q: Self) -> Self { self - q }
                 fn mul(self, q: Self) -> Self { self * q }
                 fn div(self, q: Self) -> Self { self / q }
+                fn max_nan(self, q: Self) -> Self {
+                    if self.is_nan() || q.is_nan() { <$t>::NAN } else { self.max(q) }
+                }
+                fn min_nan(self, q: Self) -> Self {
+                    if self.is_nan() || q.is_nan() { <$t>::NAN } else { self.min(q) }
+                }
             }
         )*};
     }
@@ -611,6 +634,10 @@ impl<S: Repr> DataArrayBase<S> {
                 }
                 BinOp::Mul => (Some(lu.mul(ru)?), None, None),
                 BinOp::Div => (Some(lu.div(ru)?), None, None),
+                BinOp::Max | BinOp::Min => {
+                    let plan = lu.plan_cmp(ru, policy)?;
+                    (Some(plan.result), plan.lhs, plan.rhs)
+                }
             }
         };
         let unit = if self.unit().is_none() && rhs.unit().is_none() {

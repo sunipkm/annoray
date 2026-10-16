@@ -53,6 +53,7 @@ mod dataarray;
 mod dataset;
 mod display;
 mod dt;
+mod elementwise;
 mod encoding;
 mod error;
 mod fill;
@@ -92,6 +93,7 @@ pub use combine::{
 pub use dataarray::{Coords, DataArray, DataArrayBase, DataArrayView, DataArrayViewMut};
 pub use dataset::{Dataset, DatasetBase, DatasetView, DatasetViewMut};
 pub use dt::DtComponent;
+pub use elementwise::{ClipBound, dot};
 pub use encoding::{DatasetEncoding, Encoding};
 pub use error::{CoreError, IndexError, Result};
 pub use fill::{FillMethod, InterpNaOptions};

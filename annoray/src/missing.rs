@@ -119,7 +119,7 @@ impl<S: Repr> VariableBase<S> {
     }
 
     /// `f` applied lazily, box by box (unit and attributes kept).
-    fn lazy_map(
+    pub(crate) fn lazy_map(
         &self,
         what: &'static str,
         f: impl Fn(TypedArray<Owned>) -> Result<TypedArray<Owned>> + Send + Sync + 'static,
