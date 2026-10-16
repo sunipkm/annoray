@@ -34,7 +34,7 @@ use indexmap::IndexMap;
 use ndarray::{ArrayD, Axis, IxDyn, Slice};
 
 use crate::lookup::{Keys, index_keys, unix_origin_ns};
-use crate::slabs::by_slabs;
+use crate::slabs::by_lanes as lanes;
 use crate::{
     AttrValue, CoreError, DType, DataArray, DataArrayBase, Dataset, DatasetBase, Name, Repr,
     Result, TypedArray, Variable, VariableBase,
@@ -45,23 +45,23 @@ fn invalid(reason: impl Into<String>) -> CoreError {
 }
 
 /// A one-dimensional coordinate as numbers.
-struct Positions {
-    dim: Name,
-    x: Vec<f64>,
+pub(crate) struct Positions {
+    pub(crate) dim: Name,
+    pub(crate) x: Vec<f64>,
     /// The unit of `x` (absolute: °C stays °C).
-    unit: Option<Unit>,
+    pub(crate) unit: Option<Unit>,
 }
 
 /// How to place time coordinates on a number line.
 #[derive(Clone, Copy)]
-enum Origin {
+pub(crate) enum Origin {
     /// Relative to the first valid time (steps only matter).
     First,
     /// Since 1970-01-01 (`polyfit`, as xarray).
     Unix,
 }
 
-fn positions<C: Repr>(
+pub(crate) fn positions<C: Repr>(
     name: &str,
     coord: Option<&VariableBase<C>>,
     time_unit: Option<&Unit>,
@@ -263,18 +263,6 @@ fn numbers<S: Repr>(v: &VariableBase<S>) -> Result<(ArrayD<f64>, bool)> {
         crate::ops::to_f64(&typed, None)?,
         typed.dtype() == DType::F32,
     ))
-}
-
-/// `f` of `da` lane by lane along `dim`: lazy data in slabs along another dimension.
-fn lanes<S: Repr>(
-    da: &DataArrayBase<S>,
-    dim: &Name,
-    f: impl Fn(&DataArray) -> Result<DataArray>,
-) -> Result<DataArray> {
-    match da.dims().iter().find(|d| *d != dim) {
-        Some(other) => by_slabs(da, other, 1, f),
-        None => f(&da.to_owned()),
-    }
 }
 
 fn variable(dims: Vec<Name>, data: ArrayD<f64>, f32: bool, unit: Option<Unit>) -> Result<Variable> {

@@ -11,6 +11,7 @@
 mod alloc;
 mod calculus;
 mod convert;
+mod fill;
 mod native;
 mod raw;
 mod reshape;

@@ -49,3 +49,16 @@ pub(crate) fn by_slabs<S: Repr>(
     let refs: Vec<&DataArray> = parts.iter().collect();
     concat(&refs, dim, &ConcatOptions::default())
 }
+
+/// `f` of `da` lane by lane along `dim` (whole lanes at once): lazy data in slabs along
+/// another dimension, or whole when `dim` is the only one.
+pub(crate) fn by_lanes<S: Repr>(
+    da: &DataArrayBase<S>,
+    dim: &crate::Name,
+    f: impl Fn(&DataArray) -> Result<DataArray>,
+) -> Result<DataArray> {
+    match da.dims().iter().find(|d| *d != dim) {
+        Some(other) => by_slabs(da, other, 1, f),
+        None => f(&da.to_owned()),
+    }
+}
