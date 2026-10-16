@@ -136,6 +136,59 @@ impl<S: Repr> DataArrayBase<S> {
         Ok(DataArrayBase::from_parts(self.name().cloned(), var, coords))
     }
 
+    /// Rename dimensions and coordinates (`old → new` pairs; xarray's `rename` with a
+    /// mapping): a name may be a dimension, a coordinate, or both.
+    ///
+    /// # Errors
+    /// [`CoreError::NoSuchDim`] for a name that is neither; [`CoreError::DuplicateDim`] or
+    /// [`CoreError::NameConflict`] if a new name is taken.
+    pub fn rename_dims(&self, pairs: &[(&str, &str)]) -> Result<DataArray> {
+        let mut var = self.variable().to_owned();
+        let mut coords: indexmap::IndexMap<Name, Variable> = self
+            .coords()
+            .iter()
+            .map(|(k, c)| (k.clone(), c.to_owned()))
+            .collect();
+        for (old, new) in pairs {
+            let to = Name::from(*new);
+            let is_dim = var.dims().iter().any(|d| d == *old)
+                || coords.values().any(|c| c.dims().iter().any(|d| d == *old));
+            let is_coord = coords.contains_key(*old);
+            if !is_dim && !is_coord {
+                return Err(CoreError::NoSuchDim(Name::from(*old)));
+            }
+            if is_dim {
+                if var.dims().contains(&to) {
+                    return Err(CoreError::DuplicateDim(to));
+                }
+                if var.dims().iter().any(|d| d == *old) {
+                    var = var.rename_dim(old, &to)?;
+                }
+                coords = coords
+                    .into_iter()
+                    .map(|(k, c)| {
+                        let c = if c.dims().iter().any(|d| d == *old) {
+                            c.rename_dim(old, &to)?
+                        } else {
+                            c
+                        };
+                        Ok((k, c))
+                    })
+                    .collect::<Result<_>>()?;
+            }
+            if is_coord {
+                if coords.contains_key(&to) {
+                    return Err(CoreError::NameConflict(to));
+                }
+                coords = coords
+                    .into_iter()
+                    .map(|(k, c)| if k == *old { (to.clone(), c) } else { (k, c) })
+                    .collect();
+            }
+        }
+        Ok(DataArrayBase::from_parts(self.name().cloned(), var, coords))
+    }
+
     /// Drop the entries of `dim` whose labels are `labels` (each must exist).
     ///
     /// # Errors

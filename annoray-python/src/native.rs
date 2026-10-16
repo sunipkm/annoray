@@ -49,7 +49,7 @@ fn dims_from_py(dims: Option<&Bound<'_, PyAny>>, ndim: usize) -> PyResult<Vec<St
 /// Values, attributes and unit as a variable. The unit comes from `units`, a pint-like
 /// quantity, or a `"units"` attribute; an attribute that does not parse stays an attribute
 /// (with a warning), as when reading files.
-fn variable_from_py(
+pub(crate) fn variable_from_py(
     py: Python<'_>,
     dims: Option<&Bound<'_, PyAny>>,
     data: &Bound<'_, PyAny>,
@@ -545,7 +545,7 @@ impl PyDataArray {
         Ok(new_da(py, out)?.into_any())
     }
 
-    fn binary_with(
+    pub(crate) fn binary_with(
         &self,
         py: Python<'_>,
         op: BinOp,
@@ -795,9 +795,36 @@ impl PyDataArray {
         new_da(py, py.detach(|| self.inner.transpose(&[])).py_err()?)
     }
 
-    /// A copy with another name.
-    fn rename(&self, py: Python<'_>, name: String) -> PyResult<Py<PyDataArray>> {
-        new_da(py, self.inner.clone().with_name(name))
+    /// A copy with another name (`rename("v")`), or with dimensions and coordinates renamed
+    /// (`rename({"x": "lon"})`, `rename(x="lon")`).
+    #[pyo3(signature = (new_name_or_name_dict=None, **names))]
+    fn rename(
+        &self,
+        py: Python<'_>,
+        new_name_or_name_dict: Option<&Bound<'_, PyAny>>,
+        names: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<Py<PyDataArray>> {
+        if let Some(n) = new_name_or_name_dict.filter(|n| n.is_instance_of::<PyString>()) {
+            return new_da(py, self.inner.clone().with_name(n.extract::<String>()?));
+        }
+        let mut pairs: Vec<(String, String)> = Vec::new();
+        for d in [
+            new_name_or_name_dict.filter(|d| !d.is_none()),
+            names.map(|n| n.as_any()),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            let d = d.cast::<PyDict>()?;
+            for (k, v) in d.iter() {
+                pairs.push((k.extract()?, v.extract()?));
+            }
+        }
+        let refs: Vec<(&str, &str)> = pairs
+            .iter()
+            .map(|(a, b)| (a.as_str(), b.as_str()))
+            .collect();
+        new_da(py, py.detach(|| self.inner.rename_dims(&refs)).py_err()?)
     }
 
     /// Select by position: `da.isel(time=0, x=slice(1, 3))`, lists and masks too.
@@ -1699,7 +1726,7 @@ impl PyGroupBy {
         with_groups!(self, py, |g| g.reduce(op, opts))
     }
 
-    fn binary_with(
+    pub(crate) fn binary_with(
         &self,
         py: Python<'_>,
         op: BinOp,

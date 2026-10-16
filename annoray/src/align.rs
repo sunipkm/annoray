@@ -6,6 +6,10 @@
 //! strings and booleans have no missing value and give an error. Objects whose labels already
 //! match are not touched (lazy data stays unread).
 //!
+//! Labels must have the same element type and unit to be joined: integer and float
+//! coordinates, or `m` and `km`, are an error rather than an implicit cast (xarray compares
+//! integers with floats by value). Convert one side explicitly.
+//!
 //! Ordering follows pandas: an inner join keeps the first object's order, an outer join sorts
 //! (unless the indexes are equal or one is empty).
 
@@ -255,7 +259,8 @@ pub(crate) fn plan(objs: &[Obj<'_>], join: Join) -> Result<Plan> {
                     return Err(cannot(
                         &dim,
                         format!(
-                            "coordinates differ in type or unit ({} {:?} vs {} {:?})",
+                            "coordinates differ in type or unit ({} {:?} vs {} {:?}); \
+                             convert one explicitly (no implicit casts between label types)",
                             first.1, first.2, this.1, this.2
                         ),
                     ));

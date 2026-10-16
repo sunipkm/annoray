@@ -13,6 +13,7 @@ mod calculus;
 mod convert;
 mod elementwise;
 mod fill;
+mod math;
 mod native;
 mod raw;
 mod reshape;
