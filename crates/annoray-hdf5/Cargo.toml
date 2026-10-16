@@ -14,21 +14,19 @@ keywords = ["hdf5", "netcdf", "scientific", "file-format", "compression"]
 categories = ["science", "encoding", "parser-implementations"]
 
 [dependencies]
-lz4_flex = { workspace = true, optional = true }
+annoray-codecs.workspace = true
 memmap2.workspace = true
-miniz_oxide.workspace = true
 ndarray.workspace = true
 rayon = { workspace = true, optional = true }
-ruzstd = { workspace = true, optional = true }
 thiserror.workspace = true
 
 [features]
 # Decompress chunks in parallel.
 rayon = ["dep:rayon"]
 # Read Zstandard-compressed chunks (HDF5 filter 32015, as netCDF-C writes), in pure Rust.
-zstd = ["dep:ruzstd"]
+zstd = ["annoray-codecs/zstd"]
 # Read LZ4-compressed chunks (HDF5 filter 32004), in pure Rust.
-lz4 = ["dep:lz4_flex"]
+lz4 = ["annoray-codecs/lz4"]
 
 [dev-dependencies]
 proptest.workspace = true

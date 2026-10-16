@@ -1,0 +1,9 @@
+{
+  "units": "degC",
+  "long_name": "temperature",
+  "coordinates": "station",
+  "_ARRAY_DIMENSIONS": [
+    "time",
+    "x"
+  ]
+}

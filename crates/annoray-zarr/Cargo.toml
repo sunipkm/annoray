@@ -1,0 +1,32 @@
+[package]
+name = "annoray-zarr"
+description = "Pure-Rust Zarr v2 and v3 reader and writer for local stores: regular chunks, sharding, the common codecs, safe on untrusted stores"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/annoray-zarr"
+readme = "README.md"
+keywords = ["zarr", "array", "scientific", "file-format", "compression"]
+categories = ["science", "encoding", "parser-implementations"]
+
+[dependencies]
+annoray-codecs.workspace = true
+ndarray.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[features]
+# Zstandard chunks (Zarr v3's default compressor in zarr-python), in pure Rust.
+zstd = ["annoray-codecs/zstd"]
+# LZ4 chunks (alone and inside Blosc; zarr-python v2's default Blosc codec), in pure Rust.
+lz4 = ["annoray-codecs/lz4"]
+
+[dev-dependencies]
+proptest.workspace = true
+
+[lints]
+workspace = true

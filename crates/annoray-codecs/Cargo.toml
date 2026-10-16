@@ -1,0 +1,32 @@
+[package]
+name = "annoray-codecs"
+description = "Pure-Rust compression codecs for scientific array formats (Blosc, bzip2, zlib/gzip, Zstandard, LZ4, shuffles, CRCs), safe on untrusted input"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/annoray-codecs"
+readme = "README.md"
+keywords = ["compression", "blosc", "zarr", "hdf5", "codec"]
+categories = ["compression", "science", "encoding"]
+
+[dependencies]
+lz4_flex = { workspace = true, optional = true }
+miniz_oxide.workspace = true
+ruzstd = { workspace = true, optional = true }
+thiserror.workspace = true
+
+[features]
+# Zstandard (alone and inside Blosc), in pure Rust.
+zstd = ["dep:ruzstd"]
+# LZ4 (alone and inside Blosc), in pure Rust.
+lz4 = ["dep:lz4_flex"]
+
+[dev-dependencies]
+proptest.workspace = true
+
+[lints]
+workspace = true

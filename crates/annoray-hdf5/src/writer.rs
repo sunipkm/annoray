@@ -727,7 +727,7 @@ impl Plan<'_> {
                 chunk.data = shuffle(&chunk.data, esize);
             }
             if let Some(level) = ds.deflate {
-                chunk.data = miniz_oxide::deflate::compress_to_vec_zlib(&chunk.data, level.min(9));
+                chunk.data = annoray_codecs::zlib::zlib_compress(&chunk.data, level);
             }
             if let Some(c) = ds.compression {
                 chunk.data = compress(c, &chunk.data, esize)?;
@@ -1366,30 +1366,22 @@ fn blosc(ds: &WDataset) -> bool {
 }
 
 /// Blosc's code for a codec inside its frames.
-fn blosc_code(codec: BloscCodec) -> Result<u8, Error> {
-    match codec {
-        BloscCodec::Lz4 | BloscCodec::Lz4Hc => Ok(1),
-        BloscCodec::Zlib => Ok(3),
-        BloscCodec::Zstd => Ok(4),
-        _ => Err(Error::Unsupported("writing Blosc with BloscLZ".into())),
-    }
-}
-
 /// Encode one chunk with a plugin codec.
 fn compress(c: Compression, data: &[u8], esize: usize) -> Result<Vec<u8>, Error> {
     match c {
-        #[cfg(feature = "zstd")]
-        Compression::Zstd { .. } => Ok(crate::filters::zstd_compress(data)),
-        #[cfg(feature = "lz4")]
+        Compression::Zstd { .. } if annoray_codecs::zstd::available() => {
+            Ok(annoray_codecs::zstd::compress(data))
+        }
         Compression::Lz4 => crate::filters::lz4_compress(data),
         Compression::Blosc {
             codec,
             level,
             shuffle,
-        } => crate::codecs::blosc::compress(data, esize, blosc_code(codec)?, level, shuffle),
-        #[cfg(not(all(feature = "zstd", feature = "lz4")))]
+        } => Ok(annoray_codecs::blosc::compress(
+            data, esize, codec, level, shuffle,
+        )?),
         other => Err(Error::Unsupported(format!(
-            "writing {other:?} (needs the `zstd`/`lz4` features)"
+            "writing {other:?} (needs the `zstd` feature)"
         ))),
     }
 }

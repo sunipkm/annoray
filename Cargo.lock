@@ -24,6 +24,7 @@ dependencies = [
  "annoray-hdf5",
  "annoray-macros",
  "annoray-units",
+ "annoray-zarr",
  "chrono",
  "glob",
  "indexmap",
@@ -39,16 +40,25 @@ dependencies = [
 ]
 
 [[package]]
-name = "annoray-hdf5"
+name = "annoray-codecs"
 version = "0.0.0"
 dependencies = [
  "lz4_flex",
- "memmap2",
  "miniz_oxide",
+ "proptest",
+ "ruzstd",
+ "thiserror",
+]
+
+[[package]]
+name = "annoray-hdf5"
+version = "0.0.0"
+dependencies = [
+ "annoray-codecs",
+ "memmap2",
  "ndarray",
  "proptest",
  "rayon",
- "ruzstd",
  "thiserror",
 ]
 
@@ -83,6 +93,17 @@ dependencies = [
  "typenum",
  "uom",
  "whippyunits",
+]
+
+[[package]]
+name = "annoray-zarr"
+version = "0.0.0"
+dependencies = [
+ "annoray-codecs",
+ "ndarray",
+ "proptest",
+ "serde_json",
+ "thiserror",
 ]
 
 [[package]]

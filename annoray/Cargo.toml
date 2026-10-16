@@ -17,6 +17,7 @@ categories = ["science", "science::geo", "data-structures"]
 annoray-hdf5.workspace = true
 annoray-macros.workspace = true
 annoray-units.workspace = true
+annoray-zarr.workspace = true
 chrono.workspace = true
 glob.workspace = true
 indexmap.workspace = true
@@ -35,8 +36,8 @@ default = ["rayon", "zstd", "lz4"]
 rayon = ["dep:rayon", "ndarray/rayon", "annoray-hdf5/rayon"]
 # Read and write Zstandard- and LZ4-compressed HDF5/netCDF-4 chunks (pure Rust). LZF is always
 # read.
-zstd = ["annoray-hdf5/zstd"]
-lz4 = ["annoray-hdf5/lz4"]
+zstd = ["annoray-hdf5/zstd", "annoray-zarr/zstd"]
+lz4 = ["annoray-hdf5/lz4", "annoray-zarr/lz4"]
 # The netCDF-C/HDF5 C libraries as an alternative backend (built from source; needs cmake).
 # Not needed for I/O: netCDF-3, netCDF-4 and HDF5 are read and written in pure Rust.
 netcdf-c = ["dep:netcdf"]

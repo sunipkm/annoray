@@ -619,6 +619,15 @@ class Dataset(_Reductions):
         encoding: Mapping[str, Mapping[str, Any]] | None = None,
         unlimited_dims: Sequence[str] | None = None,
     ) -> None: ...
+    def to_zarr(
+        self,
+        store: str | os.PathLike[str],
+        mode: Literal["w", "w-"] | None = None,
+        group: str | None = None,
+        encoding: Mapping[str, Mapping[str, Any]] | None = None,
+        consolidated: bool | None = None,
+        zarr_format: Literal[2, 3] | None = None,
+    ) -> None: ...
     def to_xarray(self) -> Any: ...
 
 class GroupBy(_Reductions):

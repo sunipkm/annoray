@@ -34,8 +34,7 @@ pub(crate) fn decode(
             continue;
         }
         data = match f.id {
-            DEFLATE => miniz_oxide::inflate::decompress_to_vec_zlib_with_limit(&data, expected)
-                .map_err(|e| bad(format!("deflate: {e:?}")))?,
+            DEFLATE => annoray_codecs::zlib::zlib_decompress(&data, expected)?,
             SHUFFLE => {
                 let size = f
                     .client
@@ -64,25 +63,11 @@ pub(crate) fn decode(
             LZF => lzf_decompress(&data, expected)?,
             NBIT => crate::codecs::nbit::decompress(&data, &f.client, expected)?,
             SCALEOFFSET => crate::codecs::scaleoffset::decompress(&data, &f.client, expected)?,
-            BZIP2 => crate::codecs::bzip2::decompress(&data, expected)?,
-            BLOSC => crate::codecs::blosc::decompress(&data, expected)?,
+            BZIP2 => annoray_codecs::bzip2::decompress(&data, expected)?,
+            BLOSC => annoray_codecs::blosc::decompress(&data, expected)?,
             BITSHUFFLE => crate::codecs::bitshuffle::decompress(&data, &f.client, expected)?,
-            #[cfg(feature = "zstd")]
-            ZSTD => zstd_decompress(&data, expected)?,
-            #[cfg(feature = "lz4")]
+            ZSTD => annoray_codecs::zstd::decompress(&data, expected)?,
             LZ4 => lz4_decompress(&data, expected)?,
-            #[cfg(not(feature = "zstd"))]
-            ZSTD => {
-                return Err(Error::Unsupported(
-                    "Zstandard-compressed data (enable the `zstd` feature)".into(),
-                ));
-            }
-            #[cfg(not(feature = "lz4"))]
-            LZ4 => {
-                return Err(Error::Unsupported(
-                    "LZ4-compressed data (enable the `lz4` feature)".into(),
-                ));
-            }
             id => return Err(Error::Unsupported(format!("HDF5 filter {id}"))),
         };
     }
@@ -133,29 +118,9 @@ pub(crate) fn lzf_decompress(input: &[u8], limit: usize) -> Result<Vec<u8>, Erro
     Ok(out)
 }
 
-/// One Zstandard frame (the HDF5 zstd filter's chunk format), producing at most `limit`
-/// bytes.
-#[cfg(feature = "zstd")]
-pub(crate) fn zstd_decompress(input: &[u8], limit: usize) -> Result<Vec<u8>, Error> {
-    use std::io::Read;
-    let mut decoder =
-        ruzstd::decoding::StreamingDecoder::new(input).map_err(|e| bad(format!("zstd: {e}")))?;
-    let mut out = Vec::with_capacity(limit);
-    let cap = u64::try_from(limit).unwrap_or(u64::MAX).saturating_add(1);
-    (&mut decoder)
-        .take(cap)
-        .read_to_end(&mut out)
-        .map_err(|e| bad(format!("zstd: {e}")))?;
-    if out.len() > limit {
-        return Err(bad("zstd: chunk larger than expected"));
-    }
-    Ok(out)
-}
-
 /// The HDF5 LZ4 filter's chunk format: the original size (8 bytes) and block size (4 bytes),
 /// big-endian, then blocks, each a 4-byte compressed size and LZ4 block data (stored raw
 /// when that size equals the block's).
-#[cfg(feature = "lz4")]
 pub(crate) fn lz4_decompress(input: &[u8], limit: usize) -> Result<Vec<u8>, Error> {
     let corrupt = || bad("lz4: corrupt chunk");
     let be = |at: usize, n: usize| -> Result<u64, Error> {
@@ -180,46 +145,17 @@ pub(crate) fn lz4_decompress(input: &[u8], limit: usize) -> Result<Vec<u8>, Erro
         if size == want {
             out.extend_from_slice(data);
         } else {
-            let start = out.len();
-            out.resize(start.checked_add(want).ok_or_else(corrupt)?, 0);
-            let dst = out.get_mut(start..).ok_or_else(corrupt)?;
-            let n = lz4_flex::block::decompress_into(data, dst)
-                .map_err(|e| bad(format!("lz4: {e}")))?;
-            if n != want {
-                return Err(corrupt());
-            }
+            out.extend(annoray_codecs::lz4::block_decompress(data, want)?);
         }
         ip = end;
     }
     Ok(out)
 }
 
-/// One Zstandard frame (at Zstandard's fastest level, the one `ruzstd` implements), with its
-/// content size in the header: the HDF5 zstd plugin sizes its output buffer from it, and
-/// `ruzstd` leaves it out.
-#[cfg(feature = "zstd")]
-pub(crate) fn zstd_compress(data: &[u8]) -> Vec<u8> {
-    let mut frame =
-        ruzstd::encoding::compress_to_vec(data, ruzstd::encoding::CompressionLevel::Fastest);
-    // Header: magic (4), descriptor (1), window descriptor (1, as single-segment is off),
-    // then the content size if the descriptor's top two bits say so (3 = 8 bytes).
-    let plain = frame.get(..4) == Some(&[0x28, 0xB5, 0x2F, 0xFD][..])
-        && frame.get(4).is_some_and(|d| d & 0xE3 == 0); // no content size, window, no dictionary
-    if plain {
-        if let Some(d) = frame.get_mut(4) {
-            *d |= 0xC0;
-        }
-        let size = (data.len() as u64).to_le_bytes();
-        frame.splice(6..6, size);
-    }
-    frame
-}
-
 /// The HDF5 LZ4 filter's chunk format, as one block (stored raw if LZ4 does not shrink it).
-#[cfg(feature = "lz4")]
 pub(crate) fn lz4_compress(data: &[u8]) -> Result<Vec<u8>, Error> {
     let n = u32::try_from(data.len()).map_err(|_| bad("lz4: chunk too large"))?;
-    let c = lz4_flex::block::compress(data);
+    let c = annoray_codecs::lz4::block_compress(data)?;
     let body: &[u8] = if c.len() < data.len() { &c } else { data };
     let mut out = Vec::with_capacity(body.len().saturating_add(16));
     out.extend_from_slice(&(data.len() as u64).to_be_bytes());
@@ -233,59 +169,7 @@ pub(crate) fn lz4_compress(data: &[u8]) -> Result<Vec<u8>, Error> {
     Ok(out)
 }
 
-/// Bytes grouped by position within each element → element-interleaved. Writes are
-/// sequential (one element at a time, gathered from the byte planes).
-pub(crate) fn unshuffle(data: &[u8], size: usize) -> Vec<u8> {
-    let Some(n) = data.len().checked_div(size).filter(|_| size > 1) else {
-        return data.to_vec();
-    };
-    let body = n.saturating_mul(size);
-    let (planes_data, tail) = data.split_at(body.min(data.len()));
-    let planes: Vec<&[u8]> = planes_data.chunks_exact(n.max(1)).collect();
-    let mut out = Vec::with_capacity(data.len());
-    match size {
-        2 => unshuffle_n::<2>(&planes, n, &mut out),
-        4 => unshuffle_n::<4>(&planes, n, &mut out),
-        8 => unshuffle_n::<8>(&planes, n, &mut out),
-        _ => {
-            for e in 0..n {
-                out.extend(planes.iter().map(|p| p.get(e).copied().unwrap_or(0)));
-            }
-        }
-    }
-    // A trailing partial element (if any) is kept as it is.
-    out.extend_from_slice(tail);
-    out
-}
-
-fn unshuffle_n<const S: usize>(planes: &[&[u8]], n: usize, out: &mut Vec<u8>) {
-    let p: [&[u8]; S] = std::array::from_fn(|b| planes.get(b).copied().unwrap_or(&[]));
-    for e in 0..n {
-        let elem: [u8; S] =
-            std::array::from_fn(|b| p.get(b).and_then(|x| x.get(e)).copied().unwrap_or(0));
-        out.extend_from_slice(&elem);
-    }
-}
-
-/// Element-interleaved → bytes grouped by position within each element. Writes are
-/// sequential (one byte plane at a time).
-pub(crate) fn shuffle(data: &[u8], size: usize) -> Vec<u8> {
-    let Some(n) = data.len().checked_div(size).filter(|_| size > 1) else {
-        return data.to_vec();
-    };
-    let body = n.saturating_mul(size);
-    let (elems, tail) = data.split_at(body.min(data.len()));
-    let mut out = Vec::with_capacity(data.len());
-    for b in 0..size {
-        out.extend(
-            elems
-                .chunks_exact(size)
-                .map(|el| el.get(b).copied().unwrap_or(0)),
-        );
-    }
-    out.extend_from_slice(tail);
-    out
-}
+pub(crate) use annoray_codecs::shuffle::{shuffle, unshuffle};
 
 /// HDF5's Fletcher-32 checksum (H5_checksum_fletcher32), stored big-endian after the data.
 pub(crate) fn fletcher32(data: &[u8]) -> u32 {
@@ -321,16 +205,6 @@ pub(crate) fn fletcher32(data: &[u8]) -> u32 {
 mod tests {
     use super::*;
 
-    #[cfg(feature = "zstd")]
-    #[test]
-    fn zstd_frames_carry_their_content_size() {
-        let data: Vec<u8> = (0..5000u32).map(|i| (i % 13) as u8).collect();
-        let frame = zstd_compress(&data);
-        assert_eq!(frame[4] & 0xC0, 0xC0);
-        assert_eq!(frame[6..14], (data.len() as u64).to_le_bytes());
-        assert_eq!(zstd_decompress(&frame, data.len()).unwrap(), data);
-    }
-
     #[test]
     fn lzf_decodes_literals_and_back_references() {
         // "abcabcabcd": 3 literals, a back-reference of 6 bytes at distance 3, 1 literal.
@@ -355,28 +229,11 @@ mod tests {
         framed.extend_from_slice(&(data.len() as u64).to_be_bytes());
         framed.extend_from_slice(&4096u32.to_be_bytes());
         for block in data.chunks(4096) {
-            let c = lz4_flex::block::compress(block);
+            let c = annoray_codecs::lz4::block_compress(block).unwrap();
             framed.extend_from_slice(&(c.len() as u32).to_be_bytes());
             framed.extend_from_slice(&c);
         }
         assert_eq!(lz4_decompress(&framed, data.len()).unwrap(), data);
         assert!(lz4_decompress(&framed, 10).is_err());
-    }
-
-    #[test]
-    fn shuffle_round_trips() {
-        let data: Vec<u8> = (0..24).collect();
-        for size in [1, 2, 4, 8, 3] {
-            assert_eq!(unshuffle(&shuffle(&data, size), size), data, "size {size}");
-        }
-        assert_eq!(shuffle(&[1, 2, 3, 4], 2), vec![1, 3, 2, 4]);
-        // A trailing partial element stays in place.
-        let odd: Vec<u8> = (0..27).collect();
-        for size in [2, 4, 8, 5] {
-            let s = shuffle(&odd, size);
-            assert_eq!(s.len(), odd.len());
-            assert_eq!(unshuffle(&s, size), odd, "size {size}");
-        }
-        assert_eq!(shuffle(&[1, 2, 3, 4, 9], 2), vec![1, 3, 2, 4, 9]);
     }
 }

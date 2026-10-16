@@ -21,6 +21,7 @@ mod stack;
 mod stats;
 mod tree;
 mod units;
+mod zarr;
 
 use pyo3::prelude::*;
 

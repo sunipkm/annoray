@@ -76,12 +76,28 @@ __all__ = [
     "open_dataset",
     "open_datatree",
     "open_mfdataset",
+    "open_zarr",
     "polyval",
     "set_stream_bytes",
     "stream_bytes",
     "to_astropy",
     "to_netcdf",
+    "to_zarr",
 ]
+
+
+def open_zarr(store, group=None, **kwargs):
+    """Open a Zarr store (v2 or v3 directory) lazily and CF-decode it; `open_dataset`
+    recognises stores too."""
+    return open_dataset(store, group=group, **kwargs)
+
+
+def to_zarr(obj, store, **kwargs) -> None:
+    """Write an annoray ``Dataset`` (or ``DataArray``, as a one-variable dataset) as a Zarr
+    store; see ``Dataset.to_zarr``."""
+    if isinstance(obj, DataArray):
+        obj = obj.to_dataset()
+    obj.to_zarr(store, **kwargs)
 
 
 def to_netcdf(obj, path, **kwargs) -> None:

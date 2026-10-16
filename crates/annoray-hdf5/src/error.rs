@@ -24,3 +24,12 @@ pub type Result<T, E = Error> = core::result::Result<T, E>;
 pub(crate) fn bad(message: impl Into<String>) -> Error {
     Error::Invalid(message.into())
 }
+
+impl From<annoray_codecs::Error> for Error {
+    fn from(e: annoray_codecs::Error) -> Self {
+        match e {
+            annoray_codecs::Error::Unsupported(m) => Self::Unsupported(m),
+            other => Self::Invalid(other.to_string()),
+        }
+    }
+}

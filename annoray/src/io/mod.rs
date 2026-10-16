@@ -1,6 +1,7 @@
 //! Reading and writing files.
 //!
-//! netCDF-3, netCDF-4 and HDF5 are read and written in pure Rust; files are memory-mapped.
+//! netCDF-3, netCDF-4, HDF5 and Zarr (v2 and v3 directory stores) are read and written in
+//! pure Rust; files are memory-mapped.
 //! The optional `netcdf-c` feature adds the C libraries as an alternative backend.
 //!
 //! ```no_run
@@ -20,6 +21,7 @@ pub mod netcdf4;
 #[cfg(feature = "netcdf-c")]
 pub mod netcdf_c;
 mod raw;
+pub mod zarr;
 
 pub use raw::{
     Backend, FileBytes, Format, IoError, RawData, RawDataset, RawDim, RawVariable, Result, Storage,
@@ -116,7 +118,8 @@ fn not_netcdf(path: &Path) -> IoError {
 }
 
 /// Picks a backend per file, all pure Rust: netCDF-3 via [`netcdf3::Netcdf3`], netCDF-4 and
-/// HDF5 via [`netcdf4::Netcdf4`]. Files are memory-mapped, so opening is cheap.
+/// HDF5 via [`netcdf4::Netcdf4`], Zarr directories via [`zarr`]. Files are memory-mapped, so
+/// opening is cheap.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct AutoBackend;
 
@@ -126,6 +129,9 @@ impl Backend for AutoBackend {
     }
 
     fn read(&self, path: &Path) -> Result<RawDataset> {
+        if zarr::is_zarr(path) {
+            return zarr::read(path, false);
+        }
         let bytes = map_file(path)?;
         if netcdf3::is_netcdf3(&bytes) {
             return netcdf3::Netcdf3File::from_file_bytes(bytes)?.to_raw();
@@ -137,6 +143,9 @@ impl Backend for AutoBackend {
     }
 
     fn read_lazy(&self, path: &Path) -> Result<RawDataset> {
+        if zarr::is_zarr(path) {
+            return zarr::read(path, true);
+        }
         let bytes = map_file(path)?;
         if netcdf3::is_netcdf3(&bytes) {
             let file = netcdf3::Netcdf3File::from_file_bytes(bytes)?;
@@ -208,6 +217,40 @@ impl<S: Repr> ToNetcdf for DatasetBase<S> {
     fn to_netcdf_with(&self, path: impl AsRef<Path>, opts: &WriteOptions) -> Result<(), Error> {
         to_netcdf_with_backend(default_backend(), self, path, opts)
     }
+}
+
+/// Writing datasets to Zarr stores.
+pub trait ToZarr {
+    /// Write a Zarr v3 store (as zarr-python 3) with consolidated metadata, replacing `path`.
+    ///
+    /// # Errors
+    /// Encoding or I/O errors.
+    fn to_zarr(&self, path: impl AsRef<Path>) -> Result<(), Error> {
+        self.to_zarr_with(path, &zarr::ZarrOptions::default())
+    }
+
+    /// Write with options (format, compressor, consolidated metadata).
+    ///
+    /// # Errors
+    /// Encoding or I/O errors.
+    fn to_zarr_with(&self, path: impl AsRef<Path>, opts: &zarr::ZarrOptions) -> Result<(), Error>;
+}
+
+impl<S: Repr> ToZarr for DatasetBase<S> {
+    fn to_zarr_with(&self, path: impl AsRef<Path>, opts: &zarr::ZarrOptions) -> Result<(), Error> {
+        let raw = crate::cf::encode(self, &EncodeOptions::format(Format::Netcdf4))?;
+        zarr::write(&raw, path.as_ref(), opts)?;
+        Ok(())
+    }
+}
+
+/// Open a Zarr store (v2 or v3) and CF-decode it, lazily. [`open_dataset`] detects stores
+/// too; this names the intent.
+///
+/// # Errors
+/// I/O or decoding errors.
+pub fn open_zarr(path: impl AsRef<Path>) -> Result<Dataset, Error> {
+    open_dataset(path)
 }
 
 // ----- data trees -----

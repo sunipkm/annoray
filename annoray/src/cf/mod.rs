@@ -18,7 +18,7 @@
 
 mod decode;
 mod encode;
-mod num;
+pub(crate) mod num;
 
 pub use decode::{DecodeOptions, Decoded, decode};
 pub use encode::{EncodeOptions, encode};

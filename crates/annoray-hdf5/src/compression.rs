@@ -23,30 +23,4 @@ pub enum Compression {
     },
 }
 
-/// The codec inside Blosc.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[non_exhaustive]
-pub enum BloscCodec {
-    /// BloscLZ (read only).
-    BloscLz,
-    /// LZ4.
-    Lz4,
-    /// LZ4HC (LZ4's high-compression mode; read only, written as LZ4).
-    Lz4Hc,
-    /// zlib.
-    Zlib,
-    /// Zstandard.
-    Zstd,
-}
-
-/// The shuffle Blosc applies before compressing.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[non_exhaustive]
-pub enum BloscShuffle {
-    /// None.
-    None,
-    /// Bytes grouped by their position in each element.
-    Byte,
-    /// Bits grouped by their position in each element.
-    Bit,
-}
+pub use annoray_codecs::{BloscCodec, BloscShuffle};
