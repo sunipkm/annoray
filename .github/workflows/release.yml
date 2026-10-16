@@ -1,7 +1,9 @@
 name: Release
 
-# Pushing a tag vX.Y.Z (or vX.Y.Z-preN) publishes that version: the Rust crates to crates.io
-# and the Python package to PyPI. The version comes from the tag (tools/version.py).
+# Pushing a tag vX.Y.Z (or vX.Y.Z-preN) publishes that version: the Rust crates to crates.io,
+# the Python package to PyPI, and a GitHub release (marked as a pre-release for -preN tags). The version comes from the tag (tools/version.py). The full
+# CI (ci.yml) runs first; every release job waits for it, so nothing is built or published
+# unless it passes.
 #
 # Needs: a CARGO_REGISTRY_TOKEN secret, and this workflow registered as a trusted publisher
 # for the `annoray` project on PyPI (environment `pypi`).
@@ -14,7 +16,11 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
   crates:
+    needs: [ci]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -28,6 +34,7 @@ jobs:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
   wheels:
+    needs: [ci]
     strategy:
       matrix:
         include:
@@ -92,6 +99,7 @@ jobs:
         working-directory: annoray-python
 
   sdist:
+    needs: [ci]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -109,7 +117,7 @@ jobs:
           path: annoray-python/dist
 
   pypi:
-    needs: [wheels, sdist, test-wheels]
+    needs: [ci, wheels, sdist, test-wheels]
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
@@ -120,3 +128,34 @@ jobs:
           path: dist
           merge-multiple: true
       - uses: pypa/gh-action-pypi-publish@release/v1
+
+  # A GitHub release for the tag, with the wheels and sdist, once both registries have the
+  # version. Pre-release tags (vX.Y.Z-preN) are marked as pre-releases and never become the
+  # "Latest" release; crates.io (semver `-preN`) and PyPI (PEP 440 `rcN`) already treat those
+  # versions as pre-releases, so `cargo add` and `pip install` skip them unless asked.
+  github-release:
+    needs: [crates, pypi]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if [[ "$TAG" == *-pre* ]]; then
+            kind=(--prerelease --latest=false)
+          else
+            kind=(--latest)
+          fi
+          gh release create "$TAG" dist/* \
+            --repo "${{ github.repository }}" \
+            --verify-tag \
+            --title "$TAG" \
+            --generate-notes \
+            "${kind[@]}"

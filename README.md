@@ -2,12 +2,16 @@
 
 **Annotated arrays**: the xarray data model (labelled N-d arrays with named dimensions,
 coordinates and attributes) in Rust, with first-class physical units and Python bindings.
-I/O goes through pure-Rust netCDF-3 (CDF-1/2/5), netCDF-4 and HDF5 backends; no C
-dependencies.
+I/O goes through pure-Rust netCDF-3 (CDF-1/2/5), netCDF-4, HDF5 and Zarr (v2 and v3) backends;
+no C dependencies.
 
 - **Labelled indexing and alignment:** positional and label-based selection (`isel`/`sel`,
   inclusive label slices, nearest/pad/backfill), name-based broadcasting and outer/inner/exact
-  joins, `groupby`, `resample` (all CF calendars), `rolling`, `interp`, `concat`, `merge`.
+  joins, vectorized (pointwise) indexing, `groupby`, `resample` (all CF calendars),
+  `rolling`, `coarsen`, `weighted`, `interp`/`interpolate_na`, `stack`/`unstack`, `concat`,
+  `merge`.
+- **Computation:** reductions and quantiles, cumulative and shift/roll operations,
+  `differentiate`/`integrate`/`polyfit`, numpy ufuncs and `apply_ufunc`, all unit-aware.
 - **Units in the type system of the data:** binary operations check dimensional consistency
   and propagate units; conversions use exact prime-factorised scales; affine (°C) and epoch
   units are handled; CF `units` attributes are decoded into units on open.
@@ -58,13 +62,28 @@ print(point.max("time").to("degC"))
 
 | Crate | |
 |---|---|
-| [`annoray`](annoray) | Data model, CF encode/decode, netCDF I/O backends. |
-| [`annoray-units`](crates/annoray-units) | Standalone units library: UDUNITS-2/CF grammar, exact conversion, CF calendars, dimension-typed quantities. |
-| [`annoray-hdf5`](crates/annoray-hdf5) | Standalone pure-Rust HDF5 reader/writer. |
+| [`annoray`](annoray) | Data model, operations, CF encode/decode, netCDF/HDF5/Zarr I/O. |
+| [`annoray-units`](crates/annoray-units) | Standalone units library: UDUNITS-2/CF grammar, exact conversion, CF calendars, dimension-typed quantities; optional `uom`/`whippyunits` bridges. |
+| [`annoray-hdf5`](crates/annoray-hdf5) | Standalone pure-Rust HDF5 reader/writer (every layout and chunk index; HDF5 filters). |
+| [`annoray-zarr`](crates/annoray-zarr) | Standalone pure-Rust Zarr v2/v3 reader/writer for local stores (sharding, consolidated metadata). |
+| [`annoray-codecs`](crates/annoray-codecs) | Standalone compression codecs shared by the HDF5 and Zarr crates: Blosc, bzip2, zlib/gzip, Zstandard, LZ4, shuffles, CRCs. |
 | [`annoray-macros`](crates/annoray-macros) | `isel!`/`sel!` proc macros, re-exported by `annoray`. |
 
-The Python bindings (PyO3, maturin) are in [`annoray-python`](annoray-python). The examples
-are Rust/Python pairs with identical output: [`annoray/examples`](annoray/examples),
+Dependencies between them (the standalone crates do not depend on `annoray`):
+
+```text
+annoray ──┬── annoray-units
+          ├── annoray-macros
+          ├── annoray-hdf5 ──┐
+          └── annoray-zarr ──┴── annoray-codecs
+```
+
+Zstandard and LZ4 are behind the `zstd` and `lz4` features (on by default in `annoray`), which
+pass through to the codec crate.
+
+The Python bindings (PyO3, maturin) are in [`annoray-python`](annoray-python); wheels use the
+stable ABI, one per platform for CPython 3.11 and later. The examples are Rust/Python pairs
+with identical output: [`annoray/examples`](annoray/examples),
 [`annoray-python/examples`](annoray-python/examples).
 
 ## License

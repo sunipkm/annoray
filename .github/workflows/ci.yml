@@ -1,9 +1,9 @@
 name: CI
 
+# Runs only when publishing: the release workflow calls it (on a version tag) and publishes
+# nothing unless it passes. It can also be run by hand from the Actions tab.
 on:
-  push:
-    branches: [master]
-  pull_request:
+  workflow_call:
   workflow_dispatch:
 
 env:

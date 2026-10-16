@@ -1,12 +1,16 @@
 # annoray
 
 **Annotated arrays**: the [xarray](https://xarray.dev) data model with first-class physical
-units, implemented in Rust (PyO3). I/O uses pure-Rust netCDF-3, netCDF-4 and HDF5 backends;
-the runtime dependencies are NumPy and matplotlib.
+units, implemented in Rust (PyO3). I/O uses pure-Rust netCDF-3, netCDF-4, HDF5 and Zarr
+(v2/v3, `open_zarr`/`to_zarr`) backends; the runtime dependencies are NumPy and matplotlib.
+Wheels use the stable ABI: one per platform for CPython 3.11 and later.
 
-- **Labelled indexing and alignment:** `isel`, `sel` (exact, nearest, pad, backfill),
-  name-based broadcasting, `groupby`, `resample`, `rolling`, `interp`, `concat`, `merge`,
-  `DataTree`.
+- **Labelled indexing and alignment:** `isel`, `sel` (exact, nearest, pad, backfill;
+  pointwise with `DataArray` indexers), name-based broadcasting, `groupby`, `resample`,
+  `rolling`, `coarsen`, `weighted`, `interp`, `interpolate_na`, `stack`/`unstack`, `concat`,
+  `merge`, `DataTree`.
+- **Computation:** quantiles, `differentiate`/`integrate`/`polyfit`, numpy ufuncs and
+  `apply_ufunc`, all unit-aware.
 - **Units:** binary operations check dimensional consistency and propagate units; `.to(...)`
   converts exactly; CF `units` attributes decode into units.
 - **Out-of-core evaluation:** lazy memory-mapped open; lazy elementwise composition and

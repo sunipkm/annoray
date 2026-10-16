@@ -1,7 +1,7 @@
 # annoray
 
 **Annotated arrays**: the [xarray](https://xarray.dev) data model in Rust, with first-class
-physical units and pure-Rust netCDF-3 (CDF-1/2/5), netCDF-4 and HDF5 backends.
+physical units and pure-Rust netCDF-3 (CDF-1/2/5), netCDF-4, HDF5 and Zarr (v2/v3) backends.
 
 - **Storage-generic containers:** `Variable`, `DataArray` and `Dataset` are generic over a
   GAT-based representation (owned, view, mutable view), mirroring `ndarray`; selections
@@ -52,13 +52,16 @@ Further examples: [`examples/`](https://github.com/sunipkm/annoray/tree/main/ann
 | Feature | Default | |
 |---|---|---|
 | `rayon` | yes | Data-parallel reductions, arithmetic, CF decoding and chunk (de)compression. |
-| `zstd`, `lz4` | yes | Zstandard (filter 32015) and LZ4 (filter 32004) chunk codecs, pure Rust. |
+| `zstd`, `lz4` | yes | Zstandard and LZ4 chunk codecs (HDF5 filters 32015/32004, Zarr `zstd`/`lz4`, inside Blosc), pure Rust. |
 | `uom` | no | Arrays and `sel` labels of uom SI quantities: `to_typed`, `from_typed` (values rescaled into coherent SI). |
 | `whippyunits` | no | Arrays and `sel` labels of whippyunits quantities; `view_typed` reinterprets data in exactly the quantity's unit without copying. |
 | `netcdf-c` | no | netCDF-C/HDF5 C libraries as an alternative backend (static build; requires cmake). |
 
 [`annoray-units`](https://docs.rs/annoray-units) and [`annoray-hdf5`](https://docs.rs/annoray-hdf5)
-are standalone crates, re-exported as `annoray::units` and `annoray::hdf5`.
+are standalone crates, re-exported as `annoray::units` and `annoray::hdf5`;
+[`annoray-zarr`](https://docs.rs/annoray-zarr) (Zarr stores, behind `annoray::io::zarr`) and
+[`annoray-codecs`](https://docs.rs/annoray-codecs) (the compression codecs both file formats
+use) are standalone too.
 
 ## License
 
