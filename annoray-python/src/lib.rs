@@ -16,6 +16,7 @@ mod fill;
 mod native;
 mod raw;
 mod reshape;
+mod stack;
 mod stats;
 mod tree;
 mod units;

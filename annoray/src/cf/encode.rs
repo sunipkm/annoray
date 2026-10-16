@@ -545,6 +545,14 @@ impl LazySource for EncodeSource {
 /// [`CfError`] if values cannot be represented (e.g. NaN in integer data without a fill value,
 /// 64-bit integers too large for a netCDF-3 file).
 pub fn encode<S: Repr>(ds: &DatasetBase<S>, opts: &EncodeOptions) -> Result<RawDataset> {
+    // Stacked dimensions are written in CF "compression by gathering" form.
+    match crate::stack::compress_stacked(ds)? {
+        Some(c) => encode_plain(&c, opts),
+        None => encode_plain(ds, opts),
+    }
+}
+
+fn encode_plain<S: Repr>(ds: &DatasetBase<S>, opts: &EncodeOptions) -> Result<RawDataset> {
     let format = opts.format;
     let mut raw = RawDataset::default();
     let unlimited = &ds.encoding().unlimited_dims;

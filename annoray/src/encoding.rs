@@ -37,6 +37,9 @@ pub struct Encoding {
     pub shuffle: bool,
     /// A compression codec other than deflate (netCDF-4 / HDF5 filter plugins).
     pub compression: Option<Compression>,
+    /// For a level of a stacked dimension (`stack`): that dimension and the level's
+    /// position, which `unstack` reads back.
+    pub level_of: Option<(Name, usize)>,
 }
 
 /// Storage details of a whole dataset.

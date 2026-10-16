@@ -49,7 +49,7 @@ impl From<DataArray> for ClipBound {
 
 /// `v` as a 0-d array of type `dtype` when it is representable exactly; `None` otherwise.
 #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
-fn scalar_as(dtype: DType, v: f64) -> Option<TypedArray<crate::Owned>> {
+pub(crate) fn scalar_as(dtype: DType, v: f64) -> Option<TypedArray<crate::Owned>> {
     let whole = v.fract() == 0.0 && v.abs() < 9.0e15;
     let int = || whole.then_some(v as i64);
     fn a<T: Clone>(x: T) -> ArrayD<T> {

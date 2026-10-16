@@ -76,6 +76,7 @@ pub use resample::date_range;
 mod rolling;
 mod select;
 mod slabs;
+mod stack;
 mod stats;
 mod tree;
 mod typed;

@@ -702,7 +702,9 @@ pub fn decode(raw: &RawDataset, opts: &DecodeOptions) -> Result<Decoded> {
     let mut coords: HashSet<String> = HashSet::new();
     if opts.decode_coords {
         for (name, v) in &raw.vars {
-            if v.dims.len() == 1 && v.dims.first().is_some_and(|d| d == name) {
+            // Strings stored as characters have a trailing character dimension.
+            let chars = v.is_char && opts.concat_characters && v.dims.len() == 2;
+            if (v.dims.len() == 1 || chars) && v.dims.first().is_some_and(|d| d == name) {
                 coords.insert(name.to_string());
             }
         }
@@ -749,6 +751,10 @@ pub fn decode(raw: &RawDataset, opts: &DecodeOptions) -> Result<Decoded> {
         .filter(|(_, d)| d.unlimited)
         .map(|(n, _)| Name::clone(n))
         .collect();
+    // CF "compression by gathering" indexes become stacked dimensions again.
+    if opts.decode_coords {
+        ds = crate::stack::decompress_stacked(ds, &mut warnings)?;
+    }
     Ok(Decoded {
         dataset: ds,
         warnings,
