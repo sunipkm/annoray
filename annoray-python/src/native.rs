@@ -869,9 +869,20 @@ impl PyDataArray {
     /// The numpy dtype of `.values`.
     #[getter]
     fn dtype<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
-        py.import("numpy")?
-            .getattr("dtype")?
-            .call1((numpy_dtype_name(self.inner.dtype()),))
+        let np_dtype = py.import("numpy")?.getattr("dtype")?;
+        if self.inner.dtype() == annoray::DType::Str {
+            // Fixed-width text, as `.values` gives (lazy text is read for its width).
+            let v = self.inner.variable();
+            let width = match v.typed() {
+                Ok(TypedArray::Str(a)) => crate::convert::text_width(&a.view()),
+                _ => match v.to_owned().into_typed().py_err()? {
+                    TypedArray::Str(a) => crate::convert::text_width(&a.view()),
+                    _ => 1,
+                },
+            };
+            return np_dtype.call1((format!("U{width}"),));
+        }
+        np_dtype.call1((numpy_dtype_name(self.inner.dtype()),))
     }
 
     /// The unit, or `None` for unitless data.

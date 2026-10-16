@@ -349,6 +349,8 @@ pub(crate) fn dtype_from_name(name: &str) -> Option<DType> {
         "uint64" => DType::U64,
         "bool" => DType::Bool,
         "str" | "object" => DType::Str,
+        // numpy's fixed-width text (`<U3` is named "str96").
+        t if t.starts_with("str") => DType::Str,
         _ => return None,
     })
 }

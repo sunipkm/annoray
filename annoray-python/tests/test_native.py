@@ -81,7 +81,8 @@ def test_dtypes_round_trip():
     for data in [t, d, np.array(["a", "bcd"]), np.array([True, False]), np.arange(2, dtype="u2")]:
         r = ar.DataArray(data, dims="x")
         np.testing.assert_array_equal(r.values, data)
-        assert r.dtype == (data.dtype if data.dtype.kind != "U" else np.dtype(object))
+        # Text too: numpy's fixed-width strings, as given.
+        assert r.dtype == data.dtype and r.values.dtype == data.dtype
     import cftime
 
     c = np.array([cftime.DatetimeNoLeap(2001, 2, 28), cftime.DatetimeNoLeap(2001, 3, 1)])

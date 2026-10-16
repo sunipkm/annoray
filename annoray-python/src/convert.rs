@@ -370,6 +370,34 @@ fn ns_to_numpy<'py>(py: Python<'py>, ns: ArrayD<i64>, dtype: &str) -> PyResult<B
         .call_method1("view", (dtype,))
 }
 
+/// The width numpy's fixed-width text type needs for `a`: the most characters (code
+/// points) in an element, at least 1 (as numpy gives `<U1` for empty strings).
+pub(crate) fn text_width(a: &ndarray::ArrayViewD<'_, String>) -> usize {
+    a.iter().map(|s| s.chars().count()).max().unwrap_or(0).max(1)
+}
+
+/// Text as numpy's fixed-width `U{n}` (n the longest element, in characters), as numpy
+/// and xarray make from Python strings: written as UTF-32 code units, then viewed.
+pub(crate) fn text_to_py<'py>(
+    py: Python<'py>,
+    a: &ndarray::ArrayViewD<'_, String>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let n = text_width(a);
+    let mut units = Vec::with_capacity(a.len().saturating_mul(n));
+    for s in a {
+        let start = units.len();
+        units.extend(s.chars().map(u32::from));
+        units.resize(start.saturating_add(n), 0);
+    }
+    let mut shape = a.shape().to_vec();
+    shape.push(n);
+    let flat = ArrayD::from_shape_vec(IxDyn(&shape), units).map_err(value_error)?;
+    let arr = PyArrayDyn::from_owned_array(py, flat).into_any();
+    let dims = PyTuple::new(py, a.shape())?;
+    arr.call_method1("view", (format!("U{n}"),))?
+        .call_method1("reshape", (dims,))
+}
+
 /// Owned values as a numpy array (moved, not copied, for numbers).
 pub(crate) fn typed_to_py(py: Python<'_>, t: TypedArray<Owned>) -> PyResult<Bound<'_, PyAny>> {
     macro_rules! np {
@@ -389,10 +417,7 @@ pub(crate) fn typed_to_py(py: Python<'_>, t: TypedArray<Owned>) -> PyResult<Boun
         TypedArray::U32(a) => np!(a),
         TypedArray::U64(a) => np!(a),
         TypedArray::Bool(a) => np!(a),
-        TypedArray::Str(a) => {
-            let objs = a.mapv(|s| PyString::new(py, &s).into_any().unbind());
-            Ok(PyArrayDyn::from_owned_object_array(py, objs).into_any())
-        }
+        TypedArray::Str(a) => text_to_py(py, &a.view()),
         TypedArray::DateTime(a) => {
             let mut bad = false;
             let ns = a.mapv(|d| {

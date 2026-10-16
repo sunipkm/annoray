@@ -147,10 +147,7 @@ def test_dicts_match_xarray():
     da, ds = build(ar)
     xda, xds = build(xr)
     assert da.to_dict() == xda.to_dict()
-    # Text is an object array in annoray (numpy's fixed-width "<U1" in xarray).
-    expected = xda.to_dict(data=False)
-    expected["coords"]["lab"]["dtype"] = "object"
-    assert da.to_dict(data=False) == expected
+    assert da.to_dict(data=False) == xda.to_dict(data=False)
     assert ds.to_dict()["data_vars"] == xds.to_dict()["data_vars"]
     ar.testing.assert_identical(ar.DataArray.from_dict(xda.to_dict()), da)
     ar.testing.assert_identical(ar.Dataset.from_dict(xds.to_dict()), ds)

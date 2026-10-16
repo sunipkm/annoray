@@ -98,9 +98,7 @@ def test_dataset_methods():
     split = da.to_dataset(dim="x")
     assert list(split.data_vars) == ["10.0", "20.0"]
     same(split["10.0"], xda.to_dataset(dim="x")[10.0])
-    # Text is 8 bytes per element (object arrays) against numpy's 4 per character.
-    numeric = ds.drop_vars("lab")
-    assert da.nbytes == xda.nbytes and numeric.nbytes == xds.drop_vars("lab").nbytes
+    assert da.nbytes == xda.nbytes and ds.nbytes == xds.nbytes
     assert list(da.indexes) == list(xda.indexes)
     assert da.get_index("x").equals(xda.get_index("x"))
     assert da.chunk() is da and da.chunks is None
