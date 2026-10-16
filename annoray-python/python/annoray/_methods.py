@@ -660,3 +660,65 @@ def reindex_method(
         mask = mask.assign_coords({dim: (dim, target)})
         out = taken.where(mask) if fill_value is None else taken.where(mask, fill_value)
     return out
+
+
+_ONE_INDEX = (
+    "annoray indexes a dimension by the coordinate of the same name; MultiIndexes are not "
+    "supported (stack() combines dimensions)"
+)
+
+
+def set_index(obj: Any, indexes: Any = None, append: bool = False, **indexes_kwargs: Any) -> Any:
+    """Make a coordinate the index of a dimension: ``ds.set_index(x="lab")`` (as xarray: the
+    old ``x`` coordinate is dropped and ``lab``'s values become the coordinate ``x``). One
+    coordinate per dimension; MultiIndexes are refused."""
+    if append:
+        raise NotImplementedError(f"set_index(append=True) builds a MultiIndex: {_ONE_INDEX}")
+    out = obj
+    for dim, var in {**(indexes or {}), **indexes_kwargs}.items():
+        if isinstance(var, (list, tuple)):
+            if len(var) != 1:
+                raise NotImplementedError(f"set_index with several coordinates: {_ONE_INDEX}")
+            var = var[0]
+        if dim not in out.dims:
+            raise ValueError(f"set_index: {dim!r} is not a dimension")
+        if var == dim:
+            continue
+        if var not in out.coords or out.coords[var].dims != (dim,):
+            raise ValueError(f"set_index: {var!r} is not a coordinate along {dim!r} alone")
+        if dim in out.coords:
+            out = out.drop_vars(dim)
+        out = out.rename({var: dim}) if isinstance(out, DataArray) else out.rename_vars({var: dim})
+    return out
+
+
+def reset_index(obj: Any, dims_or_levels: Any, *, drop: bool = False) -> Any:
+    """Remove dimension indexes: with ``drop=True``, their coordinates go too (the
+    dimensions stay, unlabelled). Keeping such a coordinate without its index is not
+    representable in annoray (a coordinate named after its dimension is its index); rename
+    it first (``rename_vars``) to keep its values as a plain coordinate."""
+    names = [dims_or_levels] if isinstance(dims_or_levels, str) else list(dims_or_levels)
+    for n in names:
+        if n not in obj.coords or obj.coords[n].dims != (n,):
+            raise ValueError(f"reset_index: {n!r} is not an index (a dimension coordinate)")
+    if not drop:
+        raise NotImplementedError(
+            "reset_index without drop=True keeps the coordinate without its index, which "
+            f"annoray cannot represent ({_ONE_INDEX}); use drop=True, or rename_vars to keep "
+            "the values as a plain coordinate"
+        )
+    return obj.drop_vars(names)
+
+
+def set_xindex(obj: Any, coord_names: Any, index_cls: Any = None, **options: Any) -> Any:
+    """Not supported: annoray selects by dimension coordinates only. Use
+    ``set_index(dim=name)`` or ``swap_dims`` to make the coordinate a dimension's index."""
+    raise NotImplementedError(
+        "set_xindex: annoray selects by dimension coordinates only; use set_index(dim=coord) "
+        "or swap_dims({dim: coord})"
+    )
+
+
+def to_stacked_array(obj: Any, *args: Any, **kwargs: Any) -> Any:
+    """Not supported: the result is indexed by a MultiIndex."""
+    raise NotImplementedError(f"to_stacked_array: {_ONE_INDEX}")

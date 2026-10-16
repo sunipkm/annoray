@@ -231,3 +231,28 @@ def test_accessors():
     assert ds.summary.names() == ["a", "b"]
     with pytest.warns(Warning, match="overriding"):
         ar.register_dataarray_accessor("mean")(Geo)
+
+
+def test_single_coordinate_indexes():
+    ds = ar.Dataset(
+        {"a": ("x", [1.0, 2.0, 3.0])}, coords={"x": [10, 20, 30], "lab": ("x", ["p", "q", "r"])}
+    )
+    xds = xr.Dataset(
+        {"a": ("x", [1.0, 2.0, 3.0])}, coords={"x": [10, 20, 30], "lab": ("x", ["p", "q", "r"])}
+    )
+    for f in (lambda d: d.set_index(x="lab"), lambda d: d.set_index({"x": ["lab"]})):
+        r, x = f(ds), f(xds)
+        assert dict(r.sizes) == dict(x.sizes) and sorted(r.coords) == sorted(x.coords)
+        assert r.sel(x="q")["a"].item() == x.sel(x="q")["a"].item() == 2.0
+    assert ds["a"].set_index(x="lab").sel(x="r").item() == 3.0
+    assert sorted(ds.reset_index("x", drop=True).coords) == sorted(
+        xds.reset_index("x", drop=True).coords
+    )
+    with pytest.raises(NotImplementedError, match="drop=True"):
+        ds.reset_index("x")
+    with pytest.raises(NotImplementedError, match="MultiIndex"):
+        ds.set_index(x=["x", "lab"])
+    with pytest.raises(NotImplementedError, match="set_index"):
+        ds.set_xindex("lab")
+    with pytest.raises(NotImplementedError, match="MultiIndex"):
+        ds.to_stacked_array("z", sample_dims=["x"])

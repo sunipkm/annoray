@@ -328,3 +328,24 @@ forwarders!(PyDataset, "annoray._methods":
     /// Drop positions whose label repeats (`keep="first"`, `"last"` or `False`).
     drop_duplicates => "drop_duplicates",
 );
+
+macro_rules! index_methods {
+    ($ty:ident) => {
+        forwarders!($ty, "annoray._methods":
+            /// Make a coordinate the index of a dimension: `ds.set_index(x="lab")`.
+            set_index => "set_index",
+            /// Remove dimension indexes (`drop=True`).
+            reset_index => "reset_index",
+            /// Not supported (selection is by dimension coordinates); see `set_index`.
+            set_xindex => "set_xindex",
+        );
+    };
+}
+
+index_methods!(PyDataArray);
+index_methods!(PyDataset);
+
+forwarders!(PyDataset, "annoray._methods":
+    /// Not supported (the result needs a MultiIndex).
+    to_stacked_array => "to_stacked_array",
+);
