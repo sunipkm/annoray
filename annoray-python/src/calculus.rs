@@ -10,7 +10,8 @@ use crate::convert::OrPy;
 use crate::native::{PyDataArray, PyDataset, new_da, new_ds};
 use crate::units::unit_from_py;
 
-/// xarray's `datetime_unit` (numpy codes, of fixed length) or any time unit.
+/// xarray's `datetime_unit` (numpy codes of fixed length) or any time unit. The parameter only
+/// takes times, so numpy's codes come first: `"m"` is the minute here, not the metre.
 fn time_unit(u: Option<&Bound<'_, PyAny>>) -> PyResult<Option<Unit>> {
     let Some(u) = u.filter(|u| !u.is_none()) else {
         return Ok(None);
@@ -114,9 +115,14 @@ fn polyfit_options(
 
 #[pymethods]
 impl PyDataArray {
-    /// The derivative along the one-dimensional coordinate `coord` (numpy's `gradient`).
-    /// Time steps are in seconds unless `datetime_unit` (a numpy code or a time unit) says
-    /// otherwise; the result carries the unit.
+    /// The derivative along the one-dimensional coordinate `coord` (numpy's `gradient`;
+    /// `edge_order` 1 or 2 at the ends), in the data's unit per coordinate unit.
+    ///
+    /// `datetime_unit` sets the step of a time coordinate: a numpy code (`"W"`, `"D"`, `"h"`,
+    /// `"m"` (minute; the parameter takes times only), `"s"`, `"ms"`, `"us"`, `"ns"`, `"ps"`,
+    /// `"fs"`, `"as"`; `"Y"`/`"M"` have no fixed length and raise `ValueError`), a unit
+    /// string such as `"min"`, a `Unit`, or an astropy unit. The default is seconds (xarray:
+    /// the coordinate's resolution, nanoseconds); the result carries the unit.
     #[pyo3(signature = (coord, edge_order=1, datetime_unit=None))]
     fn differentiate(
         &self,
@@ -130,7 +136,14 @@ impl PyDataArray {
         new_da(py, out.py_err()?)
     }
 
-    /// The trapezoidal integral along one coordinate or several in turn.
+    /// The trapezoidal integral along one coordinate or several in turn, in the data's unit
+    /// times the coordinate's; data in °C or dB raise `UnitError`.
+    ///
+    /// `datetime_unit` sets the step of a time coordinate: a numpy code (`"W"`, `"D"`, `"h"`,
+    /// `"m"` (minute; the parameter takes times only), `"s"`, `"ms"`, `"us"`, `"ns"`, `"ps"`,
+    /// `"fs"`, `"as"`; `"Y"`/`"M"` have no fixed length and raise `ValueError`), a unit
+    /// string such as `"min"`, a `Unit`, or an astropy unit. The default is seconds (xarray:
+    /// the coordinate's resolution, nanoseconds); the result carries the unit.
     #[pyo3(signature = (coord, datetime_unit=None))]
     fn integrate(
         &self,
@@ -145,7 +158,14 @@ impl PyDataArray {
         new_da(py, out.py_err()?)
     }
 
-    /// The running trapezoidal integral from zero along one coordinate or several in turn.
+    /// The running trapezoidal integral from zero along one coordinate or several in turn;
+    /// units as for `integrate`.
+    ///
+    /// `datetime_unit` sets the step of a time coordinate: a numpy code (`"W"`, `"D"`, `"h"`,
+    /// `"m"` (minute; the parameter takes times only), `"s"`, `"ms"`, `"us"`, `"ns"`, `"ps"`,
+    /// `"fs"`, `"as"`; `"Y"`/`"M"` have no fixed length and raise `ValueError`), a unit
+    /// string such as `"min"`, a `Unit`, or an astropy unit. The default is seconds (xarray:
+    /// the coordinate's resolution, nanoseconds); the result carries the unit.
     #[pyo3(signature = (coord, datetime_unit=None))]
     fn cumulative_integrate(
         &self,
@@ -162,6 +182,9 @@ impl PyDataArray {
 
     /// A least-squares polynomial fit along `dim` (a dataset of `polyfit_coefficients`,
     /// and with `full`/`cov` the residuals, rank, singular values, covariance).
+    /// Coefficients carry no unit; their `x_units`/`y_units` attributes record the units,
+    /// which `annoray.polyval` restores. Time coordinates are fitted in seconds since
+    /// 1970-01-01 (xarray: nanoseconds).
     #[pyo3(signature = (dim, deg, skipna=None, rcond=None, w=None, full=false, cov=None))]
     #[allow(clippy::too_many_arguments)]
     fn polyfit(
@@ -190,7 +213,8 @@ impl PyDataArray {
 
 #[pymethods]
 impl PyDataset {
-    /// [`DataArray.differentiate`] of every data variable along the coordinate's dimension.
+    /// `DataArray.differentiate` of every data variable along the coordinate's dimension
+    /// (same `datetime_unit`).
     #[pyo3(signature = (coord, edge_order=1, datetime_unit=None))]
     fn differentiate(
         &self,
@@ -204,7 +228,8 @@ impl PyDataset {
         new_ds(py, out.py_err()?)
     }
 
-    /// [`DataArray.integrate`] of every data variable along the coordinates' dimensions.
+    /// `DataArray.integrate` of every data variable along the coordinates' dimensions (same
+    /// `datetime_unit`).
     #[pyo3(signature = (coord, datetime_unit=None))]
     fn integrate(
         &self,
@@ -219,7 +244,7 @@ impl PyDataset {
         new_ds(py, out.py_err()?)
     }
 
-    /// [`DataArray.cumulative_integrate`] of every data variable.
+    /// `DataArray.cumulative_integrate` of every data variable (same `datetime_unit`).
     #[pyo3(signature = (coord, datetime_unit=None))]
     fn cumulative_integrate(
         &self,
@@ -234,7 +259,7 @@ impl PyDataset {
         new_ds(py, out.py_err()?)
     }
 
-    /// [`DataArray.polyfit`] of every data variable along `dim`, as
+    /// `DataArray.polyfit` of every data variable along `dim`, as
     /// `<name>_polyfit_coefficients` (and the rest).
     #[pyo3(signature = (dim, deg, skipna=None, rcond=None, w=None, full=false, cov=None))]
     #[allow(clippy::too_many_arguments)]
@@ -278,23 +303,7 @@ pub(crate) fn polyval(
         let out = py.detach(|| annoray::polyval(x, c, degree_dim));
         return Ok(new_da(py, out.py_err()?)?.into_any());
     }
-    // A dataset: every variable along `degree_dim`.
     let ds = &coeffs.cast::<PyDataset>()?.get().inner;
-    let out = py.detach(|| {
-        let mut out = annoray::Dataset::new();
-        for k in ds.data_vars().keys() {
-            let da = ds.get(k)?;
-            if da.dims().iter().any(|d| d == degree_dim) {
-                let v = annoray::polyval(x, &da, degree_dim)?;
-                for (ck, c) in v.coords() {
-                    if !out.coords().contains_key(ck) {
-                        out.add_coord(ck.clone(), c.clone())?;
-                    }
-                }
-                out.add_var(k.clone(), v.variable().clone())?;
-            }
-        }
-        Ok::<_, annoray::CoreError>(out)
-    });
+    let out = py.detach(|| annoray::polyval_dataset(x, ds, degree_dim));
     Ok(new_ds(py, out.py_err()?)?.into_any())
 }

@@ -60,6 +60,16 @@ def test_differentiate_along_times():
     assert a2.differentiate("t", datetime_unit="h").unit == ar.Unit("1/h")
     with pytest.raises(ValueError):
         a2.differentiate("t", datetime_unit="M")
+    # datetime_unit takes times only: "m" is numpy's minute, as is "min".
+    for m in ("m", "min"):
+        close(a2.differentiate("t", datetime_unit=m), x2.differentiate("t", datetime_unit="m"))
+    # A Unit object works like a string.
+    close(
+        a2.differentiate("t", datetime_unit=ar.Unit("h")), x2.differentiate("t", datetime_unit="h")
+    )
+    assert a2.integrate("t", datetime_unit=ar.Unit("h")).unit == ar.Unit("h")
+    with pytest.raises(ar.UnitError):
+        a2.integrate("t", datetime_unit=ar.Unit("kg"))
 
 
 def test_integrals():

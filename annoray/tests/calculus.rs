@@ -417,3 +417,52 @@ fn lazy_data_streams_in_slabs() {
     );
     assert!(da.variable().is_lazy());
 }
+
+#[test]
+fn cf_calendars_and_epoch_numbers() {
+    use annoray::units::{Calendar, CfDate};
+    // 360-day calendar: 2000-01-30 → 2000-02-01 is one day (no 31st), 2000-02-01 → 2000-03-01
+    // is 30.
+    let dates = [(1, 30), (2, 1), (3, 1)]
+        .map(|(m, d)| CfDate::from_ymd(Calendar::Day360, 2000, m, d).unwrap());
+    let t = DataArray::from_array(["t"], array![0.0, 2.0, 62.0].into_dyn())
+        .unwrap()
+        .with_coord(
+            "t",
+            Variable::new(["t"], ndarray::Array1::from(dates.to_vec()).into_dyn()).unwrap(),
+        )
+        .unwrap();
+    let d = t.differentiate("t", 1, Some(&unit("d"))).unwrap();
+    close(&vals(&d), &[2.0, 2.0, 2.0]);
+    close(
+        &vals(&t.integrate(&["t"], Some(&unit("d"))).unwrap()),
+        &[1.0 + 960.0],
+    );
+    let fit = t.polyfit("t", 1, &PolyfitOptions::new()).unwrap();
+    // Seconds since 1970-01-01 in that calendar: slope 2 per day.
+    close(&var(&fit, "polyfit_coefficients")[..1], &[2.0 / 86400.0]);
+    let back = polyval(
+        &DataArray::new(t.coords()["t"].clone()),
+        &fit.get("polyfit_coefficients").unwrap().to_owned(),
+        "degree",
+    )
+    .unwrap();
+    close(&vals(&back), &[0.0, 2.0, 62.0]);
+
+    // Undecoded "days since" numbers: the step is a day, converted by time_unit.
+    let n = DataArray::from_array(["t"], array![0.0, 2.0, 6.0].into_dyn())
+        .unwrap()
+        .with_coord(
+            "t",
+            Variable::new(["t"], array![0.0, 1.0, 3.0].into_dyn())
+                .unwrap()
+                .with_unit(unit("days since 2000-01-01")),
+        )
+        .unwrap();
+    let per_day = n.differentiate("t", 1, None).unwrap();
+    close(&vals(&per_day), &[2.0, 2.0, 2.0]);
+    assert!(per_day.unit().unwrap().is_convertible(&unit("1/d")));
+    let per_hour = n.differentiate("t", 1, Some(&unit("h"))).unwrap();
+    close(&vals(&per_hour), &[2.0 / 24.0; 3]);
+    assert!(n.integrate(&["t"], Some(&unit("m"))).is_err());
+}

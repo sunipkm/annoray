@@ -25,7 +25,8 @@
 //!   when it skipped NaN values, and gives the unscaled covariance without the other
 //!   dimensions); the singular values always run along `degree` (NaN-padded when there are
 //!   fewer points than coefficients; xarray pads by the rank deficit and fails on the
-//!   length); a scaled covariance from a lane with no more points than coefficients is NaN.
+//!   length); a scaled covariance from a lane with no more points than coefficients is NaN;
+//!   the covariance of a lane whose design is rank-deficient is NaN (xarray's `inv` raises).
 //! - Lazy data is read in slabs along another dimension (whole lanes are needed).
 
 use annoray_units::{Unit, UnitError, UnitKind};
@@ -1078,6 +1079,10 @@ fn svd(mut a: Vec<Vec<f64>>) -> (Vec<f64>, Vec<Vec<f64>>, Vec<Vec<f64>>) {
 /// is converted to the fit's unit first and the result carries the data's unit; time
 /// coordinates are taken in seconds since 1970-01-01 (time deltas in seconds), as fitted.
 ///
+/// A coordinate without a unit is taken to be in `x_units` as it stands (no check is
+/// possible); a coordinate with a unit must convert to it. Coefficients without the
+/// attributes evaluate on the coordinate's numbers and give a result without a unit.
+///
 /// # Errors
 /// [`CoreError::NoIndex`] without a `degree_dim` coordinate; [`CoreError::InvalidReduction`]
 /// for negative, fractional or repeated degrees, or multi-dimensional times; unit errors.
@@ -1169,4 +1174,31 @@ pub fn polyval<C: Repr, R: Repr>(
     }
     acc.set_unit(y_unit);
     Ok(acc)
+}
+
+/// [`polyval`] of every variable of `coeffs` along `degree_dim` (a `polyfit` result, say),
+/// under the same names; variables without `degree_dim` are left out.
+///
+/// # Errors
+/// As for [`polyval`].
+pub fn polyval_dataset<C: Repr, R: Repr>(
+    coord: &DataArrayBase<C>,
+    coeffs: &DatasetBase<R>,
+    degree_dim: &str,
+) -> Result<Dataset> {
+    let mut out = Dataset::new();
+    for k in coeffs.data_vars().keys() {
+        let da = coeffs.get(k)?;
+        if !da.dims().iter().any(|d| d == degree_dim) {
+            continue;
+        }
+        let v = polyval(coord, &da, degree_dim)?;
+        for (ck, c) in v.coords() {
+            if !out.coords().contains_key(ck) {
+                out.add_coord(ck.clone(), c.clone())?;
+            }
+        }
+        out.add_var(k.clone(), v.variable().clone())?;
+    }
+    Ok(out)
 }

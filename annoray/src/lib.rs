@@ -83,7 +83,7 @@ pub use align::{Join, align, align_datasets};
 pub use annoray_hdf5::{BloscCodec, BloscShuffle, Compression};
 pub use array::{Arr, DType, Element, TypedArray};
 pub use attrs::{AttrValue, Attrs};
-pub use calculus::{Covariance, PolyfitOptions, polyval};
+pub use calculus::{Covariance, PolyfitOptions, polyval, polyval_dataset};
 pub use coarsen::{Boundary, Coarsen, CoarsenOptions, DatasetCoarsen, Side};
 pub use combine::{
     Compat, Concat, ConcatOptions, MergeOptions, combine_by_coords, concat, concat_datasets, merge,

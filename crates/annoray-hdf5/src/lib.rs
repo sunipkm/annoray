@@ -156,6 +156,12 @@ impl File {
         self.superblock_version
     }
 
+    /// Bytes from `addr` to the end of the file (zero past it).
+    pub(crate) fn bytes_after(&self, addr: u64) -> u64 {
+        let len = u64::try_from(self.buf.len()).unwrap_or(u64::MAX);
+        len.saturating_sub(addr.saturating_add(self.base))
+    }
+
     pub(crate) fn cursor(&self, addr: u64) -> Result<Cursor<'_>, Error> {
         let at = addr
             .checked_add(self.base)
@@ -774,7 +780,16 @@ impl Dataset {
             }
             ChunkIndex::Implicit => {
                 let nc = count(&max);
-                let total: u64 = nc.iter().product();
+                // The chunks are stored back to back, so a valid count fits in the file; a
+                // corrupted extent must not make this loop run (practically) forever.
+                let total = nc
+                    .iter()
+                    .try_fold(1u64, |a, n| a.checked_mul(*n))
+                    .filter(|t| {
+                        t.checked_mul(chunk_bytes)
+                            .is_some_and(|b| b <= self.file.bytes_after(addr))
+                    })
+                    .ok_or_else(|| bad("implicit chunk index runs past the end of the file"))?;
                 (0..total)
                     .filter_map(|i| {
                         Some(ChunkRef {
