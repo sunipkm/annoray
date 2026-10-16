@@ -55,12 +55,22 @@ pub enum UnitPolicy {
 }
 
 /// A value conversion `y = x · factor + offset`.
+///
+/// A factor that is exactly `1/n` for an integer `n` (m → km, min → h) is applied as a
+/// division by `n`, which rounds correctly: `700 m` becomes exactly `0.7 km` (the float
+/// `0.7`), where multiplying by the inexact `0.001` gives `0.7000000000000001`. Integer
+/// factors are a single, correctly rounded multiplication already.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Converter {
     factor: f64,
     offset: f64,
     exact: Option<Rational>,
+    /// `n` when the factor is exactly `1/n` (`n` an integer that `f64` holds exactly).
+    divisor: Option<f64>,
 }
+
+/// Integers up to 2^53 are exact in `f64`.
+const EXACT_INT: i128 = 1 << 53;
 
 impl Converter {
     /// The identity conversion.
@@ -68,7 +78,21 @@ impl Converter {
         factor: 1.0,
         offset: 0.0,
         exact: Some(Rational::ONE),
+        divisor: None,
     };
+
+    fn new(factor: f64, offset: f64, exact: Option<Rational>) -> Self {
+        #[allow(clippy::cast_precision_loss)] // checked to be exact
+        let divisor = exact
+            .filter(|r| r.numer() == 1 && r.denom() > 1 && r.denom() <= EXACT_INT)
+            .map(|r| r.denom() as f64);
+        Self {
+            factor,
+            offset,
+            exact,
+            divisor,
+        }
+    }
 
     /// Multiplicative factor.
     #[must_use]
@@ -100,7 +124,10 @@ impl Converter {
     pub fn apply(&self, x: f64) -> f64 {
         // Not `mul_add`: without FMA hardware enabled at compile time it is a slow library
         // call, and numpy (hence xarray) rounds after each operation.
-        x * self.factor + self.offset
+        match self.divisor {
+            Some(n) => x / n + self.offset,
+            None => x * self.factor + self.offset,
+        }
     }
 }
 
@@ -460,18 +487,12 @@ impl Unit {
                 } else {
                     None
                 };
-                Ok(Converter {
-                    factor: ratio.to_f64(),
-                    offset: off,
-                    exact,
-                })
+                Ok(Converter::new(ratio.to_f64(), off, exact))
             }
             _ => match (&self.kind, &to.kind) {
-                (UnitKind::Log(a), UnitKind::Log(b)) if a == b => Ok(Converter {
-                    factor: ratio.to_f64(),
-                    offset: 0.0,
-                    exact: ratio.to_rational(),
-                }),
+                (UnitKind::Log(a), UnitKind::Log(b)) if a == b => {
+                    Ok(Converter::new(ratio.to_f64(), 0.0, ratio.to_rational()))
+                }
                 _ => Err(self.incompatible(to)),
             },
         }

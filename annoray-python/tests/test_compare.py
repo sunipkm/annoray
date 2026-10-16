@@ -95,3 +95,18 @@ def test_units():
     np.testing.assert_array_equal((t > ar.Quantity(32.0, "degF")).values, [False, True])
     with pytest.raises(ar.UnitError):
         _ = length > ar.Quantity(1.0, "s")
+
+
+def test_cross_unit_comparisons_read_as_the_decimals():
+    def km(v):
+        return ar.DataArray(v, dims=(), attrs={"units": "km"})
+
+    def m(v):
+        return ar.DataArray(v, dims=(), attrs={"units": "m"})
+
+    assert bool((km(1.2) > ar.Quantity(1000, "m")).values)
+    assert bool((m(1000.0) < km(1.2)).values)
+    assert not bool((km(1.2) > m(1200.0)).values)
+    a = ar.DataArray(np.arange(1, 2000) / 10, dims="x", attrs={"units": "km"})
+    b = ar.DataArray(np.arange(1, 2000) * 100.0, dims="x", attrs={"units": "m"})
+    assert np.all((a == b).values) and np.all((b == a).values)

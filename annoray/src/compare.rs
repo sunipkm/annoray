@@ -2,11 +2,12 @@
 //! `not`), giving boolean arrays.
 //!
 //! - Operands align and broadcast as in arithmetic (inner join on labels, by name).
-//! - Numbers compare in the left operand's unit, the right one converted (`m` against `km`,
-//!   °C against K as temperatures). Data with a unit compares with unitless data only when the
-//!   unitless side is the scalar 0 and the unit is ratio-scale or logarithmic: zero is the same
-//!   in every such unit (0 W m⁻² in any flux unit), but not in °C or `days since …`, where a
-//!   bare number has no meaning (pint's rule).
+//! - Numbers in different units of a kind are converted (`m` against `km`, °C against K as
+//!   temperatures), by dividing by the scale (into the larger unit) when it is a whole number:
+//!   `16100 m == 16.1 km` then holds exactly as the decimals read. Data with a unit compares
+//!   with unitless data only when the unitless side is the scalar 0 and the unit is
+//!   ratio-scale or logarithmic: zero is the same in every such unit (0 W m⁻² in any flux
+//!   unit), but not in °C or `days since …`, where a bare number has no meaning (pint's rule).
 //! - Text, dates, CF dates (same calendar) and durations compare with their own kind; booleans
 //!   with booleans; integers exactly.
 //! - NaN and NaT compare false, except `!=`, which is true (numpy).
@@ -247,9 +248,18 @@ fn plan_units<S: Repr, R: Repr>(
         (None, Some(u)) if zero_ok(u) && is_scalar_zero(lhs.variable()) => Ok((None, None)),
         (l, r) => {
             let one = Unit::one();
-            let p = l
-                .unwrap_or(&one)
-                .plan_cmp(r.unwrap_or(&one), UnitPolicy::AutoRescale)?;
+            let (lu, ru) = (l.unwrap_or(&one), r.unwrap_or(&one));
+            let p = lu.plan_cmp(ru, UnitPolicy::AutoRescale)?;
+            // The result is true/false, so either side may be converted: divide rather than
+            // multiply. A whole number in the smaller unit then lands exactly on the decimal in
+            // the larger one (16100 m / 1000 is the float 16.1; 16.1 km · 1000 is not 16100).
+            let integer_factor = p
+                .rhs
+                .and_then(|c| c.exact_factor())
+                .is_some_and(|f| f.denom() == 1 && f.numer() > 1);
+            if integer_factor && p.lhs.is_none() {
+                return Ok((Some(lu.converter_to(ru)?), None));
+            }
             Ok((p.lhs, p.rhs))
         }
     }
@@ -440,5 +450,125 @@ impl<S: Repr> DataArrayBase<S> {
                 .map(|(k, c)| (k.clone(), c.to_owned()))
                 .collect(),
         ))
+    }
+}
+
+// ----- comparison methods and logical operators -----
+
+/// The right operand of a comparison method ([`DataArrayBase::gt`] and friends): a data
+/// array, a plain number (unitless: only 0 compares with data that has a ratio-scale unit) or
+/// a quantity (converted into the data's unit).
+pub trait Comparand {
+    /// `lhs op self`.
+    ///
+    /// # Errors
+    /// As for [`DataArrayBase::compare`].
+    fn compared_with<S: Repr>(self, lhs: &DataArrayBase<S>, op: CmpOp) -> Result<DataArray>;
+}
+
+impl<R: Repr> Comparand for &DataArrayBase<R> {
+    fn compared_with<S: Repr>(self, lhs: &DataArrayBase<S>, op: CmpOp) -> Result<DataArray> {
+        lhs.compare(op, self)
+    }
+}
+
+impl Comparand for f64 {
+    fn compared_with<S: Repr>(self, lhs: &DataArrayBase<S>, op: CmpOp) -> Result<DataArray> {
+        lhs.compare(op, &crate::ops::scalar_array(self)?)
+    }
+}
+
+impl<K: annoray_units::Kind> Comparand for &annoray_units::Quantity<K> {
+    fn compared_with<S: Repr>(self, lhs: &DataArrayBase<S>, op: CmpOp) -> Result<DataArray> {
+        let q = crate::ops::scalar_array(self.value())?.with_unit(self.unit().clone());
+        lhs.compare(op, &q)
+    }
+}
+
+impl<S: Repr> DataArrayBase<S> {
+    /// `self < rhs`, elementwise ([`compare`](Self::compare) with [`CmpOp::Lt`]). Rust's `<`
+    /// cannot return an array (`PartialOrd` gives a `bool`), hence the method.
+    ///
+    /// # Errors
+    /// As for [`compare`](Self::compare).
+    pub fn lt(&self, rhs: impl Comparand) -> Result<DataArray> {
+        rhs.compared_with(self, CmpOp::Lt)
+    }
+
+    /// `self <= rhs`, elementwise.
+    ///
+    /// # Errors
+    /// As for [`compare`](Self::compare).
+    pub fn le(&self, rhs: impl Comparand) -> Result<DataArray> {
+        rhs.compared_with(self, CmpOp::Le)
+    }
+
+    /// `self > rhs`, elementwise.
+    ///
+    /// # Errors
+    /// As for [`compare`](Self::compare).
+    pub fn gt(&self, rhs: impl Comparand) -> Result<DataArray> {
+        rhs.compared_with(self, CmpOp::Gt)
+    }
+
+    /// `self >= rhs`, elementwise.
+    ///
+    /// # Errors
+    /// As for [`compare`](Self::compare).
+    pub fn ge(&self, rhs: impl Comparand) -> Result<DataArray> {
+        rhs.compared_with(self, CmpOp::Ge)
+    }
+
+    /// `self == rhs`, elementwise (named apart from `PartialEq::eq`, which would compare whole
+    /// arrays into one `bool`).
+    ///
+    /// # Errors
+    /// As for [`compare`](Self::compare).
+    pub fn eq_elem(&self, rhs: impl Comparand) -> Result<DataArray> {
+        rhs.compared_with(self, CmpOp::Eq)
+    }
+
+    /// `self != rhs`, elementwise (NaN != NaN is true).
+    ///
+    /// # Errors
+    /// As for [`compare`](Self::compare).
+    pub fn ne_elem(&self, rhs: impl Comparand) -> Result<DataArray> {
+        rhs.compared_with(self, CmpOp::Ne)
+    }
+}
+
+/// `&`, `|`, `^` on boolean arrays, as for arithmetic: between references, and with a
+/// `Result` on either side (Rust's orphan rule rules out `Result op Result`, so borrow one:
+/// `(&a.gt(lo)? & a.lt(hi))?`).
+macro_rules! impl_logic {
+    ($($tr:ident $m:ident $op:ident),*) => {$(
+        impl<S: Repr, R: Repr> std::ops::$tr<&DataArrayBase<R>> for &DataArrayBase<S> {
+            type Output = Result<DataArray>;
+            fn $m(self, rhs: &DataArrayBase<R>) -> Result<DataArray> {
+                self.logical(LogicOp::$op, rhs)
+            }
+        }
+        impl<R: Repr> std::ops::$tr<&DataArrayBase<R>> for Result<DataArray> {
+            type Output = Result<DataArray>;
+            fn $m(self, rhs: &DataArrayBase<R>) -> Result<DataArray> {
+                self?.logical(LogicOp::$op, rhs)
+            }
+        }
+        impl<S: Repr> std::ops::$tr<Result<DataArray>> for &DataArrayBase<S> {
+            type Output = Result<DataArray>;
+            fn $m(self, rhs: Result<DataArray>) -> Result<DataArray> {
+                self.logical(LogicOp::$op, &rhs?)
+            }
+        }
+    )*};
+}
+
+impl_logic!(BitAnd bitand And, BitOr bitor Or, BitXor bitxor Xor);
+
+/// `!mask`: logical not of a boolean array.
+impl<S: Repr> std::ops::Not for &DataArrayBase<S> {
+    type Output = Result<DataArray>;
+    fn not(self) -> Result<DataArray> {
+        self.logical_not()
     }
 }

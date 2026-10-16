@@ -997,7 +997,7 @@ fn converted(a: &TypedArray<View<'_>>, conv: &Converter) -> Result<TypedArray<cr
     Ok(TypedArray::F64(to_f64(a, Some(conv))?))
 }
 
-fn scalar_array(v: f64) -> Result<DataArray> {
+pub(crate) fn scalar_array(v: f64) -> Result<DataArray> {
     Ok(DataArray::new(Variable::new(
         Vec::<Name>::new(),
         ArrayD::from_elem(IxDyn(&[]), v),

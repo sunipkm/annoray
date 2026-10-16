@@ -412,3 +412,18 @@ fn labels_follow_arithmetic() {
     // Everything cancels: the canonical (dimensionless) form.
     assert_eq!(u("m").div(&u("m")).unwrap(), Unit::one());
 }
+
+#[test]
+fn reciprocal_integer_scales_divide_exactly() {
+    // 700 m is exactly the float 0.7 km (dividing by 1000 rounds correctly; multiplying by
+    // the inexact 0.001 would give 0.7000000000000001).
+    let m_to_km = u("m").converter_to(&u("km")).unwrap();
+    for i in 1..2000_i32 {
+        let km = f64::from(i) / 10.0;
+        assert_eq!(m_to_km.apply(f64::from(i) * 100.0), km, "{i}");
+    }
+    assert_eq!(u("min").converter_to(&u("h")).unwrap().apply(246.0), 4.1);
+    // Integer scales still multiply, and the factor is unchanged.
+    assert_eq!(u("km").converter_to(&u("m")).unwrap().apply(0.7), 700.0);
+    assert_eq!(m_to_km.factor(), 0.001);
+}

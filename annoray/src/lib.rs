@@ -94,7 +94,7 @@ pub use coarsen::{Boundary, Coarsen, CoarsenOptions, DatasetCoarsen, Side};
 pub use combine::{
     Compat, Concat, ConcatOptions, MergeOptions, combine_by_coords, concat, concat_datasets, merge,
 };
-pub use compare::{CmpOp, LogicOp};
+pub use compare::{CmpOp, Comparand, LogicOp};
 pub use dataarray::{Coords, DataArray, DataArrayBase, DataArrayView, DataArrayViewMut};
 pub use dataset::{Dataset, DatasetBase, DatasetView, DatasetViewMut};
 pub use dt::DtComponent;

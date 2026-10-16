@@ -224,3 +224,61 @@ fn lazy_data_against_a_scalar_stays_lazy() {
     let e = eager.compare(CmpOp::Gt, &threshold).unwrap();
     assert_eq!(bools(&l), bools(&e));
 }
+
+#[test]
+fn methods_and_operators() -> annoray::Result<()> {
+    let v = num(array![0.5, 1.5, 2.5, f64::NAN]);
+    // Comparison methods take arrays, plain numbers and quantities.
+    assert_eq!(bools(&v.gt(1.0)?), [false, true, true, false]);
+    assert_eq!(bools(&v.le(&scalar(1.5))?), [true, true, false, false]);
+    assert_eq!(bools(&v.eq_elem(2.5)?), [false, false, true, false]);
+    assert_eq!(bools(&v.ne_elem(&v)?), [false, false, false, true]);
+    let len = num(array![500.0, 1500.0]).with_unit(u("m"));
+    let km: annoray::units::Quantity = annoray::units::Quantity::new(1.0, "km")?;
+    assert_eq!(bools(&len.ge(&km)?), [false, true]);
+    assert!(len.lt(3.0).is_err(), "a bare nonzero number against metres");
+    // Logical operators, chained as arithmetic is.
+    let mask = (&v.gt(1.0)? & v.lt(2.0))?;
+    assert_eq!(bools(&mask), [false, true, false, false]);
+    assert_eq!(
+        bools(&(&v.lt(1.0)? | v.gt(2.0))?),
+        [true, false, true, false]
+    );
+    assert_eq!(bools(&(&mask ^ &mask)?), [false; 4]);
+    assert_eq!(bools(&(!&mask)?), [true, false, true, true]);
+    assert!((!&v).is_err(), "not booleans");
+    // A typical use: mask, then fill.
+    let kept = v.where_(&mask)?;
+    assert!(kept.to_f64()?[0].is_nan());
+    assert_eq!(kept.to_f64()?[1], 1.5);
+    Ok(())
+}
+
+#[test]
+fn cross_unit_comparisons_read_as_the_decimals() {
+    let km = |v: f64| scalar(v).with_unit(u("km"));
+    let m = |v: f64| scalar(v).with_unit(u("m"));
+    assert_eq!(
+        bools(&km(1.2).compare(CmpOp::Gt, &m(1000.0)).unwrap()),
+        [true]
+    );
+    assert_eq!(
+        bools(&m(1000.0).compare(CmpOp::Lt, &km(1.2)).unwrap()),
+        [true]
+    );
+    assert_eq!(
+        bools(&km(1.2).compare(CmpOp::Gt, &m(1200.0)).unwrap()),
+        [false]
+    );
+    // Equality holds as written, whichever side has the larger unit.
+    for i in 1..2000_i32 {
+        let (a, b) = (km(f64::from(i) / 10.0), m(f64::from(i) * 100.0));
+        assert_eq!(
+            bools(&a.compare(CmpOp::Eq, &b).unwrap()),
+            [true],
+            "{i}/10 km"
+        );
+        assert_eq!(bools(&b.compare(CmpOp::Eq, &a).unwrap()), [true], "{i}00 m");
+        assert_eq!(bools(&b.compare(CmpOp::Le, &a).unwrap()), [true], "{i}00 m");
+    }
+}
