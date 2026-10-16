@@ -145,6 +145,7 @@ macro_rules! typed_map {
 }
 
 pub(crate) use typed_dispatch;
+pub(crate) use typed_map;
 
 /// Carries an element type chosen by `typed_dispatch!` into generic code:
 /// `typed_dispatch!(a, x => f(..., marker(x)))` calls `f::<T>` for `a`'s element type.

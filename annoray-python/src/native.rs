@@ -241,11 +241,29 @@ trait Select: Sized + Send + Sync {
     fn isel_(&self, ix: Vec<(String, annoray::Indexer)>) -> annoray::Result<Self>;
     fn sel_(&self, ix: Vec<(String, LabelIndexer)>) -> annoray::Result<Self>;
     fn sel_take_(&self, dim: &str, labels: Vec<LabelIndexer>) -> annoray::Result<Self>;
+    fn isel_vec_(&self, ix: &[(&str, &DataArray)]) -> annoray::Result<Self>;
+    fn sel_vec_(
+        &self,
+        ix: &[(&str, &DataArray)],
+        method: annoray::Method,
+        tolerance: Option<&annoray::Label>,
+    ) -> annoray::Result<Self>;
 }
 
 impl Select for DataArray {
     fn take_(&self, dim: &str, idx: &[isize]) -> annoray::Result<Self> {
         self.take(dim, idx)
+    }
+    fn isel_vec_(&self, ix: &[(&str, &DataArray)]) -> annoray::Result<Self> {
+        self.isel_vectorized(ix)
+    }
+    fn sel_vec_(
+        &self,
+        ix: &[(&str, &DataArray)],
+        method: annoray::Method,
+        tolerance: Option<&annoray::Label>,
+    ) -> annoray::Result<Self> {
+        self.sel_vectorized(ix, method, tolerance)
     }
     fn isel_(&self, ix: Vec<(String, annoray::Indexer)>) -> annoray::Result<Self> {
         Ok(self.isel(ix)?.to_owned())
@@ -262,6 +280,17 @@ impl Select for Dataset {
     fn take_(&self, dim: &str, idx: &[isize]) -> annoray::Result<Self> {
         self.take(dim, idx)
     }
+    fn isel_vec_(&self, ix: &[(&str, &DataArray)]) -> annoray::Result<Self> {
+        self.isel_vectorized(ix)
+    }
+    fn sel_vec_(
+        &self,
+        ix: &[(&str, &DataArray)],
+        method: annoray::Method,
+        tolerance: Option<&annoray::Label>,
+    ) -> annoray::Result<Self> {
+        self.sel_vectorized(ix, method, tolerance)
+    }
     fn isel_(&self, ix: Vec<(String, annoray::Indexer)>) -> annoray::Result<Self> {
         Ok(self.isel(ix)?.to_owned())
     }
@@ -273,12 +302,36 @@ impl Select for Dataset {
     }
 }
 
+/// An indexer that selects pointwise: an annoray `DataArray` (an xarray one is converted).
+fn vector_indexer(v: &Bound<'_, PyAny>) -> PyResult<Option<DataArray>> {
+    if let Ok(da) = v.cast::<PyDataArray>() {
+        return Ok(Some(da.get().inner.clone()));
+    }
+    let module = v.get_type().getattr("__module__")?;
+    if module.extract::<String>()?.starts_with("xarray")
+        && v.hasattr("dims")?
+        && v.hasattr("variable")?
+    {
+        let converted = v
+            .py()
+            .import("annoray")?
+            .call_method1("from_xarray", (v,))?;
+        return Ok(Some(converted.cast::<PyDataArray>()?.get().inner.clone()));
+    }
+    Ok(None)
+}
+
 /// Positional selection: integer lists and masks first (copying those rows), then indices
 /// and slices.
 fn do_isel<T: Select + Clone>(py: Python<'_>, obj: &T, args: IselArgs<'_>) -> PyResult<T> {
     let mut takes = Vec::new();
     let mut basic = Vec::new();
+    let mut vectors: Vec<(String, DataArray)> = Vec::new();
     for (dim, v) in args {
+        if let Some(da) = vector_indexer(&v)? {
+            vectors.push((dim, da));
+            continue;
+        }
         match pos_from_py(&v)? {
             PosSel::Basic(ix) => basic.push((dim, ix)),
             PosSel::Take(idx) => takes.push((dim, idx)),
@@ -290,7 +343,12 @@ fn do_isel<T: Select + Clone>(py: Python<'_>, obj: &T, args: IselArgs<'_>) -> Py
             let next = taken.as_ref().unwrap_or(obj).take_(dim, idx)?;
             taken = Some(next);
         }
-        taken.as_ref().unwrap_or(obj).isel_(basic)
+        let out = taken.as_ref().unwrap_or(obj).isel_(basic)?;
+        if vectors.is_empty() {
+            return Ok(out);
+        }
+        let refs: Vec<(&str, &DataArray)> = vectors.iter().map(|(d, a)| (d.as_str(), a)).collect();
+        out.isel_vec_(&refs)
     })
     .py_err()
 }
@@ -306,7 +364,12 @@ fn do_sel<T: Select + Clone>(
     let tolerance = tolerance.map(label_from_py).transpose()?;
     let mut many = Vec::new();
     let mut one = Vec::new();
+    let mut vectors: Vec<(String, DataArray)> = Vec::new();
     for (dim, v) in args {
+        if let Some(da) = vector_indexer(&v)? {
+            vectors.push((dim, da));
+            continue;
+        }
         match label_sel_from_py(&v, method, tolerance.as_ref())? {
             LabelSel::One(ix) => one.push((dim, *ix)),
             LabelSel::Many(ix) => many.push((dim, ix)),
@@ -318,7 +381,12 @@ fn do_sel<T: Select + Clone>(
             let next = taken.as_ref().unwrap_or(obj).sel_take_(&dim, labels)?;
             taken = Some(next);
         }
-        taken.as_ref().unwrap_or(obj).sel_(one)
+        let out = taken.as_ref().unwrap_or(obj).sel_(one)?;
+        if vectors.is_empty() {
+            return Ok(out);
+        }
+        let refs: Vec<(&str, &DataArray)> = vectors.iter().map(|(d, a)| (d.as_str(), a)).collect();
+        out.sel_vec_(&refs, method, tolerance.as_ref())
     })
     .py_err()
 }

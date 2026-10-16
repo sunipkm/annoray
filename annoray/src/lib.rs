@@ -80,6 +80,7 @@ mod stats;
 mod tree;
 mod typed;
 mod variable;
+mod vindex;
 
 pub use align::{Join, align, align_datasets};
 pub use annoray_hdf5::{BloscCodec, BloscShuffle, Compression};
