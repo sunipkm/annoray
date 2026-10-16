@@ -10,6 +10,7 @@
 
 mod alloc;
 mod calculus;
+mod compare;
 mod convert;
 mod elementwise;
 mod fill;

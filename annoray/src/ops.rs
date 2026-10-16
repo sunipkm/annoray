@@ -180,7 +180,10 @@ fn is_time(d: DType) -> bool {
 }
 
 /// Dimensions and shape of the broadcast result.
-fn out_dims(a: &[(Name, usize)], b: &[(Name, usize)]) -> Result<(Vec<Name>, Vec<usize>)> {
+pub(crate) fn out_dims(
+    a: &[(Name, usize)],
+    b: &[(Name, usize)],
+) -> Result<(Vec<Name>, Vec<usize>)> {
     let mut sizes: IndexMap<Name, usize> = IndexMap::new();
     for (d, n) in a.iter().chain(b) {
         match sizes.get(d) {
@@ -651,7 +654,7 @@ impl<S: Repr> DataArrayBase<S> {
     /// The result of a binary operation from its data: the unit (keeping the left operand's
     /// spelling when unchanged), the union of the coordinates (left first), and the name if
     /// both operands share it.
-    fn assemble<'a>(
+    pub(crate) fn assemble<'a>(
         &self,
         mut var: Variable,
         unit: Option<Unit>,

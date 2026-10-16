@@ -488,13 +488,13 @@ macro_rules! arithmetic {
 
 /// The other operand of arithmetic: a data array, or a scalar (possibly with units) as a
 /// 0-d data array.
-enum Operand<'a> {
+pub(crate) enum Operand<'a> {
     Array(&'a DataArray),
     Owned(Box<DataArray>),
 }
 
 impl Operand<'_> {
-    fn get(&self) -> &DataArray {
+    pub(crate) fn get(&self) -> &DataArray {
         match self {
             Self::Array(a) => a,
             Self::Owned(a) => a,
@@ -502,7 +502,10 @@ impl Operand<'_> {
     }
 }
 
-fn operand<'a>(py: Python<'_>, o: &'a Bound<'_, PyAny>) -> PyResult<Option<Operand<'a>>> {
+pub(crate) fn operand<'a>(
+    py: Python<'_>,
+    o: &'a Bound<'_, PyAny>,
+) -> PyResult<Option<Operand<'a>>> {
     if let Ok(da) = o.cast::<PyDataArray>() {
         return Ok(Some(Operand::Array(&da.get().inner)));
     }

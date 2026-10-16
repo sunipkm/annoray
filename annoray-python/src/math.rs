@@ -1,6 +1,6 @@
 //! Unit-aware numpy ufuncs on data arrays (`__array_ufunc__`) and the unary operators.
 
-use annoray::{BinOp, DataArray, MathFn};
+use annoray::{BinOp, CmpOp, DataArray, LogicOp, MathFn};
 use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyTuple};
@@ -16,6 +16,28 @@ fn binary_op(name: &str) -> Option<BinOp> {
         "true_divide" | "divide" => BinOp::Div,
         "maximum" => BinOp::Max,
         "minimum" => BinOp::Min,
+        _ => return None,
+    })
+}
+
+fn compare_op(name: &str) -> Option<CmpOp> {
+    Some(match name {
+        "less" => CmpOp::Lt,
+        "less_equal" => CmpOp::Le,
+        "greater" => CmpOp::Gt,
+        "greater_equal" => CmpOp::Ge,
+        "equal" => CmpOp::Eq,
+        "not_equal" => CmpOp::Ne,
+        _ => return None,
+    })
+}
+
+/// numpy's logical and bitwise ufuncs (on booleans they agree).
+fn logic_op(name: &str) -> Option<LogicOp> {
+    Some(match name {
+        "logical_and" | "bitwise_and" => LogicOp::And,
+        "logical_or" | "bitwise_or" => LogicOp::Or,
+        "logical_xor" | "bitwise_xor" => LogicOp::Xor,
         _ => return None,
     })
 }
@@ -65,6 +87,10 @@ impl PyDataArray {
         let me = slf.get();
         match inputs.len() {
             1 => {
+                if matches!(name.as_str(), "logical_not" | "invert") {
+                    let out = py.detach(|| me.inner.logical_not()).py_err()?;
+                    return Ok(new_da(py, out)?.into_any());
+                }
                 if name == "positive" {
                     return Ok(new_da(py, me.inner.clone())?.into_any());
                 }
@@ -81,6 +107,12 @@ impl PyDataArray {
                 }
                 if let Some(op) = binary_op(&name) {
                     return me.binary_with(py, op, &other, !first_is_me);
+                }
+                if let Some(op) = compare_op(&name) {
+                    return me.compare_with(py, op, &other, !first_is_me);
+                }
+                if let Some(op) = logic_op(&name) {
+                    return me.logical_with(py, op, &other, !first_is_me);
                 }
             }
             _ => {}
