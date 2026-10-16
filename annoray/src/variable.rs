@@ -692,6 +692,20 @@ impl<S: Repr> fmt::Debug for VariableBase<S> {
 }
 
 impl Variable {
+    /// The variable with every dimension renamed by `f` at once (so names can be swapped).
+    pub(crate) fn map_dims(mut self, f: impl Fn(&Name) -> Name) -> Result<Self> {
+        let dims: Vec<Name> = self.dims.iter().map(&f).collect();
+        for (i, d) in dims.iter().enumerate() {
+            if dims.iter().skip(i.saturating_add(1)).any(|e| e == d) {
+                return Err(CoreError::DuplicateDim(d.clone()));
+            }
+        }
+        for (slot, d) in self.dims.iter_mut().zip(dims) {
+            *slot = d;
+        }
+        Ok(self)
+    }
+
     /// The variable with dimension `from` called `to` (the data untouched).
     pub(crate) fn rename_dim(mut self, from: &str, to: &Name) -> Result<Self> {
         if from != to.as_str() && self.dims.iter().any(|d| d == to) {

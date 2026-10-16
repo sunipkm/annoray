@@ -149,6 +149,13 @@ impl Dataset {
             .ok_or_else(|| CoreError::NoSuchVariable(name.into()))
     }
 
+    /// The data variables and coordinates, mutably (for setters that keep them consistent).
+    pub(crate) fn parts_mut(
+        &mut self,
+    ) -> (&mut IndexMap<Name, Variable>, &mut IndexMap<Name, Variable>) {
+        (&mut self.data_vars, &mut self.coords)
+    }
+
     /// Mutable access to the global attributes.
     pub fn attrs_mut(&mut self) -> &mut Attrs {
         &mut self.attrs

@@ -11,14 +11,14 @@ use crate::convert::OrPy;
 use crate::native::{PyDataArray, PyDataset, new_da, new_ds, operand};
 
 /// The other operand of a dataset operation.
-enum Other<'a> {
-    Dataset(&'a Dataset),
+enum Other<'py> {
+    Dataset(PyRef<'py, PyDataset>),
     Array(Box<DataArray>),
 }
 
-fn other<'a>(py: Python<'_>, o: &'a Bound<'_, PyAny>) -> PyResult<Option<Other<'a>>> {
+fn other<'py>(py: Python<'py>, o: &Bound<'py, PyAny>) -> PyResult<Option<Other<'py>>> {
     if let Ok(ds) = o.cast::<PyDataset>() {
-        return Ok(Some(Other::Dataset(&ds.get().inner)));
+        return Ok(Some(Other::Dataset(ds.borrow())));
     }
     Ok(operand(py, o)?.map(|a| Other::Array(Box::new(a.get().clone()))))
 }
@@ -37,12 +37,16 @@ impl PyDataset {
             return Ok(py.NotImplemented());
         };
         let pair = |a: &DataArray, b: &DataArray| if reflected { f(b, a) } else { f(a, b) };
+        let target: Result<&Dataset, &DataArray> = match &o {
+            Other::Dataset(ds) => Ok(&ds.inner),
+            Other::Array(da) => Err(da),
+        };
         let out = py
-            .detach(|| match &o {
-                Other::Dataset(ds) => self
+            .detach(|| match target {
+                Ok(ds) => self
                     .inner
                     .zip_with_dataset(ds, |a, b| pair(&a.to_owned(), &b.to_owned())),
-                Other::Array(da) => self.inner.zip_with_array(da, |v, d| pair(&v.to_owned(), d)),
+                Err(da) => self.inner.zip_with_array(da, |v, d| pair(&v.to_owned(), d)),
             })
             .py_err()?;
         Ok(new_ds(py, out)?.into_any())
@@ -241,7 +245,8 @@ impl PyDataset {
             return Ok(py.NotImplemented());
         }
         let name: String = ufunc.getattr("__name__")?.extract()?;
-        let me = slf.get();
+        let me_ref = slf.borrow();
+        let me = &*me_ref;
         match inputs.len() {
             1 => {
                 if matches!(name.as_str(), "logical_not" | "invert") {
@@ -276,28 +281,33 @@ impl PyDataset {
         )))
     }
 
-    /// Keep values where `cond` (a boolean DataArray, or a Dataset of booleans for the common
-    /// variables) holds; NaN (NaT) or `other` elsewhere.
+    /// Keep values where `cond` (a boolean DataArray, a Dataset of booleans for the common
+    /// variables, or a callable taking this dataset) holds; NaN (NaT) or `other` elsewhere.
+    /// `other` is a number or a quantity, converted into each variable's unit (a bare number
+    /// beside a unit only when NaN, or 0 in a ratio-scale unit).
     #[pyo3(signature = (cond, other=None))]
     fn r#where(
-        &self,
-        py: Python<'_>,
+        slf: &Bound<'_, Self>,
         cond: &Bound<'_, PyAny>,
-        other: Option<f64>,
+        other: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<Py<PyDataset>> {
-        let pick = move |v: &DataArray, c: &DataArray| match other {
+        let py = slf.py();
+        let this = &slf.borrow().inner;
+        let cond = &crate::utility::dataset_condition(slf, cond)?;
+        let other = match other {
+            Some(o) if !o.is_none() => Some(crate::utility::WhereOther::from_py(o)?),
+            _ => None,
+        };
+        let pick = |v: &DataArray, c: &DataArray| match &other {
             None => v.where_(c),
-            Some(o) => v.where_or(c, o),
+            Some(o) => o.apply(v, c),
         };
         let out = if let Ok(c) = cond.cast::<PyDataset>() {
-            let c = &c.get().inner;
-            py.detach(|| {
-                self.inner
-                    .zip_with_dataset(c, |v, c| pick(&v.to_owned(), &c.to_owned()))
-            })
+            let c = &c.borrow().inner;
+            py.detach(|| this.zip_with_dataset(c, |v, c| pick(&v.to_owned(), &c.to_owned())))
         } else if let Ok(c) = cond.cast::<PyDataArray>() {
-            let c = &c.get().inner;
-            py.detach(|| self.inner.zip_with_array(c, |v, c| pick(&v.to_owned(), c)))
+            let c = &c.borrow().inner;
+            py.detach(|| this.zip_with_array(c, |v, c| pick(&v.to_owned(), c)))
         } else {
             return Err(PyTypeError::new_err(
                 "cond must be a DataArray or Dataset of booleans",
@@ -340,7 +350,7 @@ impl PyDataset {
                     .map_err(|_| {
                         PyTypeError::new_err("Dataset.map: func must return an annoray DataArray")
                     })?
-                    .get()
+                    .borrow()
                     .inner
                     .clone())
             };

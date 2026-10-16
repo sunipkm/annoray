@@ -15,14 +15,18 @@ mod convert;
 mod dataset_ops;
 mod elementwise;
 mod fill;
+mod forward;
 mod math;
+mod mutate;
 mod native;
 mod raw;
+mod relations;
 mod reshape;
 mod stack;
 mod stats;
 mod tree;
 mod units;
+mod utility;
 mod zarr;
 
 use pyo3::prelude::*;
@@ -52,12 +56,18 @@ fn _annoray(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(native::concat, m)?)?;
     m.add_function(wrap_pyfunction!(native::date_range, m)?)?;
     m.add_function(wrap_pyfunction!(native::merge, m)?)?;
+    m.add_function(wrap_pyfunction!(native::combine_by_coords, m)?)?;
     m.add_function(wrap_pyfunction!(native::align, m)?)?;
     m.add_function(wrap_pyfunction!(native::from_xarray, m)?)?;
     m.add_function(wrap_pyfunction!(native::set_stream_bytes, m)?)?;
     m.add_function(wrap_pyfunction!(native::stream_bytes, m)?)?;
     m.add_function(wrap_pyfunction!(calculus::polyval, m)?)?;
     m.add_function(wrap_pyfunction!(elementwise::dot, m)?)?;
+    m.add_function(wrap_pyfunction!(utility::where_, m)?)?;
+    m.add_function(wrap_pyfunction!(relations::broadcast, m)?)?;
+    m.add_function(wrap_pyfunction!(relations::cov, m)?)?;
+    m.add_function(wrap_pyfunction!(relations::corr, m)?)?;
+    m.add_function(wrap_pyfunction!(utility::full_like, m)?)?;
     m.add("UnitError", m.py().get_type::<convert::UnitError>())?;
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     Ok(())

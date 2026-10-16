@@ -63,5 +63,5 @@ show("mean daily range", (ds["tmax"] - ds["tmin"]).mean("time").values)
 show("mean tmax in degF", ds["tmax"].mean("time").to("degF").values)
 show(
     "filled tmin, IA, days 0-2",
-    ds["tmin"].fillna(-99.0).sel(location="IA").isel(time=slice(0, 3)).values,
+    ds["tmin"].fillna(ar.Quantity(-99.0, "degC")).sel(location="IA").isel(time=slice(0, 3)).values,
 )

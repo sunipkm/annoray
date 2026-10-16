@@ -64,7 +64,11 @@ impl PyDataTree {
     #[pyo3(signature = (dataset=None))]
     fn py_new(dataset: Option<&Bound<'_, PyDataset>>) -> Self {
         Self {
-            inner: DataTree::new(dataset.map(|d| d.get().inner.clone()).unwrap_or_default()),
+            inner: DataTree::new(
+                dataset
+                    .map(|d| d.borrow().inner.clone())
+                    .unwrap_or_default(),
+            ),
         }
     }
 
@@ -74,7 +78,7 @@ impl PyDataTree {
         let mut nodes = Vec::with_capacity(d.len());
         for (k, v) in d.iter() {
             let path = normalize(&k.extract::<String>()?);
-            nodes.push((path, v.cast::<PyDataset>()?.get().inner.clone()));
+            nodes.push((path, v.cast::<PyDataset>()?.borrow().inner.clone()));
         }
         Ok(Self {
             inner: build("/", &nodes)?,
@@ -148,12 +152,7 @@ impl PyDataTree {
         let d = PyDict::new(py);
         for path in self.inner.paths() {
             let node = self.inner.get(&path).py_err()?;
-            let ds = Bound::new(
-                py,
-                PyDataset {
-                    inner: node.dataset().clone(),
-                },
-            )?;
+            let ds = crate::native::new_ds(py, node.dataset().clone())?.into_bound(py);
             d.set_item(path, ds.call_method0("to_xarray")?)?;
         }
         xr.getattr("DataTree")?.call_method1("from_dict", (d,))
@@ -216,7 +215,7 @@ pub(crate) fn tree_from_xarray(py: Python<'_>, obj: &Bound<'_, PyAny>) -> PyResu
         let ours = crate::native::from_xarray(py, &ds)?;
         nodes.push((
             normalize(&path),
-            ours.bind(py).cast::<PyDataset>()?.get().inner.clone(),
+            ours.bind(py).cast::<PyDataset>()?.borrow().inner.clone(),
         ));
     }
     Ok(PyDataTree {

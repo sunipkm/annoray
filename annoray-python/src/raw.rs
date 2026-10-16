@@ -335,7 +335,7 @@ fn values_from_py(v: &Bound<'_, PyDict>) -> PyResult<TypedArray<Owned>> {
     })
 }
 
-fn dtype_from_name(name: &str) -> Option<DType> {
+pub(crate) fn dtype_from_name(name: &str) -> Option<DType> {
     Some(match name {
         "float32" => DType::F32,
         "float64" => DType::F64,
@@ -351,6 +351,84 @@ fn dtype_from_name(name: &str) -> Option<DType> {
         "str" | "object" => DType::Str,
         _ => return None,
     })
+}
+
+/// Our `Encoding` as xarray's encoding dict (netCDF4-python names); settings left at their
+/// defaults are omitted.
+pub(crate) fn encoding_to_py<'py>(
+    py: Python<'py>,
+    enc: &annoray::Encoding,
+) -> PyResult<Bound<'py, PyDict>> {
+    let d = PyDict::new(py);
+    if let Some(t) = enc.dtype {
+        d.set_item("dtype", numpy_dtype(t, enc.char_dim.is_some()))?;
+    }
+    for (key, slot) in [
+        ("_FillValue", &enc.fill_value),
+        ("missing_value", &enc.missing_value),
+        ("scale_factor", &enc.scale_factor),
+        ("add_offset", &enc.add_offset),
+    ] {
+        if let Some(v) = slot {
+            d.set_item(key, crate::convert::attr_to_py(py, v)?)?;
+        }
+    }
+    if enc.unsigned {
+        d.set_item("_Unsigned", "true")?;
+    }
+    if let Some(u) = &enc.time_units {
+        d.set_item("units", u)?;
+    }
+    if let Some(c) = &enc.calendar {
+        d.set_item("calendar", c)?;
+    }
+    if let Some(c) = &enc.char_dim {
+        d.set_item("char_dim_name", c.as_str())?;
+    }
+    if let Some(c) = &enc.chunks {
+        d.set_item("chunksizes", PyTuple::new(py, c)?)?;
+    }
+    if let Some(level) = enc.deflate {
+        d.set_item("zlib", true)?;
+        d.set_item("complevel", level)?;
+    }
+    if enc.shuffle {
+        d.set_item("shuffle", true)?;
+    }
+    if let Some(c) = enc.compression {
+        d.set_item("compression", compression_name(c))?;
+        match c {
+            Compression::Zstd { level } => d.set_item("complevel", level)?,
+            Compression::Blosc { level, .. } => d.set_item("complevel", level)?,
+            _ => {}
+        }
+    }
+    Ok(d)
+}
+
+/// Reset the setting under xarray's encoding key `key` to its default.
+pub(crate) fn clear_encoding_key(enc: &mut annoray::Encoding, key: &str) -> PyResult<()> {
+    match key {
+        "dtype" => enc.dtype = None,
+        "_FillValue" => enc.fill_value = None,
+        "missing_value" => enc.missing_value = None,
+        "scale_factor" => enc.scale_factor = None,
+        "add_offset" => enc.add_offset = None,
+        "_Unsigned" => enc.unsigned = false,
+        "units" => enc.time_units = None,
+        "calendar" => enc.calendar = None,
+        "char_dim_name" => enc.char_dim = None,
+        "chunksizes" => enc.chunks = None,
+        "zlib" => enc.deflate = None,
+        "shuffle" => enc.shuffle = false,
+        "compression" => enc.compression = None,
+        // Read back with the codec it qualifies.
+        "complevel" => {}
+        other => {
+            return Err(value_error(format!("unknown encoding key {other:?}")));
+        }
+    }
+    Ok(())
 }
 
 /// xarray's encoding dict (netCDF4-python names) as our `Encoding`.
@@ -389,8 +467,16 @@ pub(crate) fn update_encoding(enc: &mut annoray::Encoding, e: &Bound<'_, PyDict>
         .map(|l| l.extract::<u8>())
         .transpose()?
         .unwrap_or(4);
-    if e.get_item("zlib")?.map(|z| z.is_truthy()).transpose()? == Some(true) {
-        enc.deflate = Some(level);
+    match e.get_item("zlib")?.map(|z| z.is_truthy()).transpose()? {
+        Some(true) => enc.deflate = Some(level),
+        Some(false) => enc.deflate = None,
+        None => {}
+    }
+    if let Some(u) = e.get_item("_Unsigned")? {
+        enc.unsigned = u.extract::<String>().is_ok_and(|s| s == "true");
+    }
+    if let Some(c) = e.get_item("char_dim_name")?.filter(|v| !v.is_none()) {
+        enc.char_dim = Some(c.extract::<String>()?.into());
     }
     if let Some(s) = e.get_item("shuffle")? {
         enc.shuffle = s.is_truthy()?;

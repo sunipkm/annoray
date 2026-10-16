@@ -15,7 +15,7 @@ fn bound(v: Option<&Bound<'_, PyAny>>) -> PyResult<Option<ClipBound>> {
         return Ok(None);
     };
     if let Ok(da) = v.cast::<PyDataArray>() {
-        return Ok(Some(ClipBound::from(da.get().inner.clone())));
+        return Ok(Some(ClipBound::from(da.borrow().inner.clone())));
     }
     if let Some((mag, unit)) = quantity_parts(v)? {
         return Ok(Some(ClipBound::Quantity(
@@ -137,19 +137,19 @@ impl PyDataArray {
         other: &Bound<'_, PyDataArray>,
         dim: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<Py<PyDataArray>> {
-        run_dot(py, &[&self.inner, &other.get().inner], dim)
+        run_dot(py, &[&self.inner, &other.borrow().inner], dim)
     }
 
     fn __matmul__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
         match other.cast::<PyDataArray>() {
-            Ok(o) => Ok(run_dot(py, &[&self.inner, &o.get().inner], None)?.into_any()),
+            Ok(o) => Ok(run_dot(py, &[&self.inner, &o.borrow().inner], None)?.into_any()),
             Err(_) => Ok(py.NotImplemented()),
         }
     }
 
     fn __rmatmul__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
         match other.cast::<PyDataArray>() {
-            Ok(o) => Ok(run_dot(py, &[&o.get().inner, &self.inner], None)?.into_any()),
+            Ok(o) => Ok(run_dot(py, &[&o.borrow().inner, &self.inner], None)?.into_any()),
             Err(_) => Ok(py.NotImplemented()),
         }
     }
@@ -205,7 +205,7 @@ pub(crate) fn dot(
         .iter()
         .map(|a| {
             a.cast::<PyDataArray>()
-                .map(|d| d.get().inner.clone())
+                .map(|d| d.borrow().inner.clone())
                 .map_err(|_| PyTypeError::new_err("dot takes annoray DataArrays"))
         })
         .collect::<PyResult<_>>()?;

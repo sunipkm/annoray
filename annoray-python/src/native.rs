@@ -24,6 +24,7 @@ use crate::convert::{
     method_from_py, numpy_dtype_name, parse_unit, pos_from_py, quantity_parts, typed_from_py,
     typed_to_py, value_error,
 };
+use crate::mutate::{Lending, Source, live_dict};
 
 /// A facade error as a Python exception.
 pub(crate) fn xr_error(e: annoray::Error) -> PyErr {
@@ -103,7 +104,7 @@ pub(crate) fn variable_from_py(
 /// named like its dimension).
 pub(crate) fn spec_from_py(py: Python<'_>, name: &str, v: &Bound<'_, PyAny>) -> PyResult<Variable> {
     if let Ok(da) = v.cast::<PyDataArray>() {
-        return Ok(da.get().inner.variable().to_owned());
+        return Ok(da.borrow().inner.variable().to_owned());
     }
     if let Ok(t) = v.cast::<PyTuple>() {
         let dims = t.get_item(0)?;
@@ -144,7 +145,7 @@ pub(crate) fn dict_iter<'py>(
     }
 }
 
-fn set_attrs(attrs: &mut annoray::Attrs, d: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+pub(crate) fn set_attrs(attrs: &mut annoray::Attrs, d: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
     for (k, v) in dict_iter(d)? {
         attrs.insert(k.into(), attr_from_py(&v)?);
     }
@@ -162,11 +163,14 @@ fn values_of<'py>(owner: Bound<'py, PyAny>, var: &Variable) -> PyResult<Bound<'p
         return typed_to_py(py, t);
     }
     let typed = var.typed().py_err()?;
+    crate::mutate::mark_lent(&owner);
     macro_rules! view {
         ($a:expr) => {{
-            // SAFETY: the data belongs to `owner`, an immutable (frozen) Python object that
-            // the array keeps alive as its base; nothing ever mutates or moves the buffer,
-            // and the array is made read-only below so Python cannot write through it.
+            // SAFETY: the data belongs to `owner`, a Python object that the array keeps alive
+            // as its base. Data buffers are never written in place, and `owner` is marked as
+            // having lent (`mark_lent` above), so a variable it later replaces or removes is
+            // retired, not freed, while it lives (see `mutate`). The array is made read-only
+            // below so Python cannot write through it.
             #[allow(unsafe_code)]
             let arr = unsafe { PyArrayDyn::borrow_from_array(&$a, owner) };
             arr.call_method("setflags", (), Some(&[("write", false)].into_py_dict(py)?))?;
@@ -207,11 +211,41 @@ fn sizes_dict<'py>(
 }
 
 pub(crate) fn new_da(py: Python<'_>, inner: DataArray) -> PyResult<Py<PyDataArray>> {
-    Py::new(py, PyDataArray { inner })
+    Py::new(
+        py,
+        PyDataArray {
+            inner,
+            lending: Lending::default(),
+            parent: None,
+        },
+    )
+}
+
+/// A data array copied from variable `name` of `owner` (a Dataset, or a DataArray for a
+/// coordinate); writes to its attributes reach the source (see `mutate`).
+pub(crate) fn new_child_da(
+    owner: &Bound<'_, PyAny>,
+    name: &str,
+    inner: DataArray,
+) -> PyResult<Py<PyDataArray>> {
+    Py::new(
+        owner.py(),
+        PyDataArray {
+            inner,
+            lending: Lending::default(),
+            parent: Source::of(owner, name),
+        },
+    )
 }
 
 pub(crate) fn new_ds(py: Python<'_>, inner: Dataset) -> PyResult<Py<PyDataset>> {
-    Py::new(py, PyDataset { inner })
+    Py::new(
+        py,
+        PyDataset {
+            inner,
+            lending: Lending::default(),
+        },
+    )
 }
 
 pub(crate) fn new_dataset(py: Python<'_>, inner: Dataset) -> PyResult<Py<PyDataset>> {
@@ -305,7 +339,7 @@ impl Select for Dataset {
 /// An indexer that selects pointwise: an annoray `DataArray` (an xarray one is converted).
 fn vector_indexer(v: &Bound<'_, PyAny>) -> PyResult<Option<DataArray>> {
     if let Ok(da) = v.cast::<PyDataArray>() {
-        return Ok(Some(da.get().inner.clone()));
+        return Ok(Some(da.borrow().inner.clone()));
     }
     let module = v.get_type().getattr("__module__")?;
     if module.extract::<String>()?.starts_with("xarray")
@@ -316,7 +350,9 @@ fn vector_indexer(v: &Bound<'_, PyAny>) -> PyResult<Option<DataArray>> {
             .py()
             .import("annoray")?
             .call_method1("from_xarray", (v,))?;
-        return Ok(Some(converted.cast::<PyDataArray>()?.get().inner.clone()));
+        return Ok(Some(
+            converted.cast::<PyDataArray>()?.borrow().inner.clone(),
+        ));
     }
     Ok(None)
 }
@@ -423,6 +459,48 @@ fn reduce_opts(
     o
 }
 
+/// numpy's `np.sum(da, …)` passes `out=None` (and `dtype=None` for some functions); other
+/// values are not supported.
+fn numpy_only_defaults(
+    out: Option<&Bound<'_, PyAny>>,
+    dtype: Option<&Bound<'_, PyAny>>,
+) -> PyResult<()> {
+    if out.is_some_and(|o| !o.is_none()) {
+        return Err(PyTypeError::new_err(
+            "out= is not supported (results are new arrays)",
+        ));
+    }
+    if dtype.is_some_and(|d| !d.is_none()) {
+        return Err(PyTypeError::new_err(
+            "dtype= is not supported; use .astype() on the result",
+        ));
+    }
+    Ok(())
+}
+
+/// Dimension names of numpy axes (`0`, `-1`, `(0, 1)`) of an array with `dims`.
+pub(crate) fn axis_names(dims: &[Name], axis: &Bound<'_, PyAny>) -> PyResult<Vec<Name>> {
+    let axes: Vec<isize> = match axis.extract::<isize>() {
+        Ok(a) => vec![a],
+        Err(_) => axis.extract()?,
+    };
+    let n = isize::try_from(dims.len()).unwrap_or(isize::MAX);
+    axes.into_iter()
+        .map(|a| {
+            let i = if a < 0 { a.saturating_add(n) } else { a };
+            usize::try_from(i)
+                .ok()
+                .and_then(|i| dims.get(i))
+                .cloned()
+                .ok_or_else(|| {
+                    pyo3::exceptions::PyIndexError::new_err(format!(
+                        "axis {a} is out of bounds for an array of {n} dimensions"
+                    ))
+                })
+        })
+        .collect()
+}
+
 /// The reduction methods (`sum`, `mean`, …) of a class with `reduce_with`.
 macro_rules! reductions {
     ($ty:ident) => {
@@ -435,18 +513,37 @@ macro_rules! reductions {
         impl $ty {
             $(
                 #[doc = concat!("`", stringify!($m), "` over `dim` (all dimensions by default).")]
-                #[pyo3(signature = (dim=None, *, skipna=None, ddof=0, min_count=None, keep_attrs=None))]
+                #[allow(clippy::too_many_arguments)]
+                #[pyo3(signature = (
+                    dim=None, *, axis=None, skipna=None, ddof=0, min_count=None,
+                    keep_attrs=None, out=None, dtype=None
+                ))]
                 fn $m(
                     &self,
                     py: Python<'_>,
                     dim: Option<&Bound<'_, PyAny>>,
+                    axis: Option<&Bound<'_, PyAny>>,
                     skipna: Option<bool>,
                     ddof: usize,
                     min_count: Option<usize>,
                     keep_attrs: Option<bool>,
+                    out: Option<&Bound<'_, PyAny>>,
+                    dtype: Option<&Bound<'_, PyAny>>,
                 ) -> PyResult<Py<PyAny>> {
+                    numpy_only_defaults(out, dtype)?;
                     let opts = reduce_opts(skipna, ddof, min_count, keep_attrs.unwrap_or(true));
-                    self.reduce_with(py, Reduction::$op, reduce_dims(dim)?, &opts)
+                    let dims = match axis {
+                        Some(a) if !a.is_none() => {
+                            if dim.is_some_and(|d| !d.is_none()) {
+                                return Err(PyValueError::new_err(
+                                    "give dim or axis, not both",
+                                ));
+                            }
+                            Some(self.dims_of_axis(a)?)
+                        }
+                        _ => reduce_dims(dim)?,
+                    };
+                    self.reduce_with(py, Reduction::$op, dims, &opts)
                 }
             )*
         }
@@ -488,26 +585,26 @@ macro_rules! arithmetic {
 
 /// The other operand of arithmetic: a data array, or a scalar (possibly with units) as a
 /// 0-d data array.
-pub(crate) enum Operand<'a> {
-    Array(&'a DataArray),
+pub(crate) enum Operand<'py> {
+    Array(PyRef<'py, PyDataArray>),
     Owned(Box<DataArray>),
 }
 
 impl Operand<'_> {
     pub(crate) fn get(&self) -> &DataArray {
         match self {
-            Self::Array(a) => a,
+            Self::Array(a) => &a.inner,
             Self::Owned(a) => a,
         }
     }
 }
 
-pub(crate) fn operand<'a>(
-    py: Python<'_>,
-    o: &'a Bound<'_, PyAny>,
-) -> PyResult<Option<Operand<'a>>> {
+pub(crate) fn operand<'py>(
+    py: Python<'py>,
+    o: &Bound<'py, PyAny>,
+) -> PyResult<Option<Operand<'py>>> {
     if let Ok(da) = o.cast::<PyDataArray>() {
-        return Ok(Some(Operand::Array(&da.get().inner)));
+        return Ok(Some(Operand::Array(da.borrow())));
     }
     // Scalars only: arrays would broadcast by position, which labelled data never does.
     let (mag, unit) = match quantity_parts(o)? {
@@ -526,12 +623,18 @@ pub(crate) fn operand<'a>(
 // ----- DataArray -----
 
 /// A labelled, units-aware N-dimensional array (xarray's `DataArray`).
-#[pyclass(frozen, name = "DataArray", module = "annoray")]
+#[pyclass(name = "DataArray", module = "annoray")]
 pub(crate) struct PyDataArray {
     pub(crate) inner: DataArray,
+    pub(crate) lending: Lending,
+    pub(crate) parent: Option<Source>,
 }
 
 impl PyDataArray {
+    fn dims_of_axis(&self, axis: &Bound<'_, PyAny>) -> PyResult<Vec<Name>> {
+        axis_names(self.inner.dims(), axis)
+    }
+
     fn reduce_with(
         &self,
         py: Python<'_>,
@@ -580,7 +683,7 @@ impl PyDataArray {
         Ok(new_da(py, out)?.into_any())
     }
 
-    fn coord_array(&self, name: &str) -> PyResult<DataArray> {
+    pub(crate) fn coord_array(&self, name: &str) -> PyResult<DataArray> {
         let c = self.inner.coord(name).py_err()?;
         let mut out = DataArray::new(c.to_owned()).with_name(name);
         for (k, v) in self.inner.coords() {
@@ -637,12 +740,21 @@ impl PyDataArray {
             let c = spec_from_py(py, &k, &v)?;
             inner = inner.with_coord(k, c).py_err()?;
         }
-        Ok(Self { inner })
+        Ok(Self {
+            inner,
+            lending: Lending::default(),
+            parent: None,
+        })
     }
 
     #[getter]
     fn name(&self) -> Option<String> {
         self.inner.name().map(ToString::to_string)
+    }
+
+    #[setter]
+    fn set_name(&mut self, name: Option<String>) {
+        self.inner.set_name(name.map(Name::from));
     }
 
     /// The dimension of the data's unit (`None` for unitless data).
@@ -688,8 +800,12 @@ impl PyDataArray {
         self.inner.len()
     }
 
-    fn __len__(&self) -> usize {
-        self.inner.shape().first().copied().unwrap_or(0)
+    fn __len__(&self) -> PyResult<usize> {
+        self.inner
+            .shape()
+            .first()
+            .copied()
+            .ok_or_else(|| PyTypeError::new_err("len() of unsized object"))
     }
 
     /// The numpy dtype of `.values`.
@@ -706,25 +822,36 @@ impl PyDataArray {
         unit_str(self.inner.variable())
     }
 
+    /// The attributes, as a dict whose changes are applied to this array (and, for an
+    /// array taken from a dataset, to that dataset's variable).
     #[getter]
-    fn attrs<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
-        attrs_to_py(py, self.inner.attrs())
+    fn attrs<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        let d = attrs_to_py(slf.py(), slf.borrow().inner.attrs())?;
+        live_dict(slf.as_any(), "AttrsDict", d.into_any())
     }
 
-    /// Coordinates, as data arrays.
+    #[setter(attrs)]
+    fn set_attrs_py(slf: &Bound<'_, Self>, attrs: &Bound<'_, PyAny>) -> PyResult<()> {
+        let mut a = annoray::Attrs::new();
+        set_attrs(&mut a, Some(attrs))?;
+        Self::replace_attrs(slf, a)
+    }
+
+    /// Coordinates, as data arrays, in a dict whose assignments (`da.coords["x"] = …`) and
+    /// deletions apply to this array.
     #[getter]
-    fn coords<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
-        let d = PyDict::new(py);
-        for k in self.inner.coords().keys() {
-            d.set_item(k.as_str(), new_da(py, self.coord_array(k)?)?)?;
-        }
-        Ok(d)
+    fn coords<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        live_dict(
+            slf.as_any(),
+            "CoordsDict",
+            Self::plain_coords(slf)?.into_any(),
+        )
     }
 
     /// The values as numpy: a read-only view (no copy) for numbers in memory.
     #[getter]
     fn values<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
-        values_of(slf.clone().into_any(), slf.get().inner.variable())
+        values_of(slf.clone().into_any(), slf.borrow().inner.variable())
     }
 
     /// Same as `.values`.
@@ -810,6 +937,12 @@ impl PyDataArray {
         if let Some(n) = new_name_or_name_dict.filter(|n| n.is_instance_of::<PyString>()) {
             return new_da(py, self.inner.clone().with_name(n.extract::<String>()?));
         }
+        // `rename()` / `rename(None)` clear the name, as in xarray.
+        if new_name_or_name_dict.is_none_or(|n| n.is_none()) && names.is_none_or(|n| n.is_empty()) {
+            let mut out = self.inner.clone();
+            out.set_name(None);
+            return new_da(py, out);
+        }
         let mut pairs: Vec<(String, String)> = Vec::new();
         for d in [
             new_name_or_name_dict.filter(|d| !d.is_none()),
@@ -860,9 +993,17 @@ impl PyDataArray {
     }
 
     /// Coordinates as attributes: `da.time`.
-    fn __getattr__(&self, py: Python<'_>, name: &str) -> PyResult<Py<PyDataArray>> {
-        if self.inner.coords().contains_key(name) {
-            return new_da(py, self.coord_array(name)?);
+    fn __getattr__(slf: &Bound<'_, Self>, name: &str) -> PyResult<Py<PyDataArray>> {
+        let coord = {
+            let me = slf.borrow();
+            if me.inner.coords().contains_key(name) {
+                Some(me.coord_array(name)?)
+            } else {
+                None
+            }
+        };
+        if let Some(c) = coord {
+            return new_child_da(slf.as_any(), name, c);
         }
         Err(pyo3::exceptions::PyAttributeError::new_err(format!(
             "'DataArray' object has no attribute {name:?}"
@@ -870,12 +1011,17 @@ impl PyDataArray {
     }
 
     /// `da[0, 1:3]` by position, `da[{"x": 0}]` by name, `da["x"]` for a coordinate.
-    fn __getitem__(&self, py: Python<'_>, key: &Bound<'_, PyAny>) -> PyResult<Py<PyDataArray>> {
+    fn __getitem__(slf: &Bound<'_, Self>, key: &Bound<'_, PyAny>) -> PyResult<Py<PyDataArray>> {
+        let py = slf.py();
         if key.is_instance_of::<PyString>() {
-            return new_da(py, self.coord_array(&key.extract::<String>()?)?);
+            let name: String = key.extract()?;
+            let c = slf.borrow().coord_array(&name)?;
+            return new_child_da(slf.as_any(), &name, c);
         }
+        let me = slf.borrow();
+        let this = &*me;
         if key.is_instance_of::<PyDict>() {
-            return self.isel(py, Some(key), None);
+            return this.isel(py, Some(key), None);
         }
         let items: Vec<Bound<'_, PyAny>> = match key.cast::<PyTuple>() {
             Ok(t) => t.iter().collect(),
@@ -891,20 +1037,20 @@ impl PyDataArray {
                     )),
                 })
                 .collect::<PyResult<Vec<_>>>()?;
-            let out = self.inner.isel_pos(ix).py_err()?.to_owned();
+            let out = this.inner.isel_pos(ix).py_err()?.to_owned();
             return new_da(py, out);
         }
-        if items.len() > self.inner.ndim() {
+        if items.len() > this.inner.ndim() {
             return Err(pyo3::exceptions::PyIndexError::new_err("too many indices"));
         }
-        let args = self
+        let args = this
             .inner
             .dims()
             .iter()
             .zip(items)
             .map(|(d, k)| (d.to_string(), k))
             .collect();
-        new_da(py, do_isel(py, &self.inner, args)?)
+        new_da(py, do_isel(py, &this.inner, args)?)
     }
 
     fn isnull(&self, py: Python<'_>) -> PyResult<Py<PyDataArray>> {
@@ -915,27 +1061,21 @@ impl PyDataArray {
         new_da(py, self.inner.notnull().py_err()?)
     }
 
-    /// Replace missing values (NaN) with `value`.
-    fn fillna(&self, py: Python<'_>, value: f64) -> PyResult<Py<PyDataArray>> {
+    /// Missing values (NaN) replaced by the number `value` (`fillna` checks units first).
+    fn _fillna_number(&self, py: Python<'_>, value: f64) -> PyResult<Py<PyDataArray>> {
         new_da(py, py.detach(|| self.inner.fillna(value)).py_err()?)
     }
 
-    /// Keep values where `cond` is true; elsewhere NaN (or `other`).
+    /// Keep values where `cond` (booleans, or a callable taking this array) is true;
+    /// elsewhere NaN, or `other`: a data array, a quantity (converted into this array's
+    /// unit), or a number (only NaN, or 0 in a ratio-scale unit, beside data with a unit).
     #[pyo3(signature = (cond, other=None))]
     fn r#where(
-        &self,
-        py: Python<'_>,
-        cond: &Bound<'_, PyDataArray>,
-        other: Option<f64>,
+        slf: &Bound<'_, Self>,
+        cond: &Bound<'_, PyAny>,
+        other: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<Py<PyDataArray>> {
-        let c = &cond.get().inner;
-        let out = py
-            .detach(|| match other {
-                None => self.inner.where_(c),
-                Some(o) => self.inner.where_or(c, o),
-            })
-            .py_err()?;
-        new_da(py, out)
+        crate::utility::where_method(slf, cond, other)
     }
 
     /// Drop positions along `dim` with missing values (`how="any"` or `"all"`).
@@ -983,7 +1123,7 @@ impl PyDataArray {
 
     /// Group by a coordinate (or `"time.month"`, …).
     fn groupby(slf: &Bound<'_, Self>, group: String) -> PyResult<PyGroupBy> {
-        slf.get().inner.groupby(&group).py_err()?;
+        slf.borrow().inner.groupby(&group).py_err()?;
         Ok(PyGroupBy {
             parent: Parent::Da(slf.clone().unbind()),
             split: Split::Labels(group),
@@ -1002,7 +1142,7 @@ impl PyDataArray {
         let opts = BinOptions::default()
             .right(right)
             .include_lowest(include_lowest);
-        slf.get()
+        slf.borrow()
             .inner
             .groupby_bins(&group, &bins, &opts)
             .py_err()?;
@@ -1021,7 +1161,7 @@ impl PyDataArray {
     ) -> PyResult<PyGroupBy> {
         let (dim, freq) = one_pair(merge_kwargs(indexer, kwargs)?)?;
         let freq: String = freq.extract()?;
-        slf.get().inner.resample(&dim, &freq).py_err()?;
+        slf.borrow().inner.resample(&dim, &freq).py_err()?;
         Ok(PyGroupBy {
             parent: Parent::Da(slf.clone().unbind()),
             split: Split::Resample { dim, freq },
@@ -1040,7 +1180,7 @@ impl PyDataArray {
         let (dim, window) = one_pair(merge_kwargs(dim, kwargs)?)?;
         let window: usize = window.extract()?;
         let opts = rolling_opts(center, min_periods);
-        slf.get().inner.rolling(&dim, window, &opts).py_err()?;
+        slf.borrow().inner.rolling(&dim, window, &opts).py_err()?;
         Ok(PyRolling {
             parent: Parent::Da(slf.clone().unbind()),
             dim,
@@ -1073,9 +1213,9 @@ impl PyDataArray {
         }
     }
 
-    /// A one-variable dataset.
+    /// A one-variable dataset (`to_dataset` also splits along a dimension).
     #[pyo3(signature = (name=None))]
-    fn to_dataset(&self, py: Python<'_>, name: Option<String>) -> PyResult<Py<PyDataset>> {
+    fn _to_dataset_named(&self, py: Python<'_>, name: Option<String>) -> PyResult<Py<PyDataset>> {
         let name = name
             .or_else(|| self.inner.name().map(ToString::to_string))
             .ok_or_else(|| PyValueError::new_err("unnamed DataArray: pass name="))?;
@@ -1087,7 +1227,7 @@ impl PyDataArray {
     /// As an `xarray.DataArray` (units as the `"units"` attribute).
     fn to_xarray<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
         let py = slf.py();
-        let this = slf.get();
+        let this = slf.borrow();
         let xr = py.import("xarray")?;
         let coords = PyDict::new(py);
         for (k, c) in this.inner.coords() {
@@ -1108,12 +1248,21 @@ impl PyDataArray {
 // ----- Dataset -----
 
 /// A units-aware collection of labelled arrays sharing dimensions (xarray's `Dataset`).
-#[pyclass(frozen, name = "Dataset", module = "annoray")]
+#[pyclass(name = "Dataset", module = "annoray")]
 pub(crate) struct PyDataset {
     pub(crate) inner: Dataset,
+    pub(crate) lending: Lending,
 }
 
 impl PyDataset {
+    #[allow(clippy::unused_self)]
+    fn dims_of_axis(&self, _axis: &Bound<'_, PyAny>) -> PyResult<Vec<Name>> {
+        Err(PyTypeError::new_err(
+            "axis= is ambiguous for a Dataset (its variables order dimensions differently); \
+             use dim=",
+        ))
+    }
+
     fn reduce_with(
         &self,
         py: Python<'_>,
@@ -1130,7 +1279,7 @@ impl PyDataset {
         Ok(new_ds(py, out)?.into_any())
     }
 
-    fn array(&self, name: &str) -> PyResult<DataArray> {
+    pub(crate) fn array(&self, name: &str) -> PyResult<DataArray> {
         if !self.inner.contains(name) {
             return Err(PyKeyError::new_err(name.to_owned()));
         }
@@ -1161,7 +1310,7 @@ impl PyDataset {
         for (k, v) in dict_iter(data_vars)? {
             match v.cast::<PyDataArray>() {
                 Ok(da) => {
-                    let mut a = da.get().inner.clone();
+                    let mut a = da.borrow().inner.clone();
                     // Coordinates already given win (as in xarray with compat="override"-like
                     // identical coordinates).
                     a = a.with_name(k.as_str());
@@ -1173,7 +1322,10 @@ impl PyDataset {
             }
         }
         set_attrs(inner.attrs_mut(), attrs)?;
-        Ok(Self { inner })
+        Ok(Self {
+            inner,
+            lending: Lending::default(),
+        })
     }
 
     /// Data variables, as data arrays.
@@ -1188,22 +1340,20 @@ impl PyDataset {
     }
 
     #[getter]
-    fn data_vars<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
-        let d = PyDict::new(py);
-        for k in self.inner.data_vars().keys() {
-            d.set_item(k.as_str(), new_da(py, self.array(k)?)?)?;
-        }
-        Ok(d)
+    fn data_vars<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyDict>> {
+        let names: Vec<String> = slf.borrow().keys();
+        Self::children(slf, names)
     }
 
-    /// Coordinates, as data arrays.
+    /// Coordinates, as data arrays, in a dict whose assignments (`ds.coords["x"] = …`) and
+    /// deletions apply to this dataset.
     #[getter]
-    fn coords<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
-        let d = PyDict::new(py);
-        for k in self.inner.coords().keys() {
-            d.set_item(k.as_str(), new_da(py, self.array(k)?)?)?;
-        }
-        Ok(d)
+    fn coords<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        live_dict(
+            slf.as_any(),
+            "CoordsDict",
+            Self::plain_coords(slf)?.into_any(),
+        )
     }
 
     /// Dimension names.
@@ -1218,13 +1368,23 @@ impl PyDataset {
         sizes_dict(py, self.inner.sizes())
     }
 
+    /// The global attributes, as a dict whose changes are applied to this dataset.
     #[getter]
-    fn attrs<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
-        attrs_to_py(py, self.inner.attrs())
+    fn attrs<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        let d = attrs_to_py(slf.py(), slf.borrow().inner.attrs())?;
+        live_dict(slf.as_any(), "AttrsDict", d.into_any())
+    }
+
+    #[setter(attrs)]
+    fn set_attrs_py(&mut self, attrs: &Bound<'_, PyAny>) -> PyResult<()> {
+        let mut a = annoray::Attrs::new();
+        set_attrs(&mut a, Some(attrs))?;
+        *self.inner.attrs_mut() = a;
+        Ok(())
     }
 
     /// Names of the data variables.
-    fn keys(&self) -> Vec<String> {
+    pub(crate) fn keys(&self) -> Vec<String> {
         self.inner
             .data_vars()
             .keys()
@@ -1247,9 +1407,17 @@ impl PyDataset {
     }
 
     /// Variables and coordinates as attributes: `ds.temp`.
-    fn __getattr__(&self, py: Python<'_>, name: &str) -> PyResult<Py<PyDataArray>> {
-        if self.inner.contains(name) {
-            return new_da(py, self.array(name)?);
+    fn __getattr__(slf: &Bound<'_, Self>, name: &str) -> PyResult<Py<PyDataArray>> {
+        let found = {
+            let me = slf.borrow();
+            if me.inner.contains(name) {
+                Some(me.array(name)?)
+            } else {
+                None
+            }
+        };
+        if let Some(a) = found {
+            return new_child_da(slf.as_any(), name, a);
         }
         Err(pyo3::exceptions::PyAttributeError::new_err(format!(
             "'Dataset' object has no attribute {name:?}"
@@ -1257,24 +1425,28 @@ impl PyDataset {
     }
 
     /// `ds["temp"]` for a variable (or coordinate); `ds[["a", "b"]]` for a subset.
-    fn __getitem__(&self, py: Python<'_>, key: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
+    fn __getitem__(slf: &Bound<'_, Self>, key: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
+        let py = slf.py();
         if let Ok(name) = key.extract::<String>() {
-            return Ok(new_da(py, self.array(&name)?)?.into_any());
+            let a = slf.borrow().array(&name)?;
+            return Ok(new_child_da(slf.as_any(), &name, a)?.into_any());
         }
+        let me = slf.borrow();
+        let this = &*me;
         let names: Vec<String> = key.extract()?;
         let mut out = Dataset::new();
-        for (k, c) in self.inner.coords() {
+        for (k, c) in this.inner.coords() {
             out.add_coord(k.clone(), c.to_owned()).py_err()?;
         }
         for n in names {
-            let v = self
+            let v = this
                 .inner
                 .data_vars()
                 .get(n.as_str())
                 .ok_or_else(|| PyKeyError::new_err(n.clone()))?;
             out.add_var(n, v.to_owned()).py_err()?;
         }
-        *out.attrs_mut() = self.inner.attrs().clone();
+        *out.attrs_mut() = this.inner.attrs().clone();
         Ok(new_ds(py, out)?.into_any())
     }
 
@@ -1292,7 +1464,9 @@ impl PyDataset {
                 out.remove(&k).py_err()?;
             }
             match v.cast::<PyDataArray>() {
-                Ok(da) => out.add_array(k.as_str(), da.get().inner.clone().with_name(k.as_str())),
+                Ok(da) => {
+                    out.add_array(k.as_str(), da.borrow().inner.clone().with_name(k.as_str()))
+                }
                 Err(_) => out.add_var(k.as_str(), spec_from_py(py, &k, &v)?),
             }
             .py_err()?;
@@ -1308,14 +1482,24 @@ impl PyDataset {
         new_ds(py, py.detach(|| self.inner.transpose(&refs)).py_err()?)
     }
 
-    /// A copy without the named variables.
-    fn drop_vars(&self, py: Python<'_>, names: &Bound<'_, PyAny>) -> PyResult<Py<PyDataset>> {
+    /// A copy without the named variables; `errors="ignore"` skips names that are not
+    /// variables.
+    #[pyo3(signature = (names, *, errors="raise"))]
+    fn drop_vars(
+        &self,
+        py: Python<'_>,
+        names: &Bound<'_, PyAny>,
+        errors: &str,
+    ) -> PyResult<Py<PyDataset>> {
         let names: Vec<String> = match names.extract::<String>() {
             Ok(n) => vec![n],
             Err(_) => names.extract()?,
         };
         let mut out = self.inner.clone();
         for n in names {
+            if errors == "ignore" && !out.contains(&n) {
+                continue;
+            }
             out.remove(&n).py_err()?;
         }
         new_ds(py, out)
@@ -1371,7 +1555,7 @@ impl PyDataset {
         new_ds(py, do_sel(py, &self.inner, args, method, tolerance)?)
     }
 
-    fn fillna(&self, py: Python<'_>, value: f64) -> PyResult<Py<PyDataset>> {
+    fn _fillna_number(&self, py: Python<'_>, value: f64) -> PyResult<Py<PyDataset>> {
         new_ds(py, py.detach(|| self.inner.fillna(value)).py_err()?)
     }
 
@@ -1414,7 +1598,7 @@ impl PyDataset {
     }
 
     fn groupby(slf: &Bound<'_, Self>, group: String) -> PyResult<PyGroupBy> {
-        slf.get().inner.groupby(&group).py_err()?;
+        slf.borrow().inner.groupby(&group).py_err()?;
         Ok(PyGroupBy {
             parent: Parent::Ds(slf.clone().unbind()),
             split: Split::Labels(group),
@@ -1432,7 +1616,7 @@ impl PyDataset {
         let opts = BinOptions::default()
             .right(right)
             .include_lowest(include_lowest);
-        slf.get()
+        slf.borrow()
             .inner
             .groupby_bins(&group, &bins, &opts)
             .py_err()?;
@@ -1450,7 +1634,7 @@ impl PyDataset {
     ) -> PyResult<PyGroupBy> {
         let (dim, freq) = one_pair(merge_kwargs(indexer, kwargs)?)?;
         let freq: String = freq.extract()?;
-        slf.get().inner.resample(&dim, &freq).py_err()?;
+        slf.borrow().inner.resample(&dim, &freq).py_err()?;
         Ok(PyGroupBy {
             parent: Parent::Ds(slf.clone().unbind()),
             split: Split::Resample { dim, freq },
@@ -1468,7 +1652,7 @@ impl PyDataset {
         let (dim, window) = one_pair(merge_kwargs(dim, kwargs)?)?;
         let window: usize = window.extract()?;
         let opts = rolling_opts(center, min_periods);
-        slf.get().inner.rolling(&dim, window, &opts).py_err()?;
+        slf.borrow().inner.rolling(&dim, window, &opts).py_err()?;
         Ok(PyRolling {
             parent: Parent::Ds(slf.clone().unbind()),
             dim,
@@ -1511,7 +1695,7 @@ impl PyDataset {
     /// As an `xarray.Dataset` (units as `"units"` attributes).
     fn to_xarray<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
         let py = slf.py();
-        let this = &slf.get().inner;
+        let this = &slf.borrow().inner;
         let xr = py.import("xarray")?;
         let owner = slf.clone().into_any();
         let vars = PyDict::new(py);
@@ -1650,7 +1834,7 @@ fn one_pair(args: IselArgs<'_>) -> PyResult<(String, Bound<'_, PyAny>)> {
 /// New labels (or interpolation points) along `dim`, as a 1-D variable.
 fn labels_var(py: Python<'_>, dim: &str, v: &Bound<'_, PyAny>) -> PyResult<Variable> {
     if let Ok(da) = v.cast::<PyDataArray>() {
-        return Ok(da.get().inner.variable().to_owned());
+        return Ok(da.borrow().inner.variable().to_owned());
     }
     let dims = PyTuple::new(py, [dim])?.into_any();
     variable_from_py(py, Some(&dims), v, None, None)
@@ -1688,7 +1872,7 @@ macro_rules! with_groups {
     ($self:ident, $py:ident, |$g:ident| $body:expr) => {
         match &$self.parent {
             Parent::Da(p) => {
-                let obj = &p.get().inner;
+                let obj = &p.borrow($py).inner;
                 let $g = match &$self.split {
                     Split::Labels(n) => obj.groupby(n),
                     Split::Bins { group, bins, opts } => obj.groupby_bins(group, bins, opts),
@@ -1699,7 +1883,7 @@ macro_rules! with_groups {
                 Ok(new_da($py, out)?.into_any())
             }
             Parent::Ds(p) => {
-                let obj = &p.get().inner;
+                let obj = &p.borrow($py).inner;
                 let $g = match &$self.split {
                     Split::Labels(n) => obj.groupby(n),
                     Split::Bins { group, bins, opts } => obj.groupby_bins(group, bins, opts),
@@ -1714,6 +1898,13 @@ macro_rules! with_groups {
 }
 
 impl PyGroupBy {
+    #[allow(clippy::unused_self)]
+    fn dims_of_axis(&self, _axis: &Bound<'_, PyAny>) -> PyResult<Vec<Name>> {
+        Err(PyTypeError::new_err(
+            "axis= is not supported for groups; use dim=",
+        ))
+    }
+
     fn reduce_with(
         &self,
         py: Python<'_>,
@@ -1745,8 +1936,8 @@ impl PyGroupBy {
         if reflected {
             return Ok(py.NotImplemented());
         }
-        let obj = &p.get().inner;
-        let other = &other.get().inner;
+        let obj = &p.borrow(py).inner;
+        let other = &other.borrow().inner;
         let g = match &self.split {
             Split::Labels(n) => obj.groupby(n),
             Split::Bins { group, bins, opts } => obj.groupby_bins(group, bins, opts),
@@ -1776,10 +1967,10 @@ impl PyGroupBy {
     }
 
     /// Number of groups.
-    fn __len__(&self) -> PyResult<usize> {
+    fn __len__(&self, py: Python<'_>) -> PyResult<usize> {
         match &self.parent {
             Parent::Da(p) => {
-                let obj = &p.get().inner;
+                let obj = &p.borrow(py).inner;
                 Ok(match &self.split {
                     Split::Labels(n) => obj.groupby(n),
                     Split::Bins { group, bins, opts } => obj.groupby_bins(group, bins, opts),
@@ -1789,7 +1980,7 @@ impl PyGroupBy {
                 .len())
             }
             Parent::Ds(p) => {
-                let obj = &p.get().inner;
+                let obj = &p.borrow(py).inner;
                 Ok(match &self.split {
                     Split::Labels(n) => obj.groupby(n),
                     Split::Bins { group, bins, opts } => obj.groupby_bins(group, bins, opts),
@@ -1821,13 +2012,19 @@ impl PyGroupBy {
             }};
         }
         match &self.parent {
-            Parent::Da(p) => fill!(p.get().inner, new_da),
-            Parent::Ds(p) => fill!(p.get().inner, new_ds),
+            Parent::Da(p) => {
+                let held = p.borrow(py);
+                fill!(held.inner, new_da)
+            }
+            Parent::Ds(p) => {
+                let held = p.borrow(py);
+                fill!(held.inner, new_ds)
+            }
         }
         pairs.try_iter().map(Bound::into_any)
     }
 
-    fn __repr__(&self) -> PyResult<String> {
+    fn __repr__(&self, py: Python<'_>) -> PyResult<String> {
         let what = match &self.split {
             Split::Labels(n) => format!("groupby({n:?})"),
             Split::Bins { group, .. } => format!("groupby_bins({group:?})"),
@@ -1835,7 +2032,7 @@ impl PyGroupBy {
         };
         Ok(format!(
             "<annoray.GroupBy {what}, {} groups>",
-            self.__len__()?
+            self.__len__(py)?
         ))
     }
 }
@@ -1881,8 +2078,8 @@ impl PyRolling {
         let Parent::Da(p) = &self.parent else {
             return Err(PyTypeError::new_err("construct needs a DataArray"));
         };
-        let r = p
-            .get()
+        let held = p.borrow(py);
+        let r = held
             .inner
             .rolling(&self.dim, self.window, &self.opts)
             .py_err()?;
@@ -1902,16 +2099,16 @@ impl PyRolling {
     fn reduce(&self, py: Python<'_>, op: Reduction) -> PyResult<Py<PyAny>> {
         match &self.parent {
             Parent::Da(p) => {
-                let r = p
-                    .get()
+                let held = p.borrow(py);
+                let r = held
                     .inner
                     .rolling(&self.dim, self.window, &self.opts)
                     .py_err()?;
                 Ok(new_da(py, py.detach(|| r.reduce(op)).py_err()?)?.into_any())
             }
             Parent::Ds(p) => {
-                let r = p
-                    .get()
+                let held = p.borrow(py);
+                let r = held
                     .inner
                     .rolling(&self.dim, self.window, &self.opts)
                     .py_err()?;
@@ -1955,7 +2152,7 @@ pub(crate) struct PyDt {
 #[pymethods]
 impl PyDt {
     fn __getattr__(&self, py: Python<'_>, name: &str) -> PyResult<Py<PyDataArray>> {
-        let da = &self.parent.get().inner;
+        let da = &self.parent.borrow(py).inner;
         let var = da
             .variable()
             .dt(name)
@@ -2107,7 +2304,8 @@ pub(crate) fn concat(
             .iter()
             .map(|o| o.cast::<PyDataArray>().cloned())
             .collect::<Result<_, _>>()?;
-        let refs: Vec<&DataArray> = arrays.iter().map(|a| &a.get().inner).collect();
+        let held: Vec<PyRef<'_, PyDataArray>> = arrays.iter().map(Bound::borrow).collect();
+        let refs: Vec<&DataArray> = held.iter().map(|a| &a.inner).collect();
         let out = py.detach(|| annoray::concat(&refs, dim, &opts)).py_err()?;
         return Ok(new_da(py, out)?.into_any());
     }
@@ -2115,7 +2313,8 @@ pub(crate) fn concat(
         .iter()
         .map(|o| o.cast::<PyDataset>().cloned())
         .collect::<Result<_, _>>()?;
-    let refs: Vec<&Dataset> = sets.iter().map(|a| &a.get().inner).collect();
+    let held: Vec<PyRef<'_, PyDataset>> = sets.iter().map(Bound::borrow).collect();
+    let refs: Vec<&Dataset> = held.iter().map(|a| &a.inner).collect();
     let out = py
         .detach(|| annoray::concat_datasets(&refs, dim, &opts))
         .py_err()?;
@@ -2133,7 +2332,7 @@ pub(crate) fn merge(
     let mut sets = Vec::with_capacity(objs.len());
     for o in &objs {
         if let Ok(da) = o.cast::<PyDataArray>() {
-            let a = &da.get().inner;
+            let a = &da.borrow().inner;
             let name = a
                 .name()
                 .ok_or_else(|| PyValueError::new_err("unnamed DataArray cannot be merged"))?;
@@ -2141,13 +2340,47 @@ pub(crate) fn merge(
             ds.add_array(name.clone(), a.clone()).py_err()?;
             sets.push(ds);
         } else {
-            sets.push(o.cast::<PyDataset>()?.get().inner.clone());
+            sets.push(o.cast::<PyDataset>()?.borrow().inner.clone());
         }
     }
     let refs: Vec<&Dataset> = sets.iter().collect();
     let mut opts = MergeOptions::default();
     opts.join = join_from(join)?;
     new_ds(py, py.detach(|| annoray::merge(&refs, &opts)).py_err()?)
+}
+
+/// Combine datasets that tile one dimension, ordered by its coordinate (xarray's
+/// `combine_by_coords`); datasets that do not differ along any dimension are merged.
+#[pyfunction]
+#[pyo3(signature = (data_objects, **kwargs))]
+pub(crate) fn combine_by_coords(
+    py: Python<'_>,
+    data_objects: Vec<Bound<'_, PyAny>>,
+    kwargs: Option<&Bound<'_, PyDict>>,
+) -> PyResult<Py<PyDataset>> {
+    let _ = kwargs;
+    let mut sets = Vec::with_capacity(data_objects.len());
+    for o in &data_objects {
+        if let Ok(da) = o.cast::<PyDataArray>() {
+            let a = da.borrow().inner.clone();
+            let name = a
+                .name()
+                .cloned()
+                .ok_or_else(|| PyValueError::new_err("unnamed DataArray cannot be combined"))?;
+            let mut ds = Dataset::new();
+            ds.add_array(name, a).py_err()?;
+            sets.push(ds);
+        } else {
+            sets.push(o.cast::<PyDataset>()?.borrow().inner.clone());
+        }
+    }
+    let refs: Vec<&Dataset> = sets.iter().collect();
+    let opts = ConcatOptions::default();
+    new_ds(
+        py,
+        py.detach(|| annoray::combine_by_coords(&refs, &opts))
+            .py_err()?,
+    )
 }
 
 /// Align data arrays (or datasets) on their shared coordinates.
@@ -2164,7 +2397,8 @@ pub(crate) fn align<'py>(
             .iter()
             .map(|o| o.cast::<PyDataArray>().cloned())
             .collect::<Result<_, _>>()?;
-        let refs: Vec<&DataArray> = arrays.iter().map(|a| &a.get().inner).collect();
+        let held: Vec<PyRef<'_, PyDataArray>> = arrays.iter().map(Bound::borrow).collect();
+        let refs: Vec<&DataArray> = held.iter().map(|a| &a.inner).collect();
         let out = py.detach(|| annoray::align(&refs, j)).py_err()?;
         let items = out
             .into_iter()
@@ -2176,7 +2410,8 @@ pub(crate) fn align<'py>(
         .iter()
         .map(|o| o.cast::<PyDataset>().cloned())
         .collect::<Result<_, _>>()?;
-    let refs: Vec<&Dataset> = sets.iter().map(|a| &a.get().inner).collect();
+    let held: Vec<PyRef<'_, PyDataset>> = sets.iter().map(Bound::borrow).collect();
+    let refs: Vec<&Dataset> = held.iter().map(|a| &a.inner).collect();
     let out = py.detach(|| annoray::align_datasets(&refs, j)).py_err()?;
     let items = out
         .into_iter()

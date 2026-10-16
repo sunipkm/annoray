@@ -16,8 +16,9 @@ and ``ar.to_netcdf(xr_dataset, path)`` writes an xarray dataset with annoray's w
 from __future__ import annotations
 
 from importlib.metadata import version as _version
+from typing import Any
 
-from annoray import dims
+from annoray import dims, testing
 from annoray._annoray import (
     Coarsen,
     DataArray,
@@ -31,10 +32,15 @@ from annoray._annoray import (
     UnitError,
     Weighted,
     align,
+    broadcast,
+    combine_by_coords,
     concat,
+    corr,
+    cov,
     date_range,
     dot,
     from_xarray,
+    full_like,
     merge,
     open_dataset,
     open_datatree,
@@ -42,8 +48,18 @@ from annoray._annoray import (
     polyval,
     set_stream_bytes,
     stream_bytes,
+    where,
 )
 from annoray._astropy import from_astropy, to_astropy
+from annoray._functions import (
+    combine_nested,
+    cross,
+    infer_freq,
+    map_blocks,
+    open_dataarray,
+    save_mfdataset,
+    set_options,
+)
 from annoray._ufunc import apply_ufunc
 from annoray.dims import dimension
 
@@ -65,25 +81,51 @@ __all__ = [
     "__version__",
     "align",
     "apply_ufunc",
+    "broadcast",
+    "combine_by_coords",
+    "combine_nested",
     "concat",
+    "corr",
+    "cov",
+    "cross",
     "date_range",
     "dimension",
     "dims",
     "dot",
     "from_astropy",
     "from_xarray",
+    "full_like",
+    "infer_freq",
+    "map_blocks",
     "merge",
+    "ones_like",
+    "open_dataarray",
     "open_dataset",
     "open_datatree",
     "open_mfdataset",
     "open_zarr",
     "polyval",
+    "save_mfdataset",
+    "set_options",
     "set_stream_bytes",
     "stream_bytes",
+    "testing",
     "to_astropy",
     "to_netcdf",
     "to_zarr",
+    "where",
+    "zeros_like",
 ]
+
+
+def zeros_like(other: Any, dtype: Any = None) -> Any:
+    """A DataArray or Dataset shaped like ``other``, filled with 0 (in ``other``'s unit)."""
+    return full_like(other, 0, dtype=dtype)
+
+
+def ones_like(other: Any, dtype: Any = None) -> Any:
+    """A DataArray or Dataset shaped like ``other``, filled with 1 (in ``other``'s unit)."""
+    return full_like(other, 1, dtype=dtype)
 
 
 def open_zarr(store, group=None, **kwargs):

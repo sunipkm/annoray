@@ -84,7 +84,8 @@ impl PyDataArray {
             return Ok(py.NotImplemented());
         }
         let name: String = ufunc.getattr("__name__")?.extract()?;
-        let me = slf.get();
+        let me_ref = slf.borrow();
+        let me = &*me_ref;
         match inputs.len() {
             1 => {
                 if matches!(name.as_str(), "logical_not" | "invert") {
@@ -122,7 +123,7 @@ impl PyDataArray {
             .iter()
             .filter_map(|x| x.cast::<PyDataArray>().ok().cloned())
             .collect();
-        if arrays.iter().any(|a| a.get().inner.unit().is_some()) {
+        if arrays.iter().any(|a| a.borrow().inner.unit().is_some()) {
             return Err(PyTypeError::new_err(format!(
                 "numpy.{name} is not unit-aware; apply it to .values or convert to plain numbers first"
             )));

@@ -83,7 +83,14 @@ fn weights(
         return Ok(values.iter().copied().collect());
     }
     if let Ok(d) = w.cast::<PyDataArray>() {
-        return Ok(d.get().inner.to_f64().py_err()?.iter().copied().collect());
+        return Ok(d
+            .borrow()
+            .inner
+            .to_f64()
+            .py_err()?
+            .iter()
+            .copied()
+            .collect());
     }
     let np = w.py().import("numpy")?;
     np.call_method1("asarray", (w, "float64"))?
@@ -297,13 +304,13 @@ pub(crate) fn polyval(
     coeffs: &Bound<'_, PyAny>,
     degree_dim: &str,
 ) -> PyResult<Py<PyAny>> {
-    let x = &coord.get().inner;
+    let x = &coord.borrow().inner;
     if let Ok(da) = coeffs.cast::<PyDataArray>() {
-        let c = &da.get().inner;
+        let c = &da.borrow().inner;
         let out = py.detach(|| annoray::polyval(x, c, degree_dim));
         return Ok(new_da(py, out.py_err()?)?.into_any());
     }
-    let ds = &coeffs.cast::<PyDataset>()?.get().inner;
+    let ds = &coeffs.cast::<PyDataset>()?.borrow().inner;
     let out = py.detach(|| annoray::polyval_dataset(x, ds, degree_dim));
     Ok(new_ds(py, out.py_err()?)?.into_any())
 }

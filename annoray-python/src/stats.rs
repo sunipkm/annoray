@@ -127,7 +127,7 @@ impl PyDataArray {
     fn weighted(&self, weights: &Bound<'_, PyDataArray>) -> PyResult<PyWeighted> {
         Ok(PyWeighted {
             inner: Weights::Da(Box::new(
-                self.inner.weighted(&weights.get().inner).py_err()?,
+                self.inner.weighted(&weights.borrow().inner).py_err()?,
             )),
         })
     }
@@ -189,7 +189,7 @@ impl PyDataset {
     fn weighted(&self, weights: &Bound<'_, PyDataArray>) -> PyResult<PyWeighted> {
         Ok(PyWeighted {
             inner: Weights::Ds(Box::new(
-                self.inner.weighted(&weights.get().inner).py_err()?,
+                self.inner.weighted(&weights.borrow().inner).py_err()?,
             )),
         })
     }

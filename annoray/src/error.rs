@@ -172,6 +172,16 @@ pub enum CoreError {
     /// Values cannot be viewed in place as a compile-time quantity type; convert instead.
     #[error("cannot view in place: {0}")]
     NotViewable(String),
+    /// A value has no counterpart in the requested element type (`astype`, `full_like`).
+    #[error("cannot convert {value} to {dtype}: {reason}")]
+    Cast {
+        /// The value.
+        value: String,
+        /// The requested element type.
+        dtype: DType,
+        /// Why.
+        reason: &'static str,
+    },
     /// Integer arithmetic overflowed.
     #[error("integer overflow in {0}")]
     ArithmeticOverflow(&'static str),

@@ -156,13 +156,19 @@ impl PyDataArray {
         new_da(py, do_squeeze(py, &self.inner, dim)?)
     }
 
-    /// A new length-1 dimension at `axis` (a scalar coordinate of that name becomes its
-    /// coordinate).
-    #[pyo3(signature = (dim, axis=0))]
-    fn expand_dims(&self, py: Python<'_>, dim: &str, axis: isize) -> PyResult<Py<PyDataArray>> {
+    /// New dimensions: a name, names, or `{name: size or labels}` (also as keywords), at
+    /// `axis` (0 by default); a scalar coordinate of a new name becomes its coordinate.
+    #[pyo3(signature = (dim=None, axis=None, **dim_kwargs))]
+    fn expand_dims(
+        &self,
+        py: Python<'_>,
+        dim: Option<&Bound<'_, PyAny>>,
+        axis: Option<&Bound<'_, PyAny>>,
+        dim_kwargs: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<Py<PyDataArray>> {
         new_da(
             py,
-            py.detach(|| self.inner.expand_dims(dim, axis)).py_err()?,
+            crate::utility::do_expand(py, &self.inner, dim, axis, dim_kwargs)?,
         )
     }
 
