@@ -200,3 +200,35 @@ fn datasets_and_lazy_data() {
     assert_eq!(vals(&l), vals(&e));
     assert!(lazy.variable().is_lazy());
 }
+
+#[test]
+fn index_coordinates_win_over_scalar_ones() {
+    let a = grid();
+    let row = a.isel([("x", 0isize)]).unwrap().to_owned();
+    assert_eq!(row.coords()["x"].ndim(), 0);
+    for order in [[("v", &a), ("w", &row)], [("w", &row), ("v", &a)]] {
+        let mut ds = Dataset::new();
+        for (k, d) in order {
+            ds.add_array(k, d.clone()).unwrap();
+        }
+        assert_eq!(ds.coords()["x"].dims(), ["x"]);
+        assert_eq!(
+            coord(&ds.get("v").unwrap().to_owned(), "x"),
+            [0.0, 10.0, 20.0]
+        );
+    }
+    // Two non-index coordinates that disagree still conflict.
+    let other = a.isel([("x", 1isize)]).unwrap().to_owned();
+    let mut ds = Dataset::new();
+    ds.add_array("w", row.clone()).unwrap();
+    assert!(matches!(
+        ds.add_array("u", other.clone()),
+        Err(CoreError::NameConflict(_))
+    ));
+    // merge applies the same rule.
+    let (mut d1, mut d2) = (Dataset::new(), Dataset::new());
+    d1.add_array("w", row).unwrap();
+    d2.add_array("v", a).unwrap();
+    let m = annoray::merge(&[&d1, &d2], &annoray::MergeOptions::default()).unwrap();
+    assert_eq!(m.coords()["x"].dims(), ["x"]);
+}

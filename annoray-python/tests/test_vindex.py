@@ -102,3 +102,19 @@ def test_dataset():
     got, want = ds.isel(x=ia, y=ja), xs.isel(x=ix, y=jx)
     for k in ["v", "w"]:
         same(got[k], want[k])
+
+
+def test_index_coordinate_wins_when_building_datasets():
+    a, x = pair()
+    for order in [("v", "w"), ("w", "v")]:
+        objs = {"v": a, "w": a.isel(z=0)}
+        xobjs = {"v": x, "w": x.isel(z=0)}
+        ds = ar.Dataset({k: objs[k] for k in order})
+        xs = xr.Dataset({k: xobjs[k] for k in order})
+        assert sorted(ds.coords) == sorted(xs.coords)
+        np.testing.assert_array_equal(ds.coords["z"].values, xs.coords["z"].values)
+        assert tuple(ds["w"].dims) == tuple(xs["w"].dims)
+    merged = ar.merge([a.isel(z=0).rename("w"), a.rename("v")])
+    np.testing.assert_array_equal(merged.coords["z"].values, [5, 6])
+    with pytest.raises(ValueError):
+        ar.Dataset({"w": a.isel(z=0), "u": a.isel(z=1)})

@@ -533,7 +533,9 @@ pub fn concat<S: Repr>(
     Ok(DataArrayBase::from_parts(name, var, coords))
 }
 
-/// Merge datasets: align them, then combine variables of the same name.
+/// Merge datasets: align them, then combine variables of the same name. A dimension
+/// coordinate (an index) takes precedence over non-index coordinates of the same name,
+/// which are dropped, as in xarray.
 ///
 /// # Errors
 /// Alignment errors ([`CoreError::NotAligned`] under the default exact join);
@@ -555,7 +557,15 @@ pub fn merge<S: Repr>(datasets: &[&DatasetBase<S>], opts: &MergeOptions) -> Resu
                     "a coordinate in one dataset, a variable in another",
                 ));
             }
-            let present: Vec<&Variable> = maps.iter().filter_map(|m| m.get(&name)).collect();
+            let mut present: Vec<&Variable> = maps.iter().filter_map(|m| m.get(&name)).collect();
+            // A dimension coordinate (an index) takes precedence over non-index ones of the
+            // same name, which are dropped (xarray's merge rule).
+            if is_coord {
+                let index = |v: &&Variable| v.dims() == std::slice::from_ref(&name);
+                if present.iter().any(index) && !present.iter().all(index) {
+                    present.retain(index);
+                }
+            }
             let var = combine_compat(&present, opts.compat, &name)?;
             if is_coord {
                 out.add_coord(name, var)?;

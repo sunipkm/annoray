@@ -99,16 +99,26 @@ impl Dataset {
     }
 
     /// Add a data array: its data becomes a data variable (named `name`), its coordinates
-    /// are merged in (they must agree with existing coordinates of the same name).
+    /// are merged in. A coordinate must agree with an existing one of the same name, except
+    /// that a dimension coordinate (an index) takes precedence over a non-index one, which
+    /// is dropped, whichever comes first (xarray's merge rule: `ds = Dataset({"v": a, "w":
+    /// a.isel(z=0)})` keeps `z` as `v`'s index and drops `w`'s scalar `z`).
     ///
     /// # Errors
-    /// [`CoreError::NameConflict`] if a coordinate of the same name differs.
+    /// [`CoreError::NameConflict`] if a coordinate of the same name differs and neither or
+    /// both are indexes.
     pub fn add_array(&mut self, name: impl Into<Name>, array: DataArray) -> Result<()> {
         let name = name.into();
         let (_, var, coords) = array.into_parts();
         for (cname, c) in coords {
+            let index = |v: &Variable| v.dims() == std::slice::from_ref(&cname);
             match self.coords.get(&cname) {
                 Some(existing) if crate::ops::variables_equal(existing, &c) => {}
+                Some(existing) if index(existing) && !index(&c) => {}
+                Some(existing) if !index(existing) && index(&c) => {
+                    self.coords.shift_remove(&cname);
+                    self.add_coord(cname, c)?;
+                }
                 Some(_) => return Err(CoreError::NameConflict(cname)),
                 None => self.add_coord(cname, c)?,
             }
