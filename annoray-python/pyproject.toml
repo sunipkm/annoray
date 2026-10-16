@@ -46,7 +46,23 @@ xarray = ["xarray>=2025.1"]
 astropy = ["astropy>=6"]
 # Dates in non-standard CF calendars (noleap, 360_day, ...) as cftime objects.
 cftime = ["cftime"]
-test = ["pytest", "xarray>=2025.1", "pandas", "cftime", "netCDF4", "h5netcdf", "astropy>=6"]
+# Everything the test suite uses (tests skip what is missing).
+test = [
+    "pytest",
+    "xarray>=2025.1",
+    "pandas",
+    "cftime",
+    "netCDF4",
+    "h5netcdf",
+    "h5py",
+    "astropy>=6",
+    "zarr>=3",
+    "scipy",
+    "bottleneck",
+    "cf_xarray",
+    "pint",
+    "dask",
+]
 
 # xr.open_dataset(path, engine="annoray") (used only when xarray is installed)
 [project.entry-points."xarray.backends"]

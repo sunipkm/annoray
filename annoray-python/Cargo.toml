@@ -21,7 +21,7 @@ doctest = false
 chrono.workspace = true
 ndarray.workspace = true
 numpy.workspace = true
-pyo3 = { workspace = true, features = ["multiple-pymethods"] }
+pyo3 = { workspace = true, features = ["multiple-pymethods", "abi3-py311"] }
 annoray.workspace = true
 
 [target.'cfg(target_os = "linux")'.dependencies]

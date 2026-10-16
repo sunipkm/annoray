@@ -130,7 +130,7 @@ def test_missing_file_is_an_oserror(tmp_path):
 
 def _sample() -> xr.Dataset:
     t = pd.date_range("2000-01-01", periods=4, freq="6h").values.copy()
-    t[2] = np.datetime64("NaT")
+    t[2] = np.datetime64("NaT", "ns")
     rng = np.random.default_rng(0)
     temp = rng.normal(280, 5, (4, 3)).astype("float32")
     temp[1, 1] = np.nan
