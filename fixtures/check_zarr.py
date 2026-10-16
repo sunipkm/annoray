@@ -13,6 +13,15 @@ import numpy as np
 import zarr
 
 root = zarr.open_group(sys.argv[1], mode="r")
+
+
+def values(path: str) -> np.ndarray:
+    """Every value of the array at `path`."""
+    a = root[path]
+    assert isinstance(a, zarr.Array), path
+    return np.asarray(a[...])
+
+
 fmt = root.metadata.zarr_format
 i, j = np.meshgrid(np.arange(7), np.arange(5), indexing="ij")
 f = 100 * i + j
@@ -29,21 +38,20 @@ for name in ["int16", "int32", "int64", "uint16", "uint32", "uint64"]:
 
 assert root.attrs["title"] == "written by annoray-zarr"
 for name, want in expect.items():
-    a = root[f"dtype_{name}"]
-    got = a[...]
+    got = values(f"dtype_{name}")
     assert str(got.dtype) == ("object" if name == "string" else name) or name == "string", (name, got.dtype)
     np.testing.assert_array_equal(np.asarray(got, dtype=want.dtype), want, err_msg=name)
 for key in root.array_keys():
     if key.startswith("comp_"):
-        np.testing.assert_array_equal(root[key][...], f / 7.0, err_msg=key)
-np.testing.assert_array_equal(root["fixed_unicode"][...].astype(str), expect["string"].astype(str))
-sparse = root["sparse"][...]
+        np.testing.assert_array_equal(values(key), f / 7.0, err_msg=key)
+np.testing.assert_array_equal(values("fixed_unicode").astype(str), expect["string"].astype(str))
+sparse = values("sparse")
 np.testing.assert_array_equal(sparse, [1.0, 2.0, np.nan, np.nan, 5.0, np.nan])
-assert root["scalar"][()] == 42
+assert values("scalar") == 42
 if fmt == 3:
     v = np.where(np.arange(8)[:, None] >= 4, 0, 100 * np.arange(8)[:, None] + np.arange(9)[None, :])
-    np.testing.assert_array_equal(root["sharded"][...], v)
-np.testing.assert_array_equal(root["sub/inner"][...], [1, 2, 3])
+    np.testing.assert_array_equal(values("sharded"), v)
+np.testing.assert_array_equal(values("sub/inner"), [1, 2, 3])
 
 # Consolidated metadata: opening it lists every array without warnings.
 with warnings.catch_warnings():
