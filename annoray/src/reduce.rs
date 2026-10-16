@@ -13,8 +13,9 @@
 //! - **Units**: kept by `sum`, `mean`, `median`, `min`, `max`; `std` of an affine unit (°C)
 //!   becomes its difference unit; `var` squares the unit; `prod` raises it to the number of
 //!   elements; `count`, `argmin`, `argmax`, `any`, `all` drop it. Summing °C is an error.
-//! - **Coordinates** along reduced dimensions are dropped; **attributes** too unless
-//!   [`ReduceOptions::keep_attrs`].
+//! - **Coordinates** along reduced dimensions are dropped; **attributes** are kept, as
+//!   xarray's default `keep_attrs` (units are not attributes, so they never go stale), unless
+//!   [`ReduceOptions::keep_attrs`] is false.
 
 use std::cmp::Ordering;
 use std::ops::RangeFull;
@@ -93,7 +94,7 @@ impl Reduction {
 }
 
 /// Options for [`reduce`](DataArrayBase::reduce).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct ReduceOptions {
     /// Ignore NaNs (default: yes).
@@ -102,8 +103,20 @@ pub struct ReduceOptions {
     pub ddof: usize,
     /// For `sum` and `prod`: fewer valid values than this gives NaN (and a float result).
     pub min_count: Option<usize>,
-    /// Keep the attributes of reduced variables (and of a dataset).
+    /// Keep the attributes of reduced variables (and of a dataset); the default, as xarray's
+    /// `keep_attrs` (units are not attributes, so they never go stale).
     pub keep_attrs: bool,
+}
+
+impl Default for ReduceOptions {
+    fn default() -> Self {
+        Self {
+            skipna: None,
+            ddof: 0,
+            min_count: None,
+            keep_attrs: true,
+        }
+    }
 }
 
 impl ReduceOptions {

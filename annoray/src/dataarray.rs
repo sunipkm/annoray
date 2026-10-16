@@ -427,6 +427,15 @@ impl<S: Repr> DataArrayBase<S> {
     }
 }
 
+impl DataArray {
+    /// The array with `attrs` as its attributes (results that keep their source's, as
+    /// xarray's default `keep_attrs`).
+    pub(crate) fn with_attrs_from(mut self, attrs: &crate::Attrs) -> Self {
+        *self.attrs_mut() = attrs.clone();
+        self
+    }
+}
+
 impl<S: ReprMut> DataArrayBase<S> {
     /// A mutable view: data writable, coordinates shared.
     #[must_use]

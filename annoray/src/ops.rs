@@ -588,6 +588,7 @@ impl<S: Repr> DataArrayBase<S> {
                 var,
                 unit,
                 rhs.name(),
+                rhs.attrs(),
                 rhs.coords.iter().map(|(k, v)| (k, v.to_owned())),
             ));
         }
@@ -603,6 +604,7 @@ impl<S: Repr> DataArrayBase<S> {
             var,
             unit,
             rhs.name(),
+            rhs.attrs(),
             rhs.coords.iter().map(|(k, v)| (k, v.to_owned())),
         ))
     }
@@ -659,8 +661,11 @@ impl<S: Repr> DataArrayBase<S> {
         mut var: Variable,
         unit: Option<Unit>,
         rhs_name: Option<&Name>,
+        rhs_attrs: &crate::Attrs,
         rhs_coords: impl Iterator<Item = (&'a Name, Variable)>,
     ) -> DataArray {
+        // Attributes of both operands, conflicting keys dropped (xarray's default).
+        *var.attrs_mut() = crate::attrs::drop_conflicts(self.attrs(), rhs_attrs);
         // Composed spellings (`km s-1`) are verified when made; an unchanged unit keeps the
         // left operand's spelling.
         var.set_unit(unit.map(|u| match (self.unit(), &u) {
@@ -722,6 +727,7 @@ impl<S: Repr> DataArrayBase<S> {
         }
         let lhs = self.variable().typed()?;
         let (rname, rvar, rcoords) = rhs.into_parts();
+        let rattrs = rvar.attrs().clone();
         let dims: Vec<Name> = rvar.dims().to_vec();
         let mut data = rvar.into_typed()?;
         match (&lhs, &mut data) {
@@ -739,6 +745,7 @@ impl<S: Repr> DataArrayBase<S> {
             var,
             unit,
             rname.as_ref(),
+            &rattrs,
             rcoords.iter().map(|(k, v)| (k, v.clone())),
         ))
     }

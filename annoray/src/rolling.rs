@@ -315,7 +315,8 @@ impl<S: Repr> DataArrayRolling<'_, S> {
                 dtype: self.obj.dtype(),
             });
         }
-        let v = rolling_reduce(self.obj.variable(), &self.dim, self.window, &self.opts, op)?;
+        let mut v = rolling_reduce(self.obj.variable(), &self.dim, self.window, &self.opts, op)?;
+        *v.attrs_mut() = self.obj.attrs().clone();
         let coords = self
             .obj
             .coords()
@@ -369,7 +370,9 @@ impl<S: Repr> DatasetRolling<'_, S> {
                 DType::Str | DType::Bool | DType::DateTime | DType::CfDate | DType::TimeDelta
             );
             let r = if v.dims().contains(&self.dim) && numeric {
-                rolling_reduce(v, &self.dim, self.window, &self.opts, op)?
+                let mut r = rolling_reduce(v, &self.dim, self.window, &self.opts, op)?;
+                *r.attrs_mut() = v.attrs().clone();
+                r
             } else {
                 v.to_owned()
             };

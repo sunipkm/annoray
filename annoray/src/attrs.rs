@@ -62,3 +62,20 @@ macro_rules! numeric_attr {
 numeric_attr!(
     I8 i8, I16 i16, I32 i32, I64 i64, U8 u8, U16 u16, U32 u32, U64 u64, F32 f32, F64 f64,
 );
+
+/// The attributes of an operation's result from its operands' (xarray's
+/// `combine_attrs="drop_conflicts"`, the default since `keep_attrs` became true): the union,
+/// without the keys the operands give different values.
+pub(crate) fn drop_conflicts(a: &Attrs, b: &Attrs) -> Attrs {
+    let mut out: Attrs = a
+        .iter()
+        .filter(|(k, v)| b.get(*k).is_none_or(|w| w == *v))
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .collect();
+    for (k, v) in b {
+        if !a.contains_key(k) {
+            out.insert(k.clone(), v.clone());
+        }
+    }
+    out
+}

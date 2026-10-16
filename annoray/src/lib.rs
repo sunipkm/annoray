@@ -52,6 +52,7 @@ mod combine;
 mod compare;
 mod dataarray;
 mod dataset;
+mod dataset_ops;
 mod display;
 mod dt;
 mod elementwise;

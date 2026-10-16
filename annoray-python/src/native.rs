@@ -435,7 +435,7 @@ macro_rules! reductions {
         impl $ty {
             $(
                 #[doc = concat!("`", stringify!($m), "` over `dim` (all dimensions by default).")]
-                #[pyo3(signature = (dim=None, *, skipna=None, ddof=0, min_count=None, keep_attrs=false))]
+                #[pyo3(signature = (dim=None, *, skipna=None, ddof=0, min_count=None, keep_attrs=None))]
                 fn $m(
                     &self,
                     py: Python<'_>,
@@ -443,9 +443,9 @@ macro_rules! reductions {
                     skipna: Option<bool>,
                     ddof: usize,
                     min_count: Option<usize>,
-                    keep_attrs: bool,
+                    keep_attrs: Option<bool>,
                 ) -> PyResult<Py<PyAny>> {
-                    let opts = reduce_opts(skipna, ddof, min_count, keep_attrs);
+                    let opts = reduce_opts(skipna, ddof, min_count, keep_attrs.unwrap_or(true));
                     self.reduce_with(py, Reduction::$op, reduce_dims(dim)?, &opts)
                 }
             )*

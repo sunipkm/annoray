@@ -432,3 +432,11 @@ impl<S: Repr> DataArrayBase<S> {
         ))
     }
 }
+
+/// `-x`: negation with its unit rule ([`MathFn::Neg`]).
+impl<S: Repr> std::ops::Neg for &DataArrayBase<S> {
+    type Output = Result<DataArray>;
+    fn neg(self) -> Result<DataArray> {
+        self.math(MathFn::Neg)
+    }
+}

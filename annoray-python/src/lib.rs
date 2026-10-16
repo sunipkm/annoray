@@ -12,6 +12,7 @@ mod alloc;
 mod calculus;
 mod compare;
 mod convert;
+mod dataset_ops;
 mod elementwise;
 mod fill;
 mod math;

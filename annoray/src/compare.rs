@@ -11,7 +11,7 @@
 //! - Text, dates, CF dates (same calendar) and durations compare with their own kind; booleans
 //!   with booleans; integers exactly.
 //! - NaN and NaT compare false, except `!=`, which is true (numpy).
-//! - The result has no unit and no attributes; coordinates as in arithmetic. Comparing lazy
+//! - The result has no unit; attributes and coordinates as in arithmetic. Comparing lazy
 //!   data with a scalar stays lazy; two lazy arrays are read.
 //! - Logical operations take booleans without units.
 
@@ -318,11 +318,11 @@ impl<S: Repr> DataArrayBase<S> {
                     Ok(TypedArray::Bool(r))
                 })?;
             var.set_unit(None);
-            var.attrs_mut().clear();
             return Ok(self.assemble(
                 var,
                 None,
                 rhs.name(),
+                rhs.attrs(),
                 rhs.coords().iter().map(|(k, v)| (k, v.to_owned())),
             ));
         }
@@ -344,6 +344,7 @@ impl<S: Repr> DataArrayBase<S> {
             var,
             None,
             rhs.name(),
+            rhs.attrs(),
             rhs.coords().iter().map(|(k, v)| (k, v.to_owned())),
         ))
     }
@@ -410,6 +411,7 @@ impl<S: Repr> DataArrayBase<S> {
             var,
             None,
             rhs.name(),
+            rhs.attrs(),
             rhs.coords().iter().map(|(k, v)| (k, v.to_owned())),
         ))
     }
@@ -441,7 +443,6 @@ impl<S: Repr> DataArrayBase<S> {
             )?
         };
         var.set_unit(None);
-        var.attrs_mut().clear();
         Ok(DataArrayBase::from_parts(
             self.name().cloned(),
             var,

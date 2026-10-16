@@ -57,14 +57,16 @@ impl<S: Repr> VariableBase<S> {
                 .lazy_map("isnull", |t| Ok(TypedArray::Bool(null_mask(&t.view()))))
                 .map(|mut v| {
                     v.set_unit(None);
-                    v.attrs_mut().clear();
                     v
                 });
         }
-        Variable::from_typed(
+        let mut v = Variable::from_typed(
             self.dims().iter().cloned(),
             TypedArray::Bool(null_mask(&self.typed()?)),
-        )
+        )?;
+        v.attrs_mut()
+            .extend(self.attrs().iter().map(|(k, a)| (k.clone(), a.clone())));
+        Ok(v)
     }
 
     /// Where values are present.
@@ -79,14 +81,16 @@ impl<S: Repr> VariableBase<S> {
                 })
                 .map(|mut v| {
                     v.set_unit(None);
-                    v.attrs_mut().clear();
                     v
                 });
         }
-        Variable::from_typed(
+        let mut v = Variable::from_typed(
             self.dims().iter().cloned(),
             TypedArray::Bool(null_mask(&self.typed()?).mapv(|m| !m)),
-        )
+        )?;
+        v.attrs_mut()
+            .extend(self.attrs().iter().map(|(k, a)| (k.clone(), a.clone())));
+        Ok(v)
     }
 
     /// NaN replaced by `value` (other types have no NaN and are returned as they are).

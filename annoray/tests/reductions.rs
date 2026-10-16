@@ -211,13 +211,18 @@ fn coordinates_units_and_attrs() {
     assert!(s.coords().is_empty(), "the reduced coordinate is dropped");
     assert_eq!(s.unit(), Some(&m));
     assert_eq!(s.name().map(Name::as_str), Some("h"));
-    assert!(s.attrs().is_empty());
-    let kept = da
+    // Attributes are kept by default (xarray's keep_attrs), and dropped on request.
+    assert_eq!(s.attrs().get("long_name"), Some(&AttrValue::from("height")));
+    let dropped = da
         .reduce(
-            Reduction::Mean,
-            "y",
-            &ReduceOptions::default().keep_attrs(true),
+            Reduction::Sum,
+            "x",
+            &ReduceOptions::default().keep_attrs(false),
         )
+        .unwrap();
+    assert!(dropped.attrs().is_empty());
+    let kept = da
+        .reduce(Reduction::Mean, "y", &ReduceOptions::default())
         .unwrap();
     assert_eq!(kept.coords().len(), 1);
     assert_eq!(

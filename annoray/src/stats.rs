@@ -226,7 +226,8 @@ impl<S: Repr> DataArrayBase<S> {
         let mut coords = indexmap::IndexMap::new();
         coords.insert(Name::from("quantile"), quantile_coord(qs, scalar_q)?);
         coords.extend(kept_coords(self, &reduced));
-        Ok(DataArrayBase::from_parts(self.name().cloned(), var, coords))
+        Ok(DataArrayBase::from_parts(self.name().cloned(), var, coords)
+            .with_attrs_from(self.attrs()))
     }
 
     /// The label (coordinate value) of the minimum along `dim`.
@@ -293,7 +294,8 @@ impl<S: Repr> DataArrayBase<S> {
         ));
         let mut var = Variable::from_typed(r.kept.clone(), labels)?;
         var.set_unit(coord.unit().cloned());
-        let out = DataArrayBase::from_parts(self.name().cloned(), var, kept_coords(self, &reduced));
+        let out = DataArrayBase::from_parts(self.name().cloned(), var, kept_coords(self, &reduced))
+            .with_attrs_from(self.attrs());
         if found.iter().all(Option::is_some) {
             return Ok(out);
         }
@@ -389,8 +391,11 @@ impl Weighted {
     /// # Errors
     /// As for [`sum_of_weights`](Self::sum_of_weights).
     pub fn sum(&self, dims: impl ReduceDims) -> Result<DataArray> {
-        let dims = self.dims(dims)?;
-        self.sum_of(&self.data.try_mul(&self.weights)?, &dims)
+        let out: Result<DataArray> = (|| {
+            let dims = self.dims(dims)?;
+            self.sum_of(&self.data.try_mul(&self.weights)?, &dims)
+        })();
+        out.map(|r| r.with_attrs_from(self.data.attrs()))
     }
 
     /// `Σ w·x / Σ w` over `dims`, counting weights only where the data is not NaN.
@@ -398,8 +403,11 @@ impl Weighted {
     /// # Errors
     /// As for [`sum_of_weights`](Self::sum_of_weights).
     pub fn mean(&self, dims: impl ReduceDims) -> Result<DataArray> {
-        let dims = self.dims(dims)?;
-        self.mean_over(&dims)
+        let out: Result<DataArray> = (|| {
+            let dims = self.dims(dims)?;
+            self.mean_over(&dims)
+        })();
+        out.map(|r| r.with_attrs_from(self.data.attrs()))
     }
 
     fn mean_over(&self, dims: &[Name]) -> Result<DataArray> {
@@ -413,8 +421,11 @@ impl Weighted {
     /// # Errors
     /// As for [`sum_of_weights`](Self::sum_of_weights).
     pub fn var(&self, dims: impl ReduceDims) -> Result<DataArray> {
-        let dims = self.dims(dims)?;
-        self.var_over(&dims)
+        let out: Result<DataArray> = (|| {
+            let dims = self.dims(dims)?;
+            self.var_over(&dims)
+        })();
+        out.map(|r| r.with_attrs_from(self.data.attrs()))
     }
 
     fn var_over(&self, dims: &[Name]) -> Result<DataArray> {
@@ -429,19 +440,22 @@ impl Weighted {
     /// # Errors
     /// As for [`sum_of_weights`](Self::sum_of_weights).
     pub fn std(&self, dims: impl ReduceDims) -> Result<DataArray> {
-        let dims = self.dims(dims)?;
-        let var = self.var_over(&dims)?;
-        let values = var.to_f64()?.mapv(f64::sqrt);
-        let mut v = Variable::new(var.dims().to_vec(), values)?;
-        v.set_unit(var.unit().map(|u| u.root(2)).transpose()?);
-        Ok(DataArrayBase::from_parts(
-            var.name().cloned(),
-            v,
-            var.coords()
-                .iter()
-                .map(|(k, c)| (k.clone(), c.clone()))
-                .collect(),
-        ))
+        let out: Result<DataArray> = (|| {
+            let dims = self.dims(dims)?;
+            let var = self.var_over(&dims)?;
+            let values = var.to_f64()?.mapv(f64::sqrt);
+            let mut v = Variable::new(var.dims().to_vec(), values)?;
+            v.set_unit(var.unit().map(|u| u.root(2)).transpose()?);
+            Ok(DataArrayBase::from_parts(
+                var.name().cloned(),
+                v,
+                var.coords()
+                    .iter()
+                    .map(|(k, c)| (k.clone(), c.clone()))
+                    .collect(),
+            ))
+        })();
+        out.map(|r| r.with_attrs_from(self.data.attrs()))
     }
 }
 

@@ -9,8 +9,8 @@
 //!   (integers too, exactly); units and attributes kept.
 //! - `isin(labels)` is a boolean array: numbers compare in the data's unit (a quantity is
 //!   converted first; one against data without a unit is an error), strings, dates and
-//!   durations compare exactly; labels of another kind match nothing. Unit and attributes
-//!   are dropped, as xarray.
+//!   durations compare exactly; labels of another kind match nothing. The result has no unit;
+//!   attributes are kept, as xarray.
 //! - `dot` multiplies (units multiply) and sums over the dimensions shared by more than one
 //!   operand (or the ones named), as `xr.dot`/`numpy.einsum`: NaN propagates.
 //! - Lazy data stays lazy (`clip`, `round`, `isin`; `dot` streams its sum).
@@ -245,6 +245,8 @@ impl<S: Repr> VariableBase<S> {
         };
         out.set_unit(None);
         out.attrs_mut().clear();
+        out.attrs_mut()
+            .extend(self.attrs().iter().map(|(k, a)| (k.clone(), a.clone())));
         Ok(out)
     }
 }
@@ -359,13 +361,15 @@ pub fn dot(arrays: &[&DataArray], dims: Option<&[&str]>) -> Result<DataArray> {
         prod = prod.try_mul(*a)?;
     }
     if sum_over.is_empty() {
-        return Ok(prod);
+        return Ok(prod.with_attrs_from(first.attrs()));
     }
+    let attrs = first.attrs().clone();
     prod.reduce(
         Reduction::Sum,
         sum_over,
         &ReduceOptions::default().skipna(false),
     )
+    .map(|r| r.with_attrs_from(&attrs))
 }
 
 fn per_data_var<S: Repr>(

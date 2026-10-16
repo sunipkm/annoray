@@ -7,7 +7,7 @@ Python's type system cannot compute dimensions (Rust's `Quantity<_D>` does).
 """
 
 import os
-from collections.abc import Hashable, Iterable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Hashable, Iterable, Iterator, Mapping, Sequence
 from types import EllipsisType
 from typing import Any, Generic, Literal, TypeAlias, TypeVar, overload
 
@@ -148,7 +148,7 @@ class _Reductions:
         skipna: bool | None = None,
         ddof: int = 0,
         min_count: int | None = None,
-        keep_attrs: bool = False,
+        keep_attrs: bool | None = None,
     ) -> Any: ...
     def prod(
         self,
@@ -157,7 +157,7 @@ class _Reductions:
         skipna: bool | None = None,
         ddof: int = 0,
         min_count: int | None = None,
-        keep_attrs: bool = False,
+        keep_attrs: bool | None = None,
     ) -> Any: ...
     def mean(
         self,
@@ -166,7 +166,7 @@ class _Reductions:
         skipna: bool | None = None,
         ddof: int = 0,
         min_count: int | None = None,
-        keep_attrs: bool = False,
+        keep_attrs: bool | None = None,
     ) -> Any: ...
     def median(
         self,
@@ -175,7 +175,7 @@ class _Reductions:
         skipna: bool | None = None,
         ddof: int = 0,
         min_count: int | None = None,
-        keep_attrs: bool = False,
+        keep_attrs: bool | None = None,
     ) -> Any: ...
     def std(
         self,
@@ -184,7 +184,7 @@ class _Reductions:
         skipna: bool | None = None,
         ddof: int = 0,
         min_count: int | None = None,
-        keep_attrs: bool = False,
+        keep_attrs: bool | None = None,
     ) -> Any: ...
     def var(
         self,
@@ -193,7 +193,7 @@ class _Reductions:
         skipna: bool | None = None,
         ddof: int = 0,
         min_count: int | None = None,
-        keep_attrs: bool = False,
+        keep_attrs: bool | None = None,
     ) -> Any: ...
     def min(
         self,
@@ -202,7 +202,7 @@ class _Reductions:
         skipna: bool | None = None,
         ddof: int = 0,
         min_count: int | None = None,
-        keep_attrs: bool = False,
+        keep_attrs: bool | None = None,
     ) -> Any: ...
     def max(
         self,
@@ -211,7 +211,7 @@ class _Reductions:
         skipna: bool | None = None,
         ddof: int = 0,
         min_count: int | None = None,
-        keep_attrs: bool = False,
+        keep_attrs: bool | None = None,
     ) -> Any: ...
     def count(
         self,
@@ -220,7 +220,7 @@ class _Reductions:
         skipna: bool | None = None,
         ddof: int = 0,
         min_count: int | None = None,
-        keep_attrs: bool = False,
+        keep_attrs: bool | None = None,
     ) -> Any: ...
     def argmin(
         self,
@@ -229,7 +229,7 @@ class _Reductions:
         skipna: bool | None = None,
         ddof: int = 0,
         min_count: int | None = None,
-        keep_attrs: bool = False,
+        keep_attrs: bool | None = None,
     ) -> Any: ...
     def argmax(
         self,
@@ -238,7 +238,7 @@ class _Reductions:
         skipna: bool | None = None,
         ddof: int = 0,
         min_count: int | None = None,
-        keep_attrs: bool = False,
+        keep_attrs: bool | None = None,
     ) -> Any: ...
     def any(
         self,
@@ -247,7 +247,7 @@ class _Reductions:
         skipna: bool | None = None,
         ddof: int = 0,
         min_count: int | None = None,
-        keep_attrs: bool = False,
+        keep_attrs: bool | None = None,
     ) -> Any: ...
     def all(
         self,
@@ -256,7 +256,7 @@ class _Reductions:
         skipna: bool | None = None,
         ddof: int = 0,
         min_count: int | None = None,
-        keep_attrs: bool = False,
+        keep_attrs: bool | None = None,
     ) -> Any: ...
 
 class DatetimeAccessor:
@@ -632,6 +632,42 @@ class Dataset(_Reductions):
         encoding: Mapping[str, Mapping[str, Any]] | None = None,
         unlimited_dims: Sequence[str] | None = None,
     ) -> None: ...
+    def __add__(self, other: Any) -> Dataset: ...
+    def __radd__(self, other: Any) -> Dataset: ...
+    def __sub__(self, other: Any) -> Dataset: ...
+    def __rsub__(self, other: Any) -> Dataset: ...
+    def __mul__(self, other: Any) -> Dataset: ...
+    def __rmul__(self, other: Any) -> Dataset: ...
+    def __truediv__(self, other: Any) -> Dataset: ...
+    def __rtruediv__(self, other: Any) -> Dataset: ...
+    def __pow__(self, e: float) -> Dataset: ...
+    def __neg__(self) -> Dataset: ...
+    def __pos__(self) -> Dataset: ...
+    def __abs__(self) -> Dataset: ...
+    def __lt__(self, other: Any) -> Dataset: ...
+    def __le__(self, other: Any) -> Dataset: ...
+    def __gt__(self, other: Any) -> Dataset: ...
+    def __ge__(self, other: Any) -> Dataset: ...
+    def __eq__(self, other: object) -> Dataset: ...  # type: ignore[override]
+    def __ne__(self, other: object) -> Dataset: ...  # type: ignore[override]
+    def __and__(self, other: Any) -> Dataset: ...
+    def __rand__(self, other: Any) -> Dataset: ...
+    def __or__(self, other: Any) -> Dataset: ...
+    def __ror__(self, other: Any) -> Dataset: ...
+    def __xor__(self, other: Any) -> Dataset: ...
+    def __rxor__(self, other: Any) -> Dataset: ...
+    def __invert__(self) -> Dataset: ...
+    def __array_ufunc__(self, ufunc: Any, method: str, *inputs: Any, **kwargs: Any) -> Any: ...
+    def where(self, cond: DataArray[Any] | Dataset, other: float | None = None) -> Dataset: ...
+    def isnull(self) -> Dataset: ...
+    def notnull(self) -> Dataset: ...
+    def map(
+        self,
+        func: Callable[..., DataArray[Any]],
+        keep_attrs: bool | None = None,
+        args: tuple[Any, ...] | None = None,
+        **kwargs: Any,
+    ) -> Dataset: ...
     def to_zarr(
         self,
         store: str | os.PathLike[str],
