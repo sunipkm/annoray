@@ -19,11 +19,10 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
 use crate::convert::{attr_from_py, attrs_to_py, io_error, value_error};
-use annoray::io::{Format, RawData, RawDataset, WriteOptions, default_backend};
+use annoray::io::{Format, RawDataset, WriteOptions, default_backend};
 use annoray::units::{Calendar, CfDate};
 use annoray::{
-    BloscCodec, BloscShuffle, Compression, DType, Dataset, LazySource, NaT, Owned, TypedArray,
-    Variable,
+    BloscCodec, BloscShuffle, Compression, DType, Dataset, NaT, Owned, TypedArray, Variable,
 };
 use pyo3::types::{PyDict, PyString, PyTuple};
 
@@ -101,16 +100,16 @@ fn compression_name(c: Compression) -> String {
 /// A group of a file opened lazily, serving raw variables.
 #[pyclass(frozen, module = "annoray._annoray")]
 pub(crate) struct RawGroup {
-    root: Arc<RawDataset>,
+    root: Arc<RawDataset<'static>>,
     path: String,
 }
 
 impl RawGroup {
-    fn group(&self) -> PyResult<&RawDataset> {
+    fn group(&self) -> PyResult<&RawDataset<'static>> {
         self.root.group(&self.path).map_err(value_error)
     }
 
-    fn var(&self, name: &str) -> PyResult<&annoray::io::RawVariable> {
+    fn var(&self, name: &str) -> PyResult<&annoray::io::RawVariable<'static>> {
         self.group()?
             .vars
             .get(name)
@@ -223,16 +222,9 @@ impl RawGroup {
         count: Vec<usize>,
     ) -> PyResult<Py<PyAny>> {
         let v = self.var(name)?;
-        let data = v.data.clone();
+        let data = &v.data;
         let t = py
-            .detach(move || -> Result<TypedArray<Owned>, String> {
-                match &data {
-                    RawData::Lazy(src) => src.read_slice(&start, &count).map_err(|e| e.to_string()),
-                    RawData::Loaded(a) => annoray::MemorySource(a.clone())
-                        .read_slice(&start, &count)
-                        .map_err(|e| e.to_string()),
-                }
-            })
+            .detach(|| data.read_slice(&start, &count).map_err(|e| e.to_string()))
             .map_err(io_error)?;
         array_to_py(py, t)
     }

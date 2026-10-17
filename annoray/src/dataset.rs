@@ -137,7 +137,6 @@ impl Dataset {
         self
     }
 
-
     /// The data variables and coordinates, mutably (for setters that keep them consistent).
     pub(crate) fn parts_mut(
         &mut self,
@@ -149,7 +148,6 @@ impl Dataset {
     pub fn attrs_mut(&mut self) -> &mut Attrs {
         &mut self.attrs
     }
-
 
     /// Remove a data variable or coordinate.
     ///

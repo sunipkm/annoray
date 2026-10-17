@@ -29,7 +29,7 @@ fn tmp(name: &str) -> PathBuf {
     dir.join(name)
 }
 
-fn var(dims: &[&str], data: TypedArray<Owned>) -> RawVariable {
+fn var(dims: &[&str], data: TypedArray<Owned>) -> RawVariable<'static> {
     RawVariable {
         dims: dims.iter().map(|d| Name::from(*d)).collect(),
         data: data.into(),
@@ -41,7 +41,7 @@ fn var(dims: &[&str], data: TypedArray<Owned>) -> RawVariable {
 
 /// Exercises fixed and record variables (including odd sizes that need padding), scalars,
 /// char data, and every attribute type the format allows.
-fn sample(cdf5: bool, n_record_vars: usize) -> RawDataset {
+fn sample(cdf5: bool, n_record_vars: usize) -> RawDataset<'static> {
     let mut ds = RawDataset::default();
     ds.dims.insert(
         "time".into(),

@@ -1,7 +1,7 @@
 //! netCDF-3 external types and big-endian (de)serialisation of values.
 
 use crate::io::IoError;
-use crate::{AttrValue, DType, Owned, TypedArray};
+use crate::{AttrValue, DType, Owned, TypedArray, View};
 use ndarray::{ArrayD, IxDyn};
 
 use crate::io::netcdf3::{Version, bad};
@@ -190,7 +190,7 @@ pub(crate) fn decode_attr(ty: NcType, bytes: &[u8]) -> AttrValue {
 }
 
 /// Big-endian bytes of an array (logical order).
-pub(crate) fn encode_array(a: &TypedArray<Owned>) -> Option<Vec<u8>> {
+pub(crate) fn encode_array(a: &TypedArray<View<'_>>) -> Option<Vec<u8>> {
     macro_rules! be {
         ($x:expr) => {
             $x.iter().flat_map(|v| v.to_be_bytes()).collect()

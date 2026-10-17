@@ -61,7 +61,7 @@ pub fn is_netcdf3(bytes: &[u8]) -> bool {
 ///
 /// # Errors
 /// [`IoError::Backend`] for anything malformed.
-pub fn read_bytes(bytes: &[u8]) -> Result<RawDataset> {
+pub fn read_bytes(bytes: &[u8]) -> Result<RawDataset<'static>> {
     read::parse(bytes)
 }
 
@@ -158,13 +158,13 @@ impl Netcdf3File {
     ///
     /// # Errors
     /// If any variable's data is corrupt.
-    pub fn to_raw(&self) -> Result<RawDataset> {
+    pub fn to_raw(&self) -> Result<RawDataset<'static>> {
         read::to_raw(&self.bytes, &self.header)
     }
 
     /// Everything, as a raw dataset whose variables read their data on demand.
     #[must_use]
-    pub fn to_raw_lazy(self: &Arc<Self>) -> RawDataset {
+    pub fn to_raw_lazy(self: &Arc<Self>) -> RawDataset<'static> {
         let h = &self.header;
         let mut ds = RawDataset {
             attrs: h.attrs.clone(),
@@ -223,11 +223,11 @@ impl Backend for Netcdf3 {
         NAME
     }
 
-    fn read(&self, path: &Path) -> Result<RawDataset> {
+    fn read(&self, path: &Path) -> Result<RawDataset<'static>> {
         Netcdf3File::open(path)?.to_raw()
     }
 
-    fn read_lazy(&self, path: &Path) -> Result<RawDataset> {
+    fn read_lazy(&self, path: &Path) -> Result<RawDataset<'static>> {
         Ok(Arc::new(Netcdf3File::open(path)?).to_raw_lazy())
     }
 

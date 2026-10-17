@@ -145,7 +145,7 @@ impl Plan<'_> {
                 let t = src
                     .read_slice(&start, &count)
                     .map_err(|e| bad(format!("reading data to write: {e}")))?;
-                Ok(encode_array(&t)
+                Ok(encode_array(&t.view())
                     .ok_or_else(|| bad("element type must be CF-encoded first"))?
                     .into())
             }
@@ -295,9 +295,12 @@ pub(crate) fn write_to(
             .to()
             .ok_or_else(|| too_big("variable"))?;
         let values =
-            match &var.data {
-                RawData::Lazy(src) => Values::Lazy(src.as_ref()),
-                RawData::Loaded(a) => Values::Bytes(encode_array(a).ok_or_else(|| {
+            match var.data.in_memory() {
+                None => match &var.data {
+                    RawData::Lazy(src) => Values::Lazy(src.as_ref()),
+                    _ => return Err(bad(format!("{name:?}: no values"))),
+                },
+                Some(a) => Values::Bytes(encode_array(&a).ok_or_else(|| {
                     bad(format!("{name:?}: element type must be CF-encoded first"))
                 })?),
             };

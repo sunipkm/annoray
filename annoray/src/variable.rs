@@ -195,7 +195,6 @@ impl Variable {
         &mut self.attrs
     }
 
-
     /// Set the encoding.
     #[must_use]
     pub fn with_encoding(mut self, encoding: Encoding) -> Self {

@@ -191,6 +191,31 @@ struct Streamed {
     dtype: ValueType,
 }
 
+/// Values borrowed from the dataset being written, served slice by slice.
+#[derive(Debug)]
+struct Viewed<'a> {
+    data: TypedArray<crate::View<'a>>,
+    dtype: ValueType,
+}
+
+impl annoray_hdf5::Source for Viewed<'_> {
+    fn dtype(&self) -> ValueType {
+        self.dtype
+    }
+
+    fn shape(&self) -> &[usize] {
+        self.data.shape()
+    }
+
+    fn read_slice(
+        &self,
+        start: &[usize],
+        count: &[usize],
+    ) -> std::result::Result<Array, Box<dyn std::error::Error + Send + Sync>> {
+        Ok(hdf5_array(super::raw::slice_of(&self.data, start, count))?)
+    }
+}
+
 impl annoray_hdf5::Source for Streamed {
     fn dtype(&self) -> ValueType {
         self.dtype
@@ -329,7 +354,7 @@ impl LazySource for H5Source {
     }
 }
 
-fn read_group(g: &Group, parent: &Scope, lazy: bool) -> Result<RawDataset> {
+fn read_group(g: &Group, parent: &Scope, lazy: bool) -> Result<RawDataset<'static>> {
     let mut ds = RawDataset::default();
     let mut scope = parent.clone();
     let members = g.members()?;
@@ -479,7 +504,7 @@ fn read_group(g: &Group, parent: &Scope, lazy: bool) -> Result<RawDataset> {
 ///
 /// # Errors
 /// [`IoError::Backend`] for unreadable files.
-pub fn read_bytes(bytes: Vec<u8>) -> Result<RawDataset> {
+pub fn read_bytes(bytes: Vec<u8>) -> Result<RawDataset<'static>> {
     read_group(&File::from_bytes(bytes)?.root()?, &Scope::default(), false)
 }
 
@@ -597,7 +622,12 @@ struct WScope {
     dims: HashMap<Name, (String, i32, RawDim)>,
 }
 
-fn build_group(ds: &RawDataset, path: &str, parent: &WScope, next_id: &mut i32) -> Result<WGroup> {
+fn build_group<'a>(
+    ds: &RawDataset<'a>,
+    path: &str,
+    parent: &WScope,
+    next_id: &mut i32,
+) -> Result<WGroup<'a>> {
     let mut scope = parent.clone();
     // Each dimension's scale is its coordinate variable if there is one, else a dimension-only
     // dataset of the same name.
@@ -685,6 +715,19 @@ fn build_group(ds: &RawDataset, path: &str, parent: &WScope, next_id: &mut i32) 
                 })?;
                 WDataset::from_source(Arc::new(Streamed {
                     source: Arc::clone(src),
+                    dtype,
+                }))?
+            }
+            // Borrowed values are written slice by slice straight from the dataset.
+            RawData::Borrowed(a) if a.dtype() != DType::Str && a.ndim() > 0 && !a.is_empty() => {
+                let dtype = value_type(a.dtype()).ok_or_else(|| {
+                    IoError::Unsupported(format!(
+                        "element type {} must be CF-encoded before writing",
+                        a.dtype()
+                    ))
+                })?;
+                WDataset::from_source(Arc::new(Viewed {
+                    data: a.clone(),
                     dtype,
                 }))?
             }
@@ -785,7 +828,7 @@ pub fn write_bytes(ds: &RawDataset, opts: &WriteOptions) -> Result<Vec<u8>> {
 }
 
 /// The HDF5 tree of a netCDF-4 dataset.
-fn build_root(ds: &RawDataset, opts: &WriteOptions) -> Result<WGroup> {
+fn build_root<'a>(ds: &RawDataset<'a>, opts: &WriteOptions) -> Result<WGroup<'a>> {
     let format = opts.format;
     match format {
         Format::Netcdf4 => {}
@@ -849,7 +892,7 @@ fn build_root(ds: &RawDataset, opts: &WriteOptions) -> Result<WGroup> {
 }
 
 /// `ds` with its loaded, non-empty numeric arrays behind in-memory sources (recursively).
-fn held(mut ds: RawDataset) -> RawDataset {
+fn held(mut ds: RawDataset<'_>) -> RawDataset<'_> {
     ds.vars = ds
         .vars
         .into_iter()
@@ -877,11 +920,11 @@ impl Backend for Netcdf4 {
         NAME
     }
 
-    fn read(&self, path: &Path) -> Result<RawDataset> {
+    fn read(&self, path: &Path) -> Result<RawDataset<'static>> {
         read_group(&File::open(path)?.root()?, &Scope::default(), false)
     }
 
-    fn read_lazy(&self, path: &Path) -> Result<RawDataset> {
+    fn read_lazy(&self, path: &Path) -> Result<RawDataset<'static>> {
         read_group(&File::open(path)?.root()?, &Scope::default(), true)
     }
 

@@ -18,7 +18,7 @@ fn tmp(name: &str) -> PathBuf {
     dir.join(name)
 }
 
-fn sample() -> WGroup {
+fn sample() -> WGroup<'static> {
     let mut chunked = WDataset::new(Array::F64(ArrayD::from_shape_fn(IxDyn(&[7, 5]), |ix| {
         (ix[0] * 10 + ix[1]) as f64 / 3.0
     })));

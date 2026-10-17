@@ -128,7 +128,7 @@ impl Backend for AutoBackend {
         "auto"
     }
 
-    fn read(&self, path: &Path) -> Result<RawDataset> {
+    fn read(&self, path: &Path) -> Result<RawDataset<'static>> {
         if zarr::is_zarr(path) {
             return zarr::read(path, false);
         }
@@ -142,7 +142,7 @@ impl Backend for AutoBackend {
         Err(not_netcdf(path))
     }
 
-    fn read_lazy(&self, path: &Path) -> Result<RawDataset> {
+    fn read_lazy(&self, path: &Path) -> Result<RawDataset<'static>> {
         if zarr::is_zarr(path) {
             return zarr::read(path, true);
         }
@@ -330,7 +330,7 @@ pub fn open_datatree_with(path: impl AsRef<Path>, opts: &OpenOptions) -> Result<
     open_datatree_with_backend(default_backend(), path, opts)
 }
 
-fn encode_tree(tree: &DataTree, format: Format) -> Result<RawDataset, Error> {
+fn encode_tree(tree: &DataTree, format: Format) -> Result<RawDataset<'_>, Error> {
     let mut raw = crate::cf::encode(tree.dataset(), &EncodeOptions::format(format))?;
     if !tree.children().is_empty() && format != Format::Netcdf4 {
         return Err(IoError::Format {

@@ -424,7 +424,7 @@ pub(crate) fn read_var(buf: &[u8], h: &Header, v: &VarInfo) -> Result<TypedArray
 }
 
 /// Everything, as a raw dataset.
-pub(crate) fn to_raw(buf: &[u8], h: &Header) -> Result<RawDataset, IoError> {
+pub(crate) fn to_raw(buf: &[u8], h: &Header) -> Result<RawDataset<'static>, IoError> {
     let mut ds = RawDataset {
         attrs: h.attrs.clone(),
         ..RawDataset::default()
@@ -447,6 +447,6 @@ pub(crate) fn to_raw(buf: &[u8], h: &Header) -> Result<RawDataset, IoError> {
 }
 
 /// Parse a whole netCDF-3 file.
-pub(crate) fn parse(buf: &[u8]) -> Result<RawDataset, IoError> {
+pub(crate) fn parse(buf: &[u8]) -> Result<RawDataset<'static>, IoError> {
     to_raw(buf, &parse_header(buf)?)
 }

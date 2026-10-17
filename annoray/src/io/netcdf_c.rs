@@ -115,7 +115,7 @@ fn read_attrs<'a>(attrs: impl Iterator<Item = netcdf::Attribute<'a>>) -> Result<
 
 // ----- reading -----
 
-fn read_var(v: &netcdf::Variable<'_>) -> Result<std::result::Result<RawVariable, String>> {
+fn read_var(v: &netcdf::Variable<'_>) -> Result<std::result::Result<RawVariable<'static>, String>> {
     let dims: Vec<Name> = v
         .dimensions()
         .iter()
@@ -128,7 +128,7 @@ fn read_var(v: &netcdf::Variable<'_>) -> Result<std::result::Result<RawVariable,
             TypedArray::$var(v.get::<$t, _>(..).map_err(nc_err)?)
         };
     }
-    let data = match v.vartype() {
+    let data: TypedArray<crate::Owned> = match v.vartype() {
         NcVariableType::Int(IntType::I8) => get!(I8, i8),
         NcVariableType::Int(IntType::I16) => get!(I16, i16),
         NcVariableType::Int(IntType::I32) => get!(I32, i32),
@@ -176,7 +176,7 @@ fn assemble<'a>(
     dims: impl Iterator<Item = netcdf::Dimension<'a>>,
     vars: impl Iterator<Item = netcdf::Variable<'a>>,
     attrs: impl Iterator<Item = netcdf::Attribute<'a>>,
-) -> Result<RawDataset> {
+) -> Result<RawDataset<'static>> {
     let mut ds = RawDataset {
         dims: dims
             .map(|d| {
@@ -204,7 +204,7 @@ fn assemble<'a>(
     Ok(ds)
 }
 
-fn read_group(g: &netcdf::Group<'_>) -> Result<RawDataset> {
+fn read_group(g: &netcdf::Group<'_>) -> Result<RawDataset<'static>> {
     let mut ds = assemble(g.dimensions(), g.variables(), g.attributes())?;
     for child in g.groups() {
         ds.groups
@@ -448,7 +448,7 @@ impl Backend for NetcdfC {
         NAME
     }
 
-    fn read(&self, path: &Path) -> Result<RawDataset> {
+    fn read(&self, path: &Path) -> Result<RawDataset<'static>> {
         let file = netcdf::open(path).map_err(nc_err)?;
         match file.root() {
             Some(root) => read_group(&root),

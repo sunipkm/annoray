@@ -3,7 +3,7 @@
 use crate::io::{Format, RawDataset, RawDim, RawVariable, Storage};
 use crate::{
     AttrValue, Attrs, DType, DatasetBase, LazySource, NaT, Name, Owned, Repr, TypedArray,
-    VariableBase,
+    VariableBase, View,
 };
 use annoray_units::{Calendar, CfDate, Unit};
 use chrono::{NaiveDateTime, TimeDelta};
@@ -271,16 +271,58 @@ fn classic_data(
     }
 }
 
-struct Encoded {
-    raw: RawVariable,
+struct Encoded<'a> {
+    raw: RawVariable<'a>,
     char_dim: Option<(Name, usize)>,
 }
 
-fn encode_var<R: Repr>(name: &str, v: &VariableBase<R>, format: Format) -> Result<Encoded> {
+/// Values on their way to the disk: borrowed from the variable until an encoding step changes
+/// them (most variables are written as they are, so most are never copied).
+enum Vals<'a> {
+    Owned(TypedArray<Owned>),
+    Borrowed(TypedArray<View<'a>>),
+}
+
+impl<'a> Vals<'a> {
+    fn dtype(&self) -> DType {
+        match self {
+            Self::Owned(a) => a.dtype(),
+            Self::Borrowed(a) => a.dtype(),
+        }
+    }
+
+    fn shape(&self) -> &[usize] {
+        match self {
+            Self::Owned(a) => a.shape(),
+            Self::Borrowed(a) => a.shape(),
+        }
+    }
+
+    /// The values, owned (copied if borrowed), for a step that changes them.
+    fn into_owned(self) -> TypedArray<Owned> {
+        match self {
+            Self::Owned(a) => a,
+            Self::Borrowed(a) => a.to_owned(),
+        }
+    }
+
+    fn into_raw(self) -> crate::io::RawData<'a> {
+        match self {
+            Self::Owned(a) => a.into(),
+            Self::Borrowed(a) => a.into(),
+        }
+    }
+}
+
+fn encode_var<'a, R: Repr>(
+    name: &str,
+    v: &'a VariableBase<R>,
+    format: Format,
+) -> Result<Encoded<'a>> {
     let enc = v.encoding();
     let mut attrs = v.attrs().clone();
     let mut dims: Vec<Name> = v.dims().to_vec();
-    let mut data = v.typed()?.to_owned();
+    let view = v.typed()?;
     let mut is_char = false;
     let mut char_dim = None;
 
@@ -291,56 +333,63 @@ fn encode_var<R: Repr>(name: &str, v: &VariableBase<R>, format: Format) -> Resul
 
     let int64_ok = format.supports(DType::I64);
     let was_time = matches!(
-        data.dtype(),
+        view.dtype(),
         DType::DateTime | DType::CfDate | DType::TimeDelta
     );
-    data = match data {
-        TypedArray::DateTime(a) => {
-            let cal = enc
-                .calendar
-                .as_deref()
-                .map(str::parse::<Calendar>)
-                .transpose()?
-                .unwrap_or(Calendar::ProlepticGregorian);
-            let dates = a
-                .iter()
-                .map(|d: &NaiveDateTime| {
-                    if d.is_nat() {
-                        Ok(CfDate::NAT)
-                    } else {
-                        CfDate::from_chrono(*d, cal)
-                    }
-                })
-                .collect::<std::result::Result<Vec<_>, _>>()?;
-            encode_times(dates, a.shape(), name, enc, &mut attrs, int64_ok)?
-        }
-        TypedArray::CfDate(a) => encode_times(
-            a.iter().copied().collect(),
-            a.shape(),
-            name,
-            enc,
-            &mut attrs,
-            int64_ok,
-        )?,
-        TypedArray::TimeDelta(a) => encode_durations(&a, name, &mut attrs, int64_ok)?,
-        TypedArray::Bool(a) => {
-            attrs.insert("dtype".into(), AttrValue::from("bool"));
-            TypedArray::I8(a.mapv(i8::from))
-        }
-        TypedArray::Str(a) if format.is_classic_model() => {
-            let (chars, width) = strings_to_chars(&a, name)?;
-            let dim = enc
-                .char_dim
-                .clone()
-                .unwrap_or_else(|| Name::from(format!("string{width}")));
-            dims.push(dim.clone());
-            char_dim = Some((dim, width));
-            is_char = true;
-            // Tells xarray (and us) the bytes are UTF-8 text, not raw bytes.
-            attrs.insert("_Encoding".into(), AttrValue::from("utf-8"));
-            TypedArray::U8(chars)
-        }
-        other => other,
+    let converted = was_time
+        || view.dtype() == DType::Bool
+        || (view.dtype() == DType::Str && format.is_classic_model());
+    let mut data = if !converted {
+        Vals::Borrowed(view)
+    } else {
+        Vals::Owned(match view.to_owned() {
+            TypedArray::DateTime(a) => {
+                let cal = enc
+                    .calendar
+                    .as_deref()
+                    .map(str::parse::<Calendar>)
+                    .transpose()?
+                    .unwrap_or(Calendar::ProlepticGregorian);
+                let dates = a
+                    .iter()
+                    .map(|d: &NaiveDateTime| {
+                        if d.is_nat() {
+                            Ok(CfDate::NAT)
+                        } else {
+                            CfDate::from_chrono(*d, cal)
+                        }
+                    })
+                    .collect::<std::result::Result<Vec<_>, _>>()?;
+                encode_times(dates, a.shape(), name, enc, &mut attrs, int64_ok)?
+            }
+            TypedArray::CfDate(a) => encode_times(
+                a.iter().copied().collect(),
+                a.shape(),
+                name,
+                enc,
+                &mut attrs,
+                int64_ok,
+            )?,
+            TypedArray::TimeDelta(a) => encode_durations(&a, name, &mut attrs, int64_ok)?,
+            TypedArray::Bool(a) => {
+                attrs.insert("dtype".into(), AttrValue::from("bool"));
+                TypedArray::I8(a.mapv(i8::from))
+            }
+            TypedArray::Str(a) if format.is_classic_model() => {
+                let (chars, width) = strings_to_chars(&a, name)?;
+                let dim = enc
+                    .char_dim
+                    .clone()
+                    .unwrap_or_else(|| Name::from(format!("string{width}")));
+                dims.push(dim.clone());
+                char_dim = Some((dim, width));
+                is_char = true;
+                // Tells xarray (and us) the bytes are UTF-8 text, not raw bytes.
+                attrs.insert("_Encoding".into(), AttrValue::from("utf-8"));
+                TypedArray::U8(chars)
+            }
+            other => other,
+        })
     };
 
     // Masking and packing back to the on-disk type.
@@ -352,11 +401,11 @@ fn encode_var<R: Repr>(name: &str, v: &VariableBase<R>, format: Format) -> Resul
         if packed || target.is_some() {
             let s = enc.scale_factor.as_ref().and_then(attr_f64).unwrap_or(1.0);
             let o = enc.add_offset.as_ref().and_then(attr_f64).unwrap_or(0.0);
-            let f = to_f64(&data)
+            let f = to_f64(&data.into_owned())
                 .ok_or_else(|| invalid(name, "not numeric"))?
                 .mapv(|x| (x - o) / s);
             let to = target.unwrap_or(DType::I16);
-            data = f64_to_int(&f, to, fill, name)?;
+            data = Vals::Owned(f64_to_int(&f, to, fill, name)?);
             for (k, a) in [
                 ("scale_factor", &enc.scale_factor),
                 ("add_offset", &enc.add_offset),
@@ -367,7 +416,7 @@ fn encode_var<R: Repr>(name: &str, v: &VariableBase<R>, format: Format) -> Resul
             }
         } else if let Some(fv) = fill.filter(|f| !f.is_nan()) {
             // Replace NaN with a non-NaN fill value.
-            data = match data {
+            data = Vals::Owned(match data.into_owned() {
                 TypedArray::F32(a) => {
                     #[allow(clippy::cast_possible_truncation)]
                     let fv32 = fv as f32;
@@ -375,7 +424,7 @@ fn encode_var<R: Repr>(name: &str, v: &VariableBase<R>, format: Format) -> Resul
                 }
                 TypedArray::F64(a) => TypedArray::F64(a.mapv(|x| if x.is_nan() { fv } else { x })),
                 other => other,
-            };
+            });
         }
         let disk = data.dtype();
         match fill {
@@ -400,8 +449,9 @@ fn encode_var<R: Repr>(name: &str, v: &VariableBase<R>, format: Format) -> Resul
     }
 
     if format.is_classic_model() {
-        if !is_char {
-            data = classic_data(data, name, &mut attrs, format)?;
+        let unchanged = format == Format::Netcdf3Data64 || format.supports(data.dtype());
+        if !is_char && !unchanged {
+            data = Vals::Owned(classic_data(data.into_owned(), name, &mut attrs, format)?);
         }
         attrs = attrs
             .iter()
@@ -428,7 +478,7 @@ fn encode_var<R: Repr>(name: &str, v: &VariableBase<R>, format: Format) -> Resul
     Ok(Encoded {
         raw: RawVariable {
             dims,
-            data: data.into(),
+            data: data.into_raw(),
             is_char,
             attrs,
             storage,
@@ -454,7 +504,11 @@ fn encodable_lazily<R: Repr>(v: &VariableBase<R>, format: Format) -> bool {
 
 /// Encode `v`, lazily when possible: its attributes and stored type come from encoding its
 /// first element, and its values are encoded as they are read.
-fn encode_maybe_lazy<R: Repr>(name: &str, v: &VariableBase<R>, format: Format) -> Result<Encoded> {
+fn encode_maybe_lazy<'a, R: Repr>(
+    name: &str,
+    v: &'a VariableBase<R>,
+    format: Format,
+) -> Result<Encoded<'a>> {
     if !encodable_lazily(v, format) {
         return encode_var(name, v, format);
     }
@@ -462,10 +516,17 @@ fn encode_maybe_lazy<R: Repr>(name: &str, v: &VariableBase<R>, format: Format) -
         v.dims().iter().map(|d| (d.clone(), 0..1)).collect();
     let mut probe = v.isel(first)?.to_owned();
     probe.load()?;
-    let mut e = encode_var(name, &probe, format)?;
+    let e = encode_var(name, &probe, format)?;
+    let RawVariable {
+        dims,
+        data: probed,
+        is_char,
+        attrs,
+        mut storage,
+    } = e.raw;
     // The probe's storage was fitted to one element: fit the chunks to the real shape.
-    if e.raw.storage.chunks.is_some() {
-        e.raw.storage.chunks = v.encoding().chunks.as_ref().map(|c| {
+    if storage.chunks.is_some() {
+        storage.chunks = v.encoding().chunks.as_ref().map(|c| {
             c.iter()
                 .zip(v.shape())
                 .map(|(c, n)| (*c).clamp(1, (*n).max(1)))
@@ -480,11 +541,19 @@ fn encode_maybe_lazy<R: Repr>(name: &str, v: &VariableBase<R>, format: Format) -
         attrs: v.attrs().clone(),
         encoding: v.encoding().clone(),
         format,
-        dtype: e.raw.data.dtype(),
+        dtype: probed.dtype(),
         shape: v.shape().to_vec(),
     };
-    e.raw.data = crate::io::RawData::Lazy(std::sync::Arc::new(source));
-    Ok(e)
+    Ok(Encoded {
+        raw: RawVariable {
+            dims,
+            data: crate::io::RawData::Lazy(std::sync::Arc::new(source)),
+            is_char,
+            attrs,
+            storage,
+        },
+        char_dim: e.char_dim,
+    })
 }
 
 /// A lazy variable encoded slice by slice as it is read (for writing without loading).
@@ -544,15 +613,21 @@ impl LazySource for EncodeSource {
 /// # Errors
 /// [`CfError`] if values cannot be represented (e.g. NaN in integer data without a fill value,
 /// 64-bit integers too large for a netCDF-3 file).
-pub fn encode<S: Repr>(ds: &DatasetBase<S>, opts: &EncodeOptions) -> Result<RawDataset> {
-    // Stacked dimensions are written in CF "compression by gathering" form.
+///
+/// Values written unchanged are borrowed from `ds`, not copied.
+pub fn encode<'a, S: Repr>(ds: &'a DatasetBase<S>, opts: &EncodeOptions) -> Result<RawDataset<'a>> {
+    // Stacked dimensions are written in CF "compression by gathering" form (of a dataset made
+    // here, so its values are owned).
     match crate::stack::compress_stacked(ds)? {
-        Some(c) => encode_plain(&c, opts),
+        Some(c) => encode_plain(&c, opts).map(RawDataset::into_owned),
         None => encode_plain(ds, opts),
     }
 }
 
-fn encode_plain<S: Repr>(ds: &DatasetBase<S>, opts: &EncodeOptions) -> Result<RawDataset> {
+fn encode_plain<'a, S: Repr>(
+    ds: &'a DatasetBase<S>,
+    opts: &EncodeOptions,
+) -> Result<RawDataset<'a>> {
     let format = opts.format;
     let mut raw = RawDataset::default();
     let unlimited = &ds.encoding().unlimited_dims;
@@ -575,7 +650,7 @@ fn encode_plain<S: Repr>(ds: &DatasetBase<S>, opts: &EncodeOptions) -> Result<Ra
         .collect();
     let mut attached: Vec<&Name> = Vec::new();
 
-    let add = |raw: &mut RawDataset, name: &Name, e: Encoded| -> Result<()> {
+    let add = |raw: &mut RawDataset<'a>, name: &Name, e: Encoded<'a>| -> Result<()> {
         if let Some((dim, width)) = e.char_dim {
             match raw.dims.get(&dim) {
                 Some(existing) if existing.len != width => {

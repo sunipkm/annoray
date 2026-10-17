@@ -27,7 +27,7 @@ fn tmp(name: &str) -> PathBuf {
     dir.join(name)
 }
 
-fn var(dims: &[&str], data: TypedArray<Owned>) -> RawVariable {
+fn var(dims: &[&str], data: TypedArray<Owned>) -> RawVariable<'static> {
     RawVariable {
         dims: dims.iter().map(|d| Name::from(*d)).collect(),
         data: data.into(),
@@ -87,7 +87,7 @@ fn reads_netcdf_c_files_like_netcdf_c() {
 }
 
 /// Everything netCDF-4 can hold that the CF layer produces.
-fn sample() -> RawDataset {
+fn sample() -> RawDataset<'static> {
     let mut ds = RawDataset::default();
     ds.dims.insert(
         "time".into(),

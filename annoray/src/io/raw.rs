@@ -11,7 +11,7 @@ use indexmap::IndexMap;
 use std::borrow::Cow;
 use std::sync::Arc;
 
-use crate::{Attrs, CoreError, DType, LazySource, Name, Owned, TypedArray};
+use crate::{Attrs, CoreError, DType, LazySource, Name, Owned, TypedArray, View};
 
 /// Errors from reading or writing files.
 #[derive(Debug, thiserror::Error)]
@@ -125,36 +125,48 @@ pub struct Storage {
     pub compression: Option<crate::Compression>,
 }
 
-/// A variable's values: in memory, or a source to read them from on demand.
+/// A variable's values: in memory (owned, or borrowed from the dataset being written), or a
+/// source to read them from on demand.
 #[derive(Clone)]
-pub enum RawData {
+pub enum RawData<'a> {
     /// Values in memory.
     Loaded(TypedArray<Owned>),
+    /// Values borrowed from memory (encoding for writing passes unchanged values through
+    /// without copying them).
+    Borrowed(TypedArray<View<'a>>),
     /// Values read on demand (only the parts selected).
     Lazy(Arc<dyn LazySource>),
 }
 
-impl std::fmt::Debug for RawData {
+impl std::fmt::Debug for RawData<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Loaded(a) => std::fmt::Debug::fmt(a, f),
+            Self::Borrowed(a) => write!(f, "Borrowed({a:?})"),
             Self::Lazy(s) => write!(f, "Lazy({s:?})"),
         }
     }
 }
 
-impl From<TypedArray<Owned>> for RawData {
+impl From<TypedArray<Owned>> for RawData<'_> {
     fn from(a: TypedArray<Owned>) -> Self {
         Self::Loaded(a)
     }
 }
 
-impl RawData {
+impl<'a> From<TypedArray<View<'a>>> for RawData<'a> {
+    fn from(a: TypedArray<View<'a>>) -> Self {
+        Self::Borrowed(a)
+    }
+}
+
+impl RawData<'_> {
     /// Element type.
     #[must_use]
     pub fn dtype(&self) -> DType {
         match self {
             Self::Loaded(a) => a.dtype(),
+            Self::Borrowed(a) => a.dtype(),
             Self::Lazy(s) => s.dtype(),
         }
     }
@@ -164,28 +176,63 @@ impl RawData {
     pub fn shape(&self) -> &[usize] {
         match self {
             Self::Loaded(a) => a.shape(),
+            Self::Borrowed(a) => a.shape(),
             Self::Lazy(s) => s.shape(),
         }
     }
 
-    /// The values (read in full if lazy).
+    /// The values in memory, as a view (`None` for a lazy source).
+    #[must_use]
+    pub fn in_memory(&self) -> Option<TypedArray<View<'_>>> {
+        match self {
+            Self::Loaded(a) => Some(a.view()),
+            Self::Borrowed(a) => Some(a.view()),
+            Self::Lazy(_) => None,
+        }
+    }
+
+    /// The values in the box `[start, start + count)`, copying only that part.
+    ///
+    /// # Errors
+    /// [`IoError::Core`] if a lazy source cannot be read.
+    pub fn read_slice(&self, start: &[usize], count: &[usize]) -> Result<TypedArray<Owned>> {
+        match self {
+            Self::Lazy(s) => Ok(s.read_slice(start, count)?),
+            Self::Loaded(a) => Ok(slice_of(&a.view(), start, count)),
+            Self::Borrowed(a) => Ok(slice_of(a, start, count)),
+        }
+    }
+
+    /// The values (read in full if lazy, copied if borrowed).
     ///
     /// # Errors
     /// [`IoError::Core`] if a lazy source cannot be read.
     pub fn values(&self) -> Result<Cow<'_, TypedArray<Owned>>> {
         match self {
             Self::Loaded(a) => Ok(Cow::Borrowed(a)),
+            Self::Borrowed(a) => Ok(Cow::Owned(a.to_owned())),
             Self::Lazy(s) => {
                 let start = vec![0; s.shape().len()];
                 Ok(Cow::Owned(s.read_slice(&start, s.shape())?))
             }
         }
     }
+
+    /// The same values, owning them (borrowed values are copied), so they may live as long
+    /// as any `'b`.
+    #[must_use]
+    pub fn into_owned<'b>(self) -> RawData<'b> {
+        match self {
+            Self::Loaded(a) => RawData::Loaded(a),
+            Self::Borrowed(a) => RawData::Loaded(a.to_owned()),
+            Self::Lazy(s) => RawData::Lazy(s),
+        }
+    }
 }
 
 /// `a[start .. start + count]`, copied out of a view (never the whole array).
 pub(crate) fn slice_of(
-    a: &TypedArray<Owned>,
+    a: &TypedArray<View<'_>>,
     start: &[usize],
     count: &[usize],
 ) -> TypedArray<Owned> {
@@ -211,17 +258,17 @@ impl LazySource for Held {
     }
 
     fn read_slice(&self, start: &[usize], count: &[usize]) -> crate::Result<TypedArray<Owned>> {
-        Ok(slice_of(&self.0, start, count))
+        Ok(slice_of(&self.0.view(), start, count))
     }
 }
 
 /// A variable as stored: raw values in the on-disk type, attributes verbatim.
 #[derive(Debug, Clone)]
-pub struct RawVariable {
+pub struct RawVariable<'a> {
     /// Dimension names.
     pub dims: Vec<Name>,
     /// Values. `NC_CHAR` data is `U8` with [`is_char`](Self::is_char) set.
-    pub data: RawData,
+    pub data: RawData<'a>,
     /// Whether the on-disk type is `NC_CHAR` (text as fixed-width byte arrays).
     pub is_char: bool,
     /// Attributes exactly as stored, including `_FillValue`, `scale_factor`, `units`, ….
@@ -230,22 +277,55 @@ pub struct RawVariable {
     pub storage: Storage,
 }
 
-/// A group (or the root) as stored.
+/// A group (or the root) as stored. `'a` is how long borrowed values
+/// ([`RawData::Borrowed`]) live: `'static` for what backends read.
 #[derive(Debug, Clone, Default)]
-pub struct RawDataset {
+pub struct RawDataset<'a> {
     /// Dimensions defined in this group.
     pub dims: IndexMap<Name, RawDim>,
     /// Variables, in file order.
-    pub vars: IndexMap<Name, RawVariable>,
+    pub vars: IndexMap<Name, RawVariable<'a>>,
     /// Group attributes.
     pub attrs: Attrs,
     /// Child groups.
-    pub groups: IndexMap<Name, RawDataset>,
+    pub groups: IndexMap<Name, RawDataset<'a>>,
     /// Variables the backend could not represent, with the reason (e.g. compound types).
     pub skipped: Vec<(Name, String)>,
 }
 
-impl RawDataset {
+impl RawDataset<'_> {
+    /// The same dataset, owning all its values (borrowed values are copied), so it may live
+    /// as long as any `'b`.
+    #[must_use]
+    pub fn into_owned<'b>(self) -> RawDataset<'b> {
+        RawDataset {
+            dims: self.dims,
+            vars: self
+                .vars
+                .into_iter()
+                .map(|(k, v)| {
+                    (
+                        k,
+                        RawVariable {
+                            dims: v.dims,
+                            data: v.data.into_owned(),
+                            is_char: v.is_char,
+                            attrs: v.attrs,
+                            storage: v.storage,
+                        },
+                    )
+                })
+                .collect(),
+            attrs: self.attrs,
+            groups: self
+                .groups
+                .into_iter()
+                .map(|(k, g)| (k, g.into_owned()))
+                .collect(),
+            skipped: self.skipped,
+        }
+    }
+
     /// The group at a `/`-separated path (`""` or `"/"` is the root).
     ///
     /// # Errors
@@ -287,14 +367,14 @@ pub trait Backend {
     ///
     /// # Errors
     /// [`IoError::Backend`] for unreadable files.
-    fn read(&self, path: &Path) -> Result<RawDataset>;
+    fn read(&self, path: &Path) -> Result<RawDataset<'static>>;
 
     /// Open a file lazily: metadata now, variable data as [`RawData::Lazy`] sources that read
     /// only the slices asked for. Backends without lazy support read everything.
     ///
     /// # Errors
     /// [`IoError::Backend`] for unreadable files.
-    fn read_lazy(&self, path: &Path) -> Result<RawDataset> {
+    fn read_lazy(&self, path: &Path) -> Result<RawDataset<'static>> {
         self.read(path)
     }
 
@@ -302,14 +382,14 @@ pub trait Backend {
     ///
     /// # Errors
     /// [`IoError::Format`] if the dataset needs features the format lacks.
-    fn write(&self, ds: &RawDataset, path: &Path, options: &WriteOptions) -> Result<()>;
+    fn write(&self, ds: &RawDataset<'_>, path: &Path, options: &WriteOptions) -> Result<()>;
 
     /// As [`write`](Self::write), taking the dataset: backends that stream values may then
     /// write loaded arrays without a second in-memory copy.
     ///
     /// # Errors
     /// As for [`write`](Self::write).
-    fn write_owned(&self, ds: RawDataset, path: &Path, options: &WriteOptions) -> Result<()> {
+    fn write_owned(&self, ds: RawDataset<'_>, path: &Path, options: &WriteOptions) -> Result<()> {
         self.write(&ds, path, options)
     }
 }

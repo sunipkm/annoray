@@ -332,7 +332,7 @@ impl LazySource for ZarrSource {
     }
 }
 
-fn read_group(g: &Group, lazy: bool) -> Result<RawDataset> {
+fn read_group(g: &Group, lazy: bool) -> Result<RawDataset<'static>> {
     let mut ds = RawDataset {
         attrs: attrs_from(g.attrs()),
         ..RawDataset::default()
@@ -440,7 +440,7 @@ fn read_group(g: &Group, lazy: bool) -> Result<RawDataset> {
 ///
 /// # Errors
 /// [`IoError`] for unreadable stores.
-pub fn read(path: &Path, lazy: bool) -> Result<RawDataset> {
+pub fn read(path: &Path, lazy: bool) -> Result<RawDataset<'static>> {
     let store = Store::new(path);
     let root = Group::open(&store, "").map_err(err)?;
     read_group(&root, lazy)
@@ -613,7 +613,8 @@ fn write_var(store: &Store, path: &str, v: &RawVariable, opts: &ZarrOptions) -> 
         let (start, count) = array.chunk_region(&idx);
         let part = match &v.data {
             RawData::Lazy(s) => s.read_slice(&start, &count)?,
-            RawData::Loaded(a) => super::raw::slice_of(a, &start, &count),
+            RawData::Loaded(a) => super::raw::slice_of(&a.view(), &start, &count),
+            RawData::Borrowed(a) => super::raw::slice_of(a, &start, &count),
         };
         array.write_chunk(&idx, &zdata(part)?).map_err(err)
     };

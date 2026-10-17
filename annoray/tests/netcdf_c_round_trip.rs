@@ -9,7 +9,7 @@ use annoray::io::{
 use annoray::{AttrValue, DType, Name, TypedArray};
 use ndarray::{ArrayD, IxDyn, array};
 
-fn var(dims: &[&str], data: TypedArray<annoray::Owned>) -> RawVariable {
+fn var(dims: &[&str], data: TypedArray<annoray::Owned>) -> RawVariable<'static> {
     RawVariable {
         dims: dims.iter().map(|d| Name::from(*d)).collect(),
         data: data.into(),
@@ -19,7 +19,7 @@ fn var(dims: &[&str], data: TypedArray<annoray::Owned>) -> RawVariable {
     }
 }
 
-fn sample(netcdf4: bool) -> RawDataset {
+fn sample(netcdf4: bool) -> RawDataset<'static> {
     let mut ds = RawDataset::default();
     ds.dims.insert(
         "time".into(),

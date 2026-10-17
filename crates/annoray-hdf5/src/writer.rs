@@ -51,32 +51,32 @@ const HEAP_MIN: usize = 4096;
 
 /// A group to write.
 #[derive(Debug, Clone, Default)]
-pub struct WGroup {
+pub struct WGroup<'a> {
     /// Attributes, in order.
     pub attrs: Vec<(String, AttrData)>,
     /// Members, in creation order.
-    pub members: Vec<(String, WNode)>,
+    pub members: Vec<(String, WNode<'a>)>,
 }
 
 /// A group member.
 #[derive(Debug, Clone)]
-pub enum WNode {
+pub enum WNode<'a> {
     /// A subgroup.
-    Group(WGroup),
+    Group(WGroup<'a>),
     /// A dataset.
-    Dataset(WDataset),
+    Dataset(WDataset<'a>),
 }
 
-/// A dataset to write.
+/// A dataset to write; `'a` is how long its [`source`](Self::source) may borrow from.
 #[derive(Debug, Clone)]
-pub struct WDataset {
+pub struct WDataset<'a> {
     /// Values. Strings become variable-length UTF-8 unless `char_data` is set on `U8` data.
     /// With a [`source`](Self::source), only its element type matters (an empty array will
     /// do).
     pub data: Array,
     /// Read the values from here instead, slice by slice, as they are written (so a dataset
     /// need never be in memory at once). Not for strings.
-    pub source: Option<Arc<dyn Source>>,
+    pub source: Option<Arc<dyn Source + 'a>>,
     /// Write `U8` data as 1-byte strings (netCDF's `NC_CHAR`).
     pub char_data: bool,
     /// Per dimension: unlimited (forces chunking).
@@ -98,12 +98,12 @@ pub struct WDataset {
     pub attrs: Vec<(String, AttrData)>,
 }
 
-impl WDataset {
+impl<'a> WDataset<'a> {
     /// A dataset whose values are read from `source` as they are written.
     ///
     /// # Errors
     /// [`Error::Unsupported`] for string sources.
-    pub fn from_source(source: Arc<dyn Source>) -> Result<Self, Error> {
+    pub fn from_source(source: Arc<dyn Source + 'a>) -> Result<Self, Error> {
         if source.dtype() == ValueType::Str {
             return Err(Error::Unsupported(
                 "writing strings from a lazy source".into(),
