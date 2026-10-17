@@ -77,8 +77,13 @@ def generate() -> None:
             lo.units = "degrees_east"
             lo[:] = np.arange(NLON, dtype=float)
             v = d.createVariable(
-                "t2m", "f4", ("time", "lat", "lon"), chunksizes=(24, NLAT, NLON),
-                zlib=zlib, complevel=1, shuffle=zlib,
+                "t2m",
+                "f4",
+                ("time", "lat", "lon"),
+                chunksizes=(24, NLAT, NLON),
+                zlib=zlib,
+                complevel=1,
+                shuffle=zlib,
             )
             v.units, v.long_name = "K", "2 m temperature"
             for t0 in range(0, NT, 720):
@@ -105,7 +110,7 @@ def timeit(f, repeat: int) -> float:
     return statistics.median(ts)
 
 
-ISOLATED = r'''
+ISOLATED = r"""
 import os, sys, time, json, resource, statistics, threading, warnings
 os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
 warnings.filterwarnings("ignore")
@@ -141,7 +146,7 @@ done[0] = True
 sampler.join()
 mem = peak[0] if anon_gb() is not None else resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1e6
 print(json.dumps({{"t": statistics.median(ts), "rss_gb": mem}}))
-'''
+"""
 
 
 def isolated(body: str, repeat: int, **params) -> dict:
@@ -150,7 +155,11 @@ def isolated(body: str, repeat: int, **params) -> dict:
     code = ISOLATED.format(body=body)
     p = {"repeat": repeat, **{k: str(v) for k, v in params.items()}}
     r = subprocess.run(
-        [sys.executable, "-c", code, json.dumps(p)], capture_output=True, text=True, timeout=3600
+        [sys.executable, "-c", code, json.dumps(p)],
+        capture_output=True,
+        text=True,
+        timeout=3600,
+        check=False,
     )
     if r.returncode:
         return {"error": r.stderr.strip().splitlines()[-1][:200]}
@@ -243,21 +252,59 @@ def compute_cases():
         ("mean over time", lambda: x.mean("time"), lambda: a.mean("time")),
         ("std over time", lambda: x.std("time"), lambda: a.std("time")),
         ("max over lat/lon", lambda: x.max(["lat", "lon"]), lambda: a.max(["lat", "lon"])),
-        ("monthly climatology", lambda: x.groupby("time.month").mean(), lambda: a.groupby("time.month").mean()),
-        ("anomaly from climatology", lambda: x.groupby("time.month") - clim_x, lambda: a.groupby("time.month") - clim_a),
-        ("daily means (resample 1D)", lambda: x.resample(time="1D").mean(), lambda: a.resample(time="1D").mean()),
+        (
+            "monthly climatology",
+            lambda: x.groupby("time.month").mean(),
+            lambda: a.groupby("time.month").mean(),
+        ),
+        (
+            "anomaly from climatology",
+            lambda: x.groupby("time.month") - clim_x,
+            lambda: a.groupby("time.month") - clim_a,
+        ),
+        (
+            "daily means (resample 1D)",
+            lambda: x.resample(time="1D").mean(),
+            lambda: a.resample(time="1D").mean(),
+        ),
         ("rolling 24-h mean", lambda: x.rolling(time=24).mean(), lambda: a.rolling(time=24).mean()),
-        ("rolling_exp mean (span 24)", lambda: x.rolling_exp(time=24).mean(), lambda: a.rolling_exp(time=24).mean()),
-        ("90th percentile over time", lambda: x.quantile(0.9, "time"), lambda: a.quantile(0.9, "time")),
+        (
+            "rolling_exp mean (span 24)",
+            lambda: x.rolling_exp(time=24).mean(),
+            lambda: a.rolling_exp(time=24).mean(),
+        ),
+        (
+            "90th percentile over time",
+            lambda: x.quantile(0.9, "time"),
+            lambda: a.quantile(0.9, "time"),
+        ),
         ("K → °C", lambda: x - 273.15, lambda: a.to("degC")),
         ("a * 2 + a", lambda: x * 2.0 + x, lambda: a * 2.0 + a),
-        ("where(a > 0 °C, a, 0 °C)", lambda: xr.where(x > 273.15, x, 273.15), lambda: ar.where(a > K, a, K)),
-        ("corr over time", lambda: xr.corr(x, b_x, dim="time"), lambda: ar.corr(a, b_a, dim="time")),
-        ("convert_calendar noleap", lambda: x.convert_calendar("noleap"), lambda: a.convert_calendar("noleap")),
-        ("sel box + month", lambda: x.sel(lat=slice(30, 60), lon=slice(200, 300), time="2001-07"),
-         lambda: a.sel(lat=slice(30, 60), lon=slice(200, 300), time="2001-07")),
-        ("interp to 0.5° lat", lambda: x.isel(time=slice(0, 744)).interp(lat=np.arange(-90.0, 90.5, 0.5)),
-         lambda: a.isel(time=slice(0, 744)).interp(lat=np.arange(-90.0, 90.5, 0.5))),
+        (
+            "where(a > 0 °C, a, 0 °C)",
+            lambda: xr.where(x > 273.15, x, 273.15),
+            lambda: ar.where(a > K, a, K),
+        ),
+        (
+            "corr over time",
+            lambda: xr.corr(x, b_x, dim="time"),
+            lambda: ar.corr(a, b_a, dim="time"),
+        ),
+        (
+            "convert_calendar noleap",
+            lambda: x.convert_calendar("noleap"),
+            lambda: a.convert_calendar("noleap"),
+        ),
+        (
+            "sel box + month",
+            lambda: x.sel(lat=slice(30, 60), lon=slice(200, 300), time="2001-07"),
+            lambda: a.sel(lat=slice(30, 60), lon=slice(200, 300), time="2001-07"),
+        ),
+        (
+            "interp to 0.5° lat",
+            lambda: x.isel(time=slice(0, 744)).interp(lat=np.arange(-90.0, 90.5, 0.5)),
+            lambda: a.isel(time=slice(0, 744)).interp(lat=np.arange(-90.0, 90.5, 0.5)),
+        ),
         ("astype float64", lambda: x.astype("float64"), lambda: a.astype("float64")),
         ("equals (copy)", lambda: x.equals(x.copy()), lambda: a.equals(a.copy())),
     ]
@@ -287,8 +334,12 @@ def main() -> None:
         "io": [],
         "compute": [],
     }
-    print(f"xarray {xr.__version__}, numpy {np.__version__}, annoray {ar.__version__}, {os.cpu_count()} CPUs")
-    print(f"data: time {NT} × lat {NLAT} × lon {NLON} float32 ({NT * NLAT * NLON * 4 / 1e9:.1f} GB)")
+    print(
+        f"xarray {xr.__version__}, numpy {np.__version__}, annoray {ar.__version__}, {os.cpu_count()} CPUs"
+    )
+    print(
+        f"data: time {NT} × lat {NLAT} × lon {NLON} float32 ({NT * NLAT * NLON * 4 / 1e9:.1f} GB)"
+    )
 
     if args.only in (None, "io"):
         print("\n## Files (median s; peak anonymous memory of the process)\n")
@@ -317,7 +368,9 @@ def main() -> None:
                 else:
                     same(ra, rx, op)
             except Exception as e:  # noqa: BLE001
-                print(f"| {op} | | | **error: {type(e).__name__}: {str(e).splitlines()[0][:100]}** |")
+                print(
+                    f"| {op} | | | **error: {type(e).__name__}: {str(e).splitlines()[0][:100]}** |"
+                )
                 out["compute"].append({"op": op, "error": str(e)[:300]})
                 continue
             tx, ta = timeit(fx, args.repeat), timeit(fa, args.repeat)

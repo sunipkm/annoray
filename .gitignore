@@ -8,3 +8,8 @@ __pycache__/
 ._DS_Store
 *.md
 !README.md
+!docs/**/*.md
+docs/_build/
+docs/api/generated/
+docs/jupyter_execute/
+.jupyter_cache/

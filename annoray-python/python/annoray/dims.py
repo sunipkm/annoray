@@ -138,7 +138,10 @@ class DimensionType(type):
         return cls.dimension**n
 
     def __repr__(cls) -> str:
-        return f"<dimension {cls.__name__} [{cls.dimension}]>"
+        dim = cls.__dict__.get("dimension") or getattr(cls, "dimension", None)
+        if dim is None:  # the base class `Dim` names no dimension
+            return f"<dimension base {cls.__name__}>"
+        return f"<dimension {cls.__name__} [{dim}]>"
 
 
 class Dim(metaclass=DimensionType):

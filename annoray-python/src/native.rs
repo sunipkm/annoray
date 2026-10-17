@@ -836,6 +836,7 @@ impl PyDataArray {
         })
     }
 
+    /// The array's name (`None` if unnamed); assignable.
     #[getter]
     fn name(&self) -> Option<String> {
         self.inner.name().map(ToString::to_string)
@@ -868,6 +869,7 @@ impl PyDataArray {
         PyTuple::new(py, self.inner.dims().iter().map(Name::as_str))
     }
 
+    /// The length of each dimension, in order.
     #[getter]
     fn shape<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyTuple>> {
         PyTuple::new(py, self.inner.shape())
@@ -879,11 +881,13 @@ impl PyDataArray {
         sizes_dict(py, self.inner.sizes().map(|(k, n)| (k.clone(), n)))
     }
 
+    /// The number of dimensions.
     #[getter]
     fn ndim(&self) -> usize {
         self.inner.ndim()
     }
 
+    /// The number of elements.
     #[getter]
     fn size(&self) -> usize {
         self.inner.len()
@@ -1240,10 +1244,12 @@ impl PyDataArray {
         new_da(py, do_isel(py, &this.inner, args)?)
     }
 
+    /// Whether each value is missing (NaN, NaT): a boolean array, unit dropped.
     fn isnull(&self, py: Python<'_>) -> PyResult<Py<PyDataArray>> {
         new_da(py, self.inner.isnull().py_err()?)
     }
 
+    /// Whether each value is present (not NaN or NaT): a boolean array, unit dropped.
     fn notnull(&self, py: Python<'_>) -> PyResult<Py<PyDataArray>> {
         new_da(py, self.inner.notnull().py_err()?)
     }
@@ -1550,6 +1556,7 @@ impl PyDataset {
             .call1((slf,))
     }
 
+    /// The data variables, as a live dict: `ds.data_vars["v"] = ...` adds or replaces one.
     #[getter]
     fn data_vars<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyDict>> {
         let names: Vec<String> = slf.borrow().keys();
@@ -1743,6 +1750,9 @@ impl PyDataset {
         self.load(py)
     }
 
+    /// Select by position along named dimensions: `ds.isel(time=0, lat=slice(10, 20))`;
+    /// integers drop the dimension, slices and integer arrays keep it. `drop=True` removes
+    /// coordinates made 0-d; `missing_dims` is `"raise"`, `"warn"` or `"ignore"`.
     #[pyo3(signature = (indexers=None, drop=false, missing_dims="raise", **kwargs))]
     fn isel(
         &self,
@@ -1765,6 +1775,9 @@ impl PyDataset {
         )
     }
 
+    /// Select by label: `ds.sel(time="2020-01", lat=slice(30, 60))`; slices are inclusive.
+    /// `method` is `"nearest"`, `"pad"`/`"ffill"` or `"backfill"`/`"bfill"`, within
+    /// `tolerance` if given; quantity labels are converted into the coordinate's unit.
     #[pyo3(signature = (indexers=None, method=None, tolerance=None, drop=false, **kwargs))]
     fn sel(
         &self,
@@ -1791,11 +1804,16 @@ impl PyDataset {
         new_ds(py, py.detach(|| self.inner.fillna(value)).py_err()?)
     }
 
+    /// The dataset without the positions along `dim` where any (`how="any"`) or every
+    /// (`how="all"`) value of the data variables is missing.
     #[pyo3(signature = (dim, how="any"))]
     fn dropna(&self, py: Python<'_>, dim: &str, how: &str) -> PyResult<Py<PyDataset>> {
         new_ds(py, self.inner.dropna(dim, how_from(how)?).py_err()?)
     }
 
+    /// Conform to new coordinate labels: positions without a match get `fill_value` (NaN by
+    /// default; `""` for text). `method` (`"nearest"`, `"pad"`, `"backfill"`) and
+    /// `tolerance` match inexact labels.
     #[pyo3(signature = (indexers=None, method=None, tolerance=None, fill_value=None, **kwargs))]
     fn reindex(
         slf: &Bound<'_, Self>,
@@ -1829,6 +1847,10 @@ impl PyDataset {
         Ok(new_ds(py, out)?.into_any())
     }
 
+    /// Interpolate along dimensions to new coordinate values (`method` `"linear"`,
+    /// `"nearest"`, or log-scale `"log_coord"`, `"log_value"`, `"loglog"`); no
+    /// extrapolation unless `extrapolate` asks for it (`"edge"`, `"extend"`, or a number for
+    /// a power law). Text variables along the dimension are dropped.
     #[pyo3(signature = (coords=None, method="linear", extrapolate=None, **kwargs))]
     fn interp(
         &self,
@@ -1847,6 +1869,9 @@ impl PyDataset {
         new_ds(py, out)
     }
 
+    /// Group by the values of a coordinate or variable (`"time.month"` for a datetime
+    /// component): reductions give one value per group, arithmetic with a per-group object
+    /// broadcasts back (`ds.groupby("time.month") - clim`).
     fn groupby(slf: &Bound<'_, Self>, group: String) -> PyResult<PyGroupBy> {
         slf.borrow().inner.groupby(&group).py_err()?;
         Ok(PyGroupBy {
@@ -1855,6 +1880,9 @@ impl PyDataset {
         })
     }
 
+    /// Group into bins of a coordinate's values: `bins` is a number of equal-width bins or
+    /// their edges; `right` closes bins on the right, `include_lowest` closes the first on
+    /// the left.
     #[pyo3(signature = (group, bins, right=true, include_lowest=false))]
     fn groupby_bins(
         slf: &Bound<'_, Self>,
@@ -1876,6 +1904,8 @@ impl PyDataset {
         })
     }
 
+    /// Resample along a datetime dimension: `ds.resample(time="1D").mean()`. Every CF
+    /// calendar is supported; times need not be sorted, and NaT belongs to no bin.
     #[pyo3(signature = (indexer=None, **kwargs))]
     fn resample(
         slf: &Bound<'_, Self>,
@@ -1891,6 +1921,9 @@ impl PyDataset {
         })
     }
 
+    /// A moving window along one or more dimensions: `ds.rolling(time=24).mean()`;
+    /// `center` labels windows at their centre, `min_periods` sets the number of valid values
+    /// a window needs.
     #[pyo3(signature = (dim=None, center=false, min_periods=None, **kwargs))]
     fn rolling(
         slf: &Bound<'_, Self>,

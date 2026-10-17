@@ -1,0 +1,9 @@
+# Documentation build (the annoray extension itself is built with `maturin develop`).
+sphinx>=8.1
+pydata-sphinx-theme>=0.16
+myst-nb>=1.2
+sphinx-design>=0.6
+sphinx-copybutton>=0.5
+matplotlib>=3.8
+xarray>=2025.1
+ipykernel>=6.29

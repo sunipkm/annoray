@@ -475,40 +475,75 @@ forwarders!(PyDataTree, "annoray._tree":
     _edit_attrs => "_edit_attrs",
     _plain_encoding => "_plain_encoding",
     _edit_encoding => "_edit_encoding",
+    /// `Dataset.mean` applied to every node's dataset, as a new tree of the same shape.
     mean => "node_mean",
+    /// `Dataset.sum` applied to every node's dataset, as a new tree of the same shape.
     sum => "node_sum",
+    /// `Dataset.prod` applied to every node's dataset, as a new tree of the same shape.
     prod => "node_prod",
+    /// `Dataset.std` applied to every node's dataset, as a new tree of the same shape.
     std => "node_std",
+    /// `Dataset.var` applied to every node's dataset, as a new tree of the same shape.
     var => "node_var",
+    /// `Dataset.min` applied to every node's dataset, as a new tree of the same shape.
     min => "node_min",
+    /// `Dataset.max` applied to every node's dataset, as a new tree of the same shape.
     max => "node_max",
+    /// `Dataset.median` applied to every node's dataset, as a new tree of the same shape.
     median => "node_median",
+    /// `Dataset.count` applied to every node's dataset, as a new tree of the same shape.
     count => "node_count",
+    /// `Dataset.any` applied to every node's dataset, as a new tree of the same shape.
     any => "node_any",
+    /// `Dataset.all` applied to every node's dataset, as a new tree of the same shape.
     all => "node_all",
+    /// `Dataset.isel` applied to every node's dataset, as a new tree of the same shape.
     isel => "node_isel",
+    /// `Dataset.sel` applied to every node's dataset, as a new tree of the same shape.
     sel => "node_sel",
+    /// `Dataset.squeeze` applied to every node's dataset, as a new tree of the same shape.
     squeeze => "node_squeeze",
+    /// `Dataset.astype` applied to every node's dataset, as a new tree of the same shape.
     astype => "node_astype",
+    /// `Dataset.fillna` applied to every node's dataset, as a new tree of the same shape.
     fillna => "node_fillna",
+    /// `Dataset.dropna` applied to every node's dataset, as a new tree of the same shape.
     dropna => "node_dropna",
+    /// `Dataset.interp` applied to every node's dataset, as a new tree of the same shape.
     interp => "node_interp",
+    /// `Dataset.reindex` applied to every node's dataset, as a new tree of the same shape.
     reindex => "node_reindex",
+    /// `Dataset.round` applied to every node's dataset, as a new tree of the same shape.
     round => "node_round",
+    /// `Dataset.clip` applied to every node's dataset, as a new tree of the same shape.
     clip => "node_clip",
+    /// `Dataset.quantile` applied to every node's dataset, as a new tree of the same shape.
     quantile => "node_quantile",
+    /// `Dataset.diff` applied to every node's dataset, as a new tree of the same shape.
     diff => "node_diff",
+    /// `Dataset.shift` applied to every node's dataset, as a new tree of the same shape.
     shift => "node_shift",
+    /// `Dataset.roll` applied to every node's dataset, as a new tree of the same shape.
     roll => "node_roll",
+    /// `Dataset.cumsum` applied to every node's dataset, as a new tree of the same shape.
     cumsum => "node_cumsum",
+    /// `Dataset.cumprod` applied to every node's dataset, as a new tree of the same shape.
     cumprod => "node_cumprod",
+    /// `Dataset.isnull` applied to every node's dataset, as a new tree of the same shape.
     isnull => "node_isnull",
+    /// `Dataset.notnull` applied to every node's dataset, as a new tree of the same shape.
     notnull => "node_notnull",
+    /// `Dataset.where` applied to every node's dataset, as a new tree of the same shape.
     r#where => "node_where",
+    /// `Dataset.drop_vars` applied to every node's dataset, as a new tree of the same shape.
     drop_vars => "node_drop_vars",
+    /// `Dataset.rename_vars` applied to every node's dataset, as a new tree of the same shape.
     rename_vars => "node_rename_vars",
+    /// `Dataset.head` applied to every node's dataset, as a new tree of the same shape.
     head => "node_head",
+    /// `Dataset.tail` applied to every node's dataset, as a new tree of the same shape.
     tail => "node_tail",
+    /// `Dataset.thin` applied to every node's dataset, as a new tree of the same shape.
     thin => "node_thin",
 );
 

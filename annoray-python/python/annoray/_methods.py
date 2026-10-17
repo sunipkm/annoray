@@ -57,7 +57,9 @@ def drop_isel(obj: Any, indexers: Any = None, **kwargs: Any) -> Any:
     return obj.isel(sel)
 
 
-def _put_at(da: DataArray, indexers: Mapping[Any, Any], pick: Callable[[DataArray, Any], Any]) -> list[tuple[str, Any]]:
+def _put_at(
+    da: DataArray, indexers: Mapping[Any, Any], pick: Callable[[DataArray, Any], Any]
+) -> list[tuple[str, Any]]:
     """Each indexer resolved to positions by selecting from an array of positions labelled
     like ``da`` along that dimension: keys mean exactly what they mean to ``isel``/``sel``."""
     at: list[tuple[str, Any]] = []
@@ -74,7 +76,9 @@ def _put_at(da: DataArray, indexers: Mapping[Any, Any], pick: Callable[[DataArra
     return at
 
 
-def da_put(da: DataArray, value: Any, indexers: Mapping[Any, Any] | None = None, **indexers_kwargs: Any) -> DataArray:
+def da_put(
+    da: DataArray, value: Any, indexers: Mapping[Any, Any] | None = None, **indexers_kwargs: Any
+) -> DataArray:
     """A copy with the values at positions (``isel`` keys) replaced by ``value``; the
     original is unchanged. See ``DataArray.put``."""
     ix = {**(indexers or {}), **indexers_kwargs}

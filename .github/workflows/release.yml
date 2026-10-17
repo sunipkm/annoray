@@ -159,3 +159,14 @@ jobs:
             --title "$TAG" \
             --generate-notes \
             "${kind[@]}"
+
+  # The documentation of the release, on GitHub Pages under /X.Y/ (and /stable/), once the
+  # release is out. Pre-releases keep the published versions as they are.
+  docs:
+    needs: [github-release]
+    if: ${{ !contains(github.ref_name, '-pre') }}
+    permissions:
+      contents: write
+    uses: ./.github/workflows/docs.yml
+    with:
+      tag: ${{ github.ref_name }}

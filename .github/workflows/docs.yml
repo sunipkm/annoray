@@ -1,0 +1,84 @@
+name: Docs
+
+# Builds the documentation and deploys it to GitHub Pages (the gh-pages branch):
+#
+# - called by release.yml after a release is published: into /X.Y/, and /stable/ when X.Y is
+#   the newest release;
+# - run by hand from the Actions tab: into /dev/.
+#
+# Pages must be enabled for the repository, serving the gh-pages branch.
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: "The release tag (vX.Y.Z)"
+        type: string
+        required: true
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: docs-deploy
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Which version
+        id: v
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          if [[ -n "$TAG" ]]; then
+            v="${TAG#v}"; v="${v%%-*}"
+            echo "version=${v%.*}" >> "$GITHUB_OUTPUT"
+            echo "stable=--stable" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=dev" >> "$GITHUB_OUTPUT"
+            echo "stable=" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: python tools/version.py --write
+      # The extension is built once and installed; the docs import it for docstrings.
+      - name: Build and install annoray
+        run: |
+          pip install maturin
+          maturin build --release -m annoray-python/Cargo.toml --out dist
+          pip install dist/*.whl
+      - run: pip install -r docs/requirements.txt
+      - run: python docs/_tools/check_api.py
+      - name: Build the documentation
+        env:
+          DOCS_VERSION: ${{ steps.v.outputs.version }}
+        run: sphinx-build -b html -W --keep-going -d docs/_build/doctrees docs docs/_build/html
+      - name: Deploy to gh-pages
+        env:
+          VERSION: ${{ steps.v.outputs.version }}
+          STABLE: ${{ steps.v.outputs.stable }}
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git fetch origin gh-pages; then
+            git worktree add -B gh-pages site origin/gh-pages
+          else
+            git worktree add --orphan -b gh-pages site
+          fi
+          python docs/_tools/deploy.py --site site --html docs/_build/html --version "$VERSION" $STABLE
+          cd site
+          git add -A
+          git commit -m "docs: $VERSION ($GITHUB_SHA)" || { echo "nothing to deploy"; exit 0; }
+          git push origin gh-pages
