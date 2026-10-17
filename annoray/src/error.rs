@@ -182,6 +182,9 @@ pub enum CoreError {
         /// Why.
         reason: &'static str,
     },
+    /// `put` positions or a value that do not fit the selection.
+    #[error("put: {0}")]
+    Put(String),
     /// Integer arithmetic overflowed.
     #[error("integer overflow in {0}")]
     ArithmeticOverflow(&'static str),

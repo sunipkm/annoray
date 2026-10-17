@@ -2,8 +2,8 @@
 ``head``/``tail``/``thin``, ``drop_isel``, ``drop_dims``, ``reset_coords``,
 ``filter_by_attrs``, ``to_dataarray``, ``to_dataset(dim=)``, ``interp_like``,
 ``reindex_like``, ``combine_first``, ``fillna`` with arrays, ``pad``, ``rank``,
-``cumulative``, ``reduce``, ``nbytes``, ``indexes``/``get_index``, and the no-op ``chunk``
-of an engine without dask).
+``cumulative``, ``reduce``, ``nbytes``, ``indexes``/``get_index``, ``put``/``put_sel``, and
+the no-op ``chunk`` of an engine without dask).
 """
 
 from __future__ import annotations
@@ -55,6 +55,49 @@ def drop_isel(obj: Any, indexers: Any = None, **kwargs: Any) -> Any:
         gone = {int(i) % n for i in np.atleast_1d(drop)}
         sel[d] = [i for i in range(n) if i not in gone]
     return obj.isel(sel)
+
+
+def _put_at(da: DataArray, indexers: Mapping[Any, Any], pick: Callable[[DataArray, Any], Any]) -> list[tuple[str, Any]]:
+    """Each indexer resolved to positions by selecting from an array of positions labelled
+    like ``da`` along that dimension: keys mean exactly what they mean to ``isel``/``sel``."""
+    at: list[tuple[str, Any]] = []
+    for d, key in indexers.items():
+        if d not in da.dims:
+            raise ValueError(f"{d!r} is not a dimension of the array (dimensions {da.dims})")
+        coords = {d: da.coords[d]} if d in da.coords and da.coords[d].dims == (d,) else {}
+        positions = DataArray(np.arange(da.sizes[d]), dims=(d,), coords=coords)
+        got = pick(positions, {d: key})
+        if got.dims not in ((), (d,)):
+            raise ValueError(f"the indexer for {d!r} must select along {d!r} only")
+        values = np.asarray(got.values)
+        at.append((str(d), int(values) if values.ndim == 0 else [int(i) for i in values]))
+    return at
+
+
+def da_put(da: DataArray, value: Any, indexers: Mapping[Any, Any] | None = None, **indexers_kwargs: Any) -> DataArray:
+    """A copy with the values at positions (``isel`` keys) replaced by ``value``; the
+    original is unchanged. See ``DataArray.put``."""
+    ix = {**(indexers or {}), **indexers_kwargs}
+    return da._put(_put_at(da, ix, lambda p, k: p.isel(k)), value)
+
+
+def da_put_sel(
+    da: DataArray,
+    value: Any,
+    indexers: Mapping[Any, Any] | None = None,
+    method: str | None = None,
+    tolerance: Any = None,
+    **indexers_kwargs: Any,
+) -> DataArray:
+    """A copy with the values at labels (``sel`` keys, ``method``, ``tolerance``) replaced
+    by ``value``; the original is unchanged. See ``DataArray.put_sel``."""
+    ix = {**(indexers or {}), **indexers_kwargs}
+    opts: dict[str, Any] = {}
+    if method is not None:
+        opts["method"] = method
+    if tolerance is not None:
+        opts["tolerance"] = tolerance
+    return da._put(_put_at(da, ix, lambda p, k: p.sel(k, **opts)), value)
 
 
 def drop_dims(ds: Dataset, drop_dims: Any, *, errors: str = "raise") -> Dataset:

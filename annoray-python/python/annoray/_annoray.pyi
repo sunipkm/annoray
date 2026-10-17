@@ -470,6 +470,18 @@ class DataArray(_Reductions, Generic[_D]):
     def drop_isel(
         self, indexers: Mapping[str, Any] | None = None, **kwargs: Any
     ) -> DataArray[_D]: ...
+    def put(
+        self, value: Any, indexers: Mapping[str, Any] | None = None, **indexers_kwargs: Any
+    ) -> DataArray[_D]: ...
+    def put_sel(
+        self,
+        value: Any,
+        indexers: Mapping[str, Any] | None = None,
+        method: str | None = None,
+        tolerance: Any = None,
+        **indexers_kwargs: Any,
+    ) -> DataArray[_D]: ...
+    def _put(self, at: list[tuple[str, int | list[int]]], value: Any) -> DataArray[_D]: ...
     def interp_like(
         self, other: DataArray[Any] | Dataset, method: str = "linear", **kwargs: Any
     ) -> DataArray[_D]: ...

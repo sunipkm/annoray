@@ -1004,6 +1004,65 @@ impl PyDataArray {
         self.load(py)
     }
 
+    /// `put` with positions already resolved: `at` pairs a dimension with one position (an
+    /// int; the dimension leaves the selection) or a list of positions. `value` is a data
+    /// array, a scalar or quantity, or an array (or quantity of one) shaped like the
+    /// selection, whose dimensions it then takes in order.
+    fn _put(
+        &self,
+        py: Python<'_>,
+        at: Vec<(String, Bound<'_, PyAny>)>,
+        value: &Bound<'_, PyAny>,
+    ) -> PyResult<Py<PyDataArray>> {
+        let mut pos: Vec<(Name, annoray::Positions)> = Vec::with_capacity(at.len());
+        for (d, p) in at {
+            let p = match p.extract::<usize>() {
+                Ok(i) => annoray::Positions::At(i),
+                Err(_) => annoray::Positions::Each(p.extract::<Vec<usize>>()?),
+            };
+            pos.push((Name::from(d.as_str()), p));
+        }
+        let held;
+        let owned;
+        let value: &DataArray = if let Ok(da) = value.cast::<PyDataArray>() {
+            held = da.borrow();
+            &held.inner
+        } else {
+            let (mag, unit) = match quantity_parts(value)? {
+                Some((m, u)) => (m, Some(u)),
+                None => (value.clone(), None),
+            };
+            let np = py.import("numpy")?;
+            let ndim = np.call_method1("ndim", (&mag,))?.extract::<usize>()?;
+            let dims: Vec<String> = if ndim == 0 {
+                Vec::new()
+            } else {
+                // An unlabelled array takes the selection's dimensions, in order.
+                self.inner
+                    .dims()
+                    .iter()
+                    .filter(|d| {
+                        !pos.iter()
+                            .any(|(n, p)| n == *d && matches!(p, annoray::Positions::At(_)))
+                    })
+                    .map(ToString::to_string)
+                    .collect()
+            };
+            if ndim != 0 && ndim != dims.len() {
+                return Err(PyValueError::new_err(format!(
+                    "an unlabelled value must have the selection's shape (dimensions {dims:?}); \
+                     got {ndim} dimension(s): give a DataArray to broadcast by name"
+                )));
+            }
+            let dims = PyTuple::new(py, dims)?;
+            let var = variable_from_py(py, Some(dims.as_any()), &mag, None, unit.as_deref())?;
+            owned = DataArray::new(var);
+            &owned
+        };
+        let out = py.detach(|| self.inner.put(&pos, value)).py_err()?;
+        new_da(py, out)
+    }
+
     /// The data converted to another unit (as float64).
     fn to(&self, py: Python<'_>, units: &Bound<'_, PyAny>) -> PyResult<Py<PyDataArray>> {
         let u = crate::units::unit_from_py(units)?;

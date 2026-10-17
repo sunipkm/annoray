@@ -356,7 +356,7 @@ impl PyDataArray {
     }
 
     /// `da["x"] = …` sets coordinate `x`. Values are immutable: other keys are refused (use
-    /// `where`, `copy(data=…)`).
+    /// `put`/`put_sel`, which return an updated copy, or `where`).
     fn __setitem__(
         slf: &Bound<'_, Self>,
         key: &Bound<'_, PyAny>,
@@ -366,8 +366,9 @@ impl PyDataArray {
             return Self::set_coord_value(slf, &name, value);
         }
         Err(PyTypeError::new_err(
-            "annoray arrays' values are immutable; use da.where(cond, other) or \
-             da.copy(data=...) for new values (da[\"name\"] = ... sets a coordinate)",
+            "annoray arrays' values are immutable: da = da.put(value, x=...) (positions) or \
+             da.put_sel(value, x=...) (labels) returns an updated copy; see also \
+             da.where(cond, other) (da[\"name\"] = ... sets a coordinate)",
         ))
     }
 

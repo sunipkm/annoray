@@ -8,7 +8,8 @@ from typing import Any
 class LocIndexer:
     """``obj.loc[key]``: ``obj.sel`` with the key given by position (``da.loc[10.0, "a"]``,
     ``da.loc[..., 2.0]``, slices of labels) or as a mapping of dimension names
-    (``ds.loc[{"x": 10.0}]``). Read only: annoray objects are immutable."""
+    (``ds.loc[{"x": 10.0}]``). Read only: annoray's values are immutable (``put_sel`` returns
+    an updated copy)."""
 
     __slots__ = ("_obj",)
 
@@ -40,6 +41,6 @@ class LocIndexer:
 
     def __setitem__(self, key: Any, value: Any) -> None:
         raise TypeError(
-            "annoray objects are immutable: assign through where(...), copy(data=...) or "
-            "assign(...)"
+            "annoray values are immutable: da = da.put_sel(value, x=...) returns an updated "
+            "copy (da.put for positions); see also where(...) and assign(...)"
         )

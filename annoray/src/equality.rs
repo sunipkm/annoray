@@ -18,7 +18,7 @@ use crate::{
 
 /// Whether two variables hold the same values (see the module notes); `exact` also requires
 /// the same unit.
-fn same_values<S: Repr, R: Repr>(
+pub(crate) fn same_values<S: Repr, R: Repr>(
     a: &VariableBase<S>,
     b: &VariableBase<R>,
     exact: bool,

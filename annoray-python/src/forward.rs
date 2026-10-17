@@ -123,6 +123,17 @@ macro_rules! getters {
 }
 
 forwarders!(PyDataArray, "annoray._methods":
+    /// A copy with the values at positions replaced: `da.put(value, time=3)`,
+    /// `da.put(q, {"x": [0, 2], "y": slice(1, None)})` (keys as for `isel`). The original
+    /// is unchanged (annoray's values are immutable). `value` is a DataArray (broadcast by
+    /// dimension name; its dimension coordinates must match the selection's), a number or
+    /// quantity, or an array shaped like the selection. It is converted into the array's
+    /// unit (a bare number only as 0 or NaN beside a unit); the element type never changes
+    /// (an integer array takes only exact integers that fit). A position may not repeat.
+    put => "da_put",
+    /// `put` with labels (keys as for `sel`, with `method=` and `tolerance=`):
+    /// `da.put_sel(Quantity(0, "degC"), time="2001-07-01")`.
+    put_sel => "da_put_sel",
     /// The first `n` positions along each dimension (5 by default): `da.head(x=2)`.
     head => "head",
     /// The last `n` positions along each dimension (5 by default).
