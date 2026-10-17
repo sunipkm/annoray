@@ -1,35 +1,37 @@
 name: Docs
 
-# Builds the documentation and deploys it to GitHub Pages (the gh-pages branch):
+# Builds the documentation: every public name in the API reference (check_api.py), executed
+# examples, warnings as errors. The HTML is uploaded as the `docs-html` artifact.
 #
-# - called by release.yml after a release is published: into /X.Y/, and /stable/ when X.Y is
-#   the newest release;
-# - run by hand from the Actions tab: into /dev/.
+# - Called by release.yml for every version tag, beside the CI: the release publishes
+#   nothing unless this passes. release.yml deploys the same HTML once the release is out.
+# - Called by docs-dev.yml (run by hand) for /dev/.
 #
-# Pages must be enabled for the repository, serving the gh-pages branch.
+# It only reads: deploying is docs-deploy.yml's job, so callers need grant nothing more.
 
 on:
   workflow_call:
     inputs:
       tag:
-        description: "The release tag (vX.Y.Z)"
+        description: "The release tag (vX.Y.Z or vX.Y.Z-preN); empty for dev"
         type: string
-        required: true
-  workflow_dispatch:
+        default: ""
+    outputs:
+      version:
+        description: "Where the build belongs on the site: X.Y, or dev"
+        value: ${{ jobs.build.outputs.version }}
 
 permissions:
-  contents: write
-
-concurrency:
-  group: docs-deploy
-  cancel-in-progress: false
+  contents: read
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  docs:
+  build:
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -42,10 +44,8 @@ jobs:
           if [[ -n "$TAG" ]]; then
             v="${TAG#v}"; v="${v%%-*}"
             echo "version=${v%.*}" >> "$GITHUB_OUTPUT"
-            echo "stable=--stable" >> "$GITHUB_OUTPUT"
           else
             echo "version=dev" >> "$GITHUB_OUTPUT"
-            echo "stable=" >> "$GITHUB_OUTPUT"
           fi
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
@@ -65,20 +65,8 @@ jobs:
         env:
           DOCS_VERSION: ${{ steps.v.outputs.version }}
         run: sphinx-build -b html -W --keep-going -d docs/_build/doctrees docs docs/_build/html
-      - name: Deploy to gh-pages
-        env:
-          VERSION: ${{ steps.v.outputs.version }}
-          STABLE: ${{ steps.v.outputs.stable }}
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if git fetch origin gh-pages; then
-            git worktree add -B gh-pages site origin/gh-pages
-          else
-            git worktree add --orphan -b gh-pages site
-          fi
-          python docs/_tools/deploy.py --site site --html docs/_build/html --version "$VERSION" $STABLE
-          cd site
-          git add -A
-          git commit -m "docs: $VERSION ($GITHUB_SHA)" || { echo "nothing to deploy"; exit 0; }
-          git push origin gh-pages
+      - uses: actions/upload-artifact@v4
+        with:
+          name: docs-html
+          path: docs/_build/html
+          retention-days: 7

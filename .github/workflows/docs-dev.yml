@@ -1,0 +1,20 @@
+name: Docs (dev)
+
+# Run by hand from the Actions tab: builds the documentation of the current branch and
+# publishes it on GitHub Pages under /dev/. Releases publish theirs from release.yml.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    uses: ./.github/workflows/docs.yml
+
+  deploy:
+    needs: [build]
+    permissions:
+      contents: write
+    uses: ./.github/workflows/docs-deploy.yml
+    with:
+      version: dev
+      stable: false
