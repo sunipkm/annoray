@@ -35,8 +35,11 @@ jobs:
           fetch-depth: 0
       - uses: dtolnay/rust-toolchain@stable
       - run: python3 tools/version.py --release
-      # In dependency order; each waits until the previous one is available.
-      - run: cargo publish --workspace --allow-dirty --exclude annoray-python
+      # In dependency order, each available before the next; versions already on crates.io
+      # are skipped and crates.io's new-crate rate limit is waited out, so re-running this job
+      # finishes a release that stopped part-way.
+      - run: python3 tools/publish_crates.py
+        timeout-minutes: 120
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
@@ -123,8 +126,9 @@ jobs:
           name: sdist
           path: annoray-python/dist
 
+  # After the crates, so a release never reaches PyPI with its crates missing.
   pypi:
-    needs: [ci, docs, wheels, sdist, test-wheels]
+    needs: [ci, docs, crates, wheels, sdist, test-wheels]
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
