@@ -26,4 +26,7 @@ assert_eq!(gzip_decompress(&packed, data.len())?, data);
 # Ok::<(), annoray_codecs::Error>(())
 ```
 
-Licensed under MIT or Apache-2.0, at your option.
+## License
+
+Dual-licensed under [Apache-2.0](LICENSE-APACHE) or [MIT](LICENSE-MIT), at the licensee's
+option.

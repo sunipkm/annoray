@@ -12,8 +12,8 @@ Pure-Rust Zarr v2 and v3 reader and writer for local directory stores; the Zarr 
   `crc32c`; numcodecs `zlib`, `lz4`, `shuffle`, `bz2` (read). Zstandard and LZ4 behind the
   `zstd`/`lz4` features.
 - **I/O model:** region reads decode only intersecting chunks (missing chunks are the fill
-  value); writes go chunk by chunk and skip all-fill chunks; consolidated metadata for xarray
-  and zarr-python.
+  value), in parallel with the `rayon` feature; writes go chunk by chunk and skip all-fill
+  chunks; consolidated metadata for xarray and zarr-python.
 - **Hardened:** keys cannot escape the store, decoded sizes are bounded, arithmetic is
   checked; malformed stores give `Error`, not panics.
 - **Checked against zarr-python 3** in both directions (`fixtures/gen_zarr.py`,
@@ -31,4 +31,13 @@ let out = ArrayBuilder::new(DType::F64, &[100, 100], &[50, 50])
 # Ok::<(), annoray_zarr::Error>(())
 ```
 
-Licensed under MIT or Apache-2.0, at your option.
+| Feature | Default | |
+|---|---|---|
+| `rayon` | no | Decode the chunks of a region in parallel (four per thread in flight). |
+| `zstd` | no | Zstandard (`zstd` codec, inside Blosc). |
+| `lz4` | no | LZ4 (numcodecs `lz4`, inside Blosc). |
+
+## License
+
+Dual-licensed under [Apache-2.0](LICENSE-APACHE) or [MIT](LICENSE-MIT), at the licensee's
+option.

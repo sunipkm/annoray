@@ -206,10 +206,36 @@ fn write<T: Clone>(dst: &mut ArrayD<T>, plans: &[Plan], src: ArrayViewD<'_, T>) 
 }
 
 impl<S: Repr> DataArrayBase<S> {
-    /// A copy with the values at `at` replaced by `value` (see the [module notes](self)):
-    /// positions per dimension (others whole), `value` converted into this array's unit and
-    /// element type and broadcast over the selection by dimension name. Name, coordinates,
-    /// attributes and encoding are kept; the original is unchanged.
+    /// A copy with the values at `at` replaced by `value`; name, coordinates, attributes and
+    /// encoding are kept and `self` is unchanged.
+    ///
+    /// - **Where:** per dimension, one position ([`Positions::At`]; the dimension leaves the
+    ///   selection) or a list ([`Positions::Each`], orthogonal as `isel` with arrays);
+    ///   dimensions not named are taken whole. A position may appear once per dimension.
+    /// - **Shape:** `value`'s dimensions are a subset of the selection's, each of the
+    ///   selection's length; missing dimensions are broadcast. A dimension coordinate of
+    ///   `value` along a selected dimension must equal `self`'s at the selected positions.
+    /// - **Units:** `value` is converted into `self`'s unit; a unitless value stands beside a
+    ///   unit only as the scalar NaN, or 0 for a ratio-scale or logarithmic unit.
+    /// - **Element type:** never changes. Floats round into a narrower float; integers must
+    ///   fit; a float goes into an integer array only as an exact integer; booleans, text,
+    ///   dates and durations only into arrays of their own type.
+    /// - **Cost:** one copy of `self` (lazy data is read without being cached); evenly spaced
+    ///   positions are written by a strided assignment.
+    ///
+    /// ```
+    /// use annoray::{DataArray, Name, Positions, Variable};
+    /// use ndarray::{ArrayD, IxDyn, array};
+    ///
+    /// # fn main() -> annoray::Result<()> {
+    /// let a = DataArray::new(Variable::new(["x"], array![1.0, 2.0, 3.0, 4.0].into_dyn())?);
+    /// let zero = DataArray::new(Variable::new(Vec::<Name>::new(), ArrayD::from_elem(IxDyn(&[]), 0.0))?);
+    /// let b = a.put(&[(Name::from("x"), Positions::Each(vec![0, 2]))], &zero)?;
+    /// assert_eq!(b.variable().data::<f64>()?.as_slice(), Some(&[0.0, 2.0, 0.0, 4.0][..]));
+    /// assert_eq!(a.variable().data::<f64>()?[0], 1.0); // unchanged
+    /// # Ok(())
+    /// # }
+    /// ```
     ///
     /// # Errors
     /// [`CoreError::NoSuchDim`]; [`CoreError::Put`] for positions out of range or repeated,

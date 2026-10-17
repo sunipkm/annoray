@@ -7,11 +7,16 @@ physical units and pure-Rust netCDF-3 (CDF-1/2/5), netCDF-4, HDF5 and Zarr (v2/v
   GAT-based representation (owned, view, mutable view), mirroring `ndarray`; selections
   borrow instead of copying.
 - **Labelled indexing and alignment:** `isel!`/`sel!` with Python slice syntax, name-based
-  broadcasting, `groupby`, `resample`, `rolling`, `interp`, `concat`, `merge`, `DataTree`.
+  broadcasting, `groupby`, `resample`, `rolling`, `rolling_exp`, `interp`, `concat`, `merge`,
+  `DataTree`.
+- **Checked updates:** mutable views (`isel_mut`, `data_mut`) write in place under the borrow
+  checker; `DataArray::put` returns a copy with values replaced, converted into the array's
+  unit and element type.
 - **Units:** binary operations check dimensional consistency and propagate units; exact
   conversion; CF `units` attributes decode into units.
 - **Out-of-core evaluation:** lazy memory-mapped sources, lazy elementwise composition and
-  chunk-aligned streaming reductions within a configurable memory budget.
+  chunk-aligned streaming reductions within a configurable memory budget. Writing borrows
+  values that encoding leaves unchanged, so a dataset is written without a second copy.
 - **Total error handling:** no panics in library code (`unwrap`, indexing and unchecked
   arithmetic are denied by lint); every failure is a `Result`.
 
@@ -45,13 +50,16 @@ assert!((v.to("m/s")?.value() - 1.3889).abs() < 1e-4);
 ```
 
 Further examples: [`examples/`](https://github.com/sunipkm/annoray/tree/main/annoray/examples)
-(each paired with a Python twin of identical output).
+(each paired with a Python twin of identical output). Deliberate departures from xarray's
+behaviour are listed in
+[differences from xarray](https://github.com/sunipkm/annoray/blob/main/docs/xarray-differences.md);
+benchmarks in [performance](https://github.com/sunipkm/annoray/blob/main/docs/performance.md).
 
 ## Features
 
 | Feature | Default | |
 |---|---|---|
-| `rayon` | yes | Data-parallel reductions, arithmetic, CF decoding and chunk (de)compression. |
+| `rayon` | yes | Data-parallel reductions, arithmetic, rolling windows, quantiles, CF decoding, and HDF5/Zarr chunk (de)compression. |
 | `zstd`, `lz4` | yes | Zstandard and LZ4 chunk codecs (HDF5 filters 32015/32004, Zarr `zstd`/`lz4`, inside Blosc), pure Rust. |
 | `uom` | no | Arrays and `sel` labels of uom SI quantities: `to_typed`, `from_typed` (values rescaled into coherent SI). |
 | `whippyunits` | no | Arrays and `sel` labels of whippyunits quantities; `view_typed` reinterprets data in exactly the quantity's unit without copying. |

@@ -1,4 +1,5 @@
-//! annoray: labelled, units-aware n-dimensional arrays for Rust, with netCDF and HDF5 I/O.
+//! annoray: labelled, units-aware n-dimensional arrays for Rust, with netCDF, HDF5 and Zarr
+//! I/O.
 //!
 //! Containers come in three storage representations, mirroring ndarray:
 //!
@@ -9,6 +10,10 @@
 //! All are aliases of one generic type parameterised by a [`Repr`]. Selecting with
 //! [`isel`](VariableBase::isel) returns a view; the `_mut` variants return mutable views whose
 //! writes land in the owner.
+//!
+//! Owned data is never changed behind a shared reference: in-place writes go through the
+//! `_mut` views (checked by the borrow checker), and [`DataArrayBase::put`] returns a copy
+//! with values replaced, converted into the array's unit and element type.
 //!
 //! No function in this crate panics on bad input: all failures are returned as errors.
 //!

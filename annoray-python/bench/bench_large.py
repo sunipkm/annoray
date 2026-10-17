@@ -4,7 +4,8 @@ dask installed, as a performance-minded user has them).
 A year of hourly 2 m temperature on a 1° grid (time 8760 × lat 181 × lon 360, float32,
 2.3 GB of values) is written three ways: netCDF-4 uncompressed, netCDF-4 zlib, and Zarr v3
 (zstd). Every annoray result is checked against xarray's before timing. File reads are
-with a warm page cache; peak memory is the resident set of a fresh process.
+with a warm page cache; peak memory is the peak anonymous memory (allocations, not mapped
+file pages) of a fresh process, sampled while the timed repeats run.
 
     python bench_large.py --generate            # write the files (once)
     python bench_large.py [--repeat N] [--json out.json] [--only io|compute]
@@ -105,18 +106,41 @@ def timeit(f, repeat: int) -> float:
 
 
 ISOLATED = r'''
-import os, sys, time, json, resource, statistics, warnings
+import os, sys, time, json, resource, statistics, threading, warnings
 os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
 warnings.filterwarnings("ignore")
 import numpy as np, xarray as xr, annoray as ar
 P = json.loads(sys.argv[1])
+# Peak anonymous memory (allocations), sampled: unlike ru_maxrss it leaves out the pages of
+# memory-mapped files, which the operating system can reclaim. Linux only; elsewhere the
+# resident-set peak.
+def anon_gb():
+    try:
+        with open("/proc/self/status") as f:
+            for line in f:
+                if line.startswith("RssAnon:"):
+                    return int(line.split()[1]) / 1e6
+    except OSError:
+        return None
+peak = [0.0]
+done = [False]
+def sample():
+    while not done[0]:
+        peak[0] = max(peak[0], anon_gb() or 0.0)
+        time.sleep(0.002)
 def run():
 {body}
 run()  # warm-up: page cache and imports
+sampler = threading.Thread(target=sample, daemon=True)
+sampler.start()
 ts = []
 for _ in range(P["repeat"]):
+    out = None  # the previous result is released first: one result alive at a time
     s = time.perf_counter(); out = run(); ts.append(time.perf_counter() - s)
-print(json.dumps({{"t": statistics.median(ts), "rss_gb": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1e6}}))
+done[0] = True
+sampler.join()
+mem = peak[0] if anon_gb() is not None else resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1e6
+print(json.dumps({{"t": statistics.median(ts), "rss_gb": mem}}))
 '''
 
 
@@ -267,7 +291,7 @@ def main() -> None:
     print(f"data: time {NT} × lat {NLAT} × lon {NLON} float32 ({NT * NLAT * NLON * 4 / 1e9:.1f} GB)")
 
     if args.only in (None, "io"):
-        print("\n## Files (median s; peak memory of the process)\n")
+        print("\n## Files (median s; peak anonymous memory of the process)\n")
         print("| file | operation | library | time | peak memory |")
         print("|---|---|---|---|---|")
         for f, op, libs in io_cases():

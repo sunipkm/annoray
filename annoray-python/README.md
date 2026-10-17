@@ -6,11 +6,15 @@ units, implemented in Rust (PyO3). I/O uses pure-Rust netCDF-3, netCDF-4, HDF5 a
 Wheels use the stable ABI: one per platform for CPython 3.11 and later.
 
 - **Labelled indexing and alignment:** `isel`, `sel` (exact, nearest, pad, backfill;
-  pointwise with `DataArray` indexers), name-based broadcasting, `groupby`, `resample`,
-  `rolling`, `coarsen`, `weighted`, `interp`, `interpolate_na`, `stack`/`unstack`, `concat`,
-  `merge`, `DataTree`.
-- **Computation:** quantiles, `differentiate`/`integrate`/`polyfit`, numpy ufuncs and
-  `apply_ufunc`, all unit-aware.
+  pointwise with `DataArray` indexers), `query`, name-based broadcasting, `groupby`,
+  `resample`, `convert_calendar`, `rolling`, `rolling_exp`, `coarsen`, `weighted`, `interp`,
+  `interpolate_na`, `stack`/`unstack`, `concat`, `merge`, `DataTree`.
+- **Computation:** quantiles, `corr`/`cov`, `differentiate`/`integrate`/`polyfit`, numpy
+  ufuncs and `apply_ufunc`, the `.str` accessor, all unit-aware.
+- **Immutable values, checked updates:** `da[...] = v` is refused; `da.put(v, time=3)` and
+  `da.put_sel(v, time="2001-07-01")` return an updated copy, converting `v` into the array's
+  unit and refusing values that do not fit its element type. Containers are assignable:
+  `ds["v"] = ...`, `ds.coords[...] = ...`, and `attrs`/`encoding` are live dicts.
 - **Units:** binary operations check dimensional consistency and propagate units; `.to(...)`
   converts exactly; CF `units` attributes decode into units.
 - **Out-of-core evaluation:** lazy memory-mapped open; lazy elementwise composition and
@@ -18,7 +22,12 @@ Wheels use the stable ABI: one per platform for CPython 3.11 and later.
   disk-to-disk pipelines.
 - **Dimension annotations:** `Quantity[Velocity]` / `DataArray[Velocity]` type hints,
   enforced at call time by `@checked`; derived dimensions are declared as `Dim` subclasses.
-- **Zero-copy NumPy interop:** `.values` exposes the Rust buffer as a read-only array.
+- **Zero-copy NumPy interop:** `.values` exposes the Rust buffer as a read-only array; text
+  is NumPy fixed-width `<U{n}`.
+- **Performance:** parallel kernels and chunk decoding; faster than xarray (with bottleneck,
+  flox, numbagg and dask) in most operations on large files, with one copy of the data on
+  load and streaming reductions in a few hundred MB
+  ([benchmarks](https://github.com/sunipkm/annoray/blob/main/docs/performance.md)).
 - **astropy interop** (`annoray[astropy]`): `to_astropy()` on units, quantities and arrays;
   `from_astropy(...)`; astropy units accepted wherever units are. Units correspond through
   their SI-plus-radian decomposition (angle is a dimension in both); names are kept only
@@ -63,6 +72,11 @@ xarray is optional. When present, annoray registers an xarray backend
 (`engine="annoray"`) and provides `to_xarray()` / `from_xarray()` conversion (units map to the
 `units` attribute) and `ar.to_netcdf(obj, path)` for writing xarray objects with annoray's
 writers.
+
+Most xarray code runs unchanged with `import annoray as ar`. The deliberate differences
+(unit-checked comparisons and fills, no unchecked casts, immutable values, single-coordinate
+indexes, eager computation instead of dask) are listed in
+[differences from xarray](https://github.com/sunipkm/annoray/blob/main/docs/xarray-differences.md).
 
 Further examples: [`examples/`](https://github.com/sunipkm/annoray/tree/main/annoray-python/examples)
 (each paired with a Rust twin of identical output).
