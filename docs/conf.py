@@ -11,8 +11,10 @@ sets it so the version switcher marks the current page's version.
 
 from __future__ import annotations
 
+import json
 import os
 import sys
+import tempfile
 from pathlib import Path
 
 import annoray
@@ -55,6 +57,32 @@ add_module_names = False
 autosummary_filename_map = {"annoray.dimension": "annoray.dimension-function"}
 
 # ----- MyST and executed examples -----
+
+# The executed pages ask for `python3`; they run in a kernel of this interpreter that logs
+# only errors. ipykernel warns on every start that its (local, loopback) TCP transport is
+# unencrypted, and that would end up in the build output.
+_kernels = Path(tempfile.mkdtemp(prefix="annoray-docs-")) / "kernels" / "annoray-docs"
+_kernels.mkdir(parents=True)
+(_kernels / "kernel.json").write_text(
+    json.dumps(
+        {
+            "argv": [
+                sys.executable,
+                "-m",
+                "ipykernel_launcher",
+                "-f",
+                "{connection_file}",
+                "--IPKernelApp.log_level=ERROR",
+            ],
+            "display_name": "Python 3 (annoray docs)",
+            "language": "python",
+        }
+    )
+)
+os.environ["JUPYTER_PATH"] = os.pathsep.join(
+    p for p in (str(_kernels.parent.parent), os.environ.get("JUPYTER_PATH", "")) if p
+)
+nb_kernel_rgx_aliases = {"python3": "annoray-docs"}
 
 myst_enable_extensions = ["colon_fence", "deflist", "fieldlist", "substitution"]
 myst_heading_anchors = 3

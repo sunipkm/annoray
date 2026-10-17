@@ -294,8 +294,9 @@ def _pad_values(values: Any, axes: list[tuple[int, int]], mode: str, fill: Any) 
             fill = np.nan
             if values.dtype.kind in "iub":
                 values = values.astype(float)
-            elif values.dtype.kind == "M":
-                fill = np.datetime64("NaT")
+            elif values.dtype.kind in "Mm":
+                # NaT in the values' own unit (a unitless NaT is deprecated in numpy).
+                fill = values.dtype.type("NaT", np.datetime_data(values.dtype)[0])
             elif values.dtype.kind in "OU":
                 # Text has no missing value: pad with "" (xarray pads with NaN objects).
                 fill = ""
