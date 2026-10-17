@@ -360,20 +360,55 @@ fn global_heap(file: &File, addr: u64) -> Result<HashMap<u16, Vec<u8>>, Error> {
 }
 
 macro_rules! ints {
-    ($bytes:expr, $t:ty, $n:literal, $be:expr) => {
-        $bytes
-            .chunks_exact($n)
-            .map(|c| {
-                let a: [u8; $n] = c.try_into().unwrap_or([0; $n]);
-                if $be {
-                    <$t>::from_be_bytes(a)
-                } else {
-                    <$t>::from_le_bytes(a)
-                }
-            })
-            .collect::<Vec<$t>>()
-    };
+    ($bytes:expr, $t:ty, $n:literal, $be:expr) => {{
+        let one = |c: &[u8]| {
+            let a: [u8; $n] = c.try_into().unwrap_or([0; $n]);
+            if $be {
+                <$t>::from_be_bytes(a)
+            } else {
+                <$t>::from_le_bytes(a)
+            }
+        };
+        decode_all!($bytes, $n, one, $t)
+    }};
 }
+
+/// Every `$n`-byte element of `$bytes` through `$one`: in parallel for large inputs (where
+/// the copy, and the page faults of a mapped file, dominate) with the `rayon` feature.
+#[cfg(feature = "rayon")]
+macro_rules! decode_all {
+    ($bytes:expr, $n:literal, $one:expr, $t:ty) => {{
+        use rayon::prelude::*;
+        let b: &[u8] = $bytes;
+        if b.len() >= PARALLEL_BYTES {
+            // Blocks of plain loops (which vectorise), each thread filling its own part.
+            const BLOCK: usize = 1 << 18;
+            let mut out = vec![<$t>::default(); b.len() / $n];
+            out.par_chunks_mut(BLOCK)
+                .zip(b.par_chunks(BLOCK * $n))
+                .for_each(|(o, b)| {
+                    for (o, c) in o.iter_mut().zip(b.chunks_exact($n)) {
+                        *o = $one(c);
+                    }
+                });
+            out
+        } else {
+            b.chunks_exact($n).map($one).collect::<Vec<$t>>()
+        }
+    }};
+}
+
+#[cfg(not(feature = "rayon"))]
+macro_rules! decode_all {
+    ($bytes:expr, $n:literal, $one:expr, $t:ty) => {{
+        let b: &[u8] = $bytes;
+        b.chunks_exact($n).map($one).collect::<Vec<$t>>()
+    }};
+}
+
+/// Inputs at least this large are decoded in parallel.
+#[cfg(feature = "rayon")]
+const PARALLEL_BYTES: usize = 1 << 22;
 
 /// The `precision`-bit field at bit `offset` of every integer, sign-extended if `signed` (what
 /// HDF5's conversion of a bit-field integer type to a native one gives).

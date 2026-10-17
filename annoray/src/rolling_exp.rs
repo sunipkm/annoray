@@ -26,7 +26,9 @@
 use ndarray::{ArrayD, ArrayViewMut1, Axis};
 
 use crate::reduce::reduced_unit;
-use crate::{CoreError, DType, DataArray, DataArrayBase, Name, Reduction, Repr, Result, Variable};
+use crate::{
+    CoreError, DataArray, DataArrayBase, Name, Reduction, Repr, Result, TypedArray, Variable,
+};
 
 /// How the decay of [`DataArrayBase::rolling_exp`] is given.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -80,46 +82,151 @@ enum Stat {
     Std,
 }
 
-/// `stat` of one lane, in place (numbagg's recurrences; West's updates for the spread).
-fn lane(x: &mut ArrayViewMut1<'_, f64>, stat: Stat, alpha: f64, min_weight: f64) {
-    let decay = 1.0 - alpha;
-    // weight: decayed sum of α (numbagg's `weight`); w, w2: decayed count and sum of
-    // squared weights; mean, m2: weighted mean and sum of squared deviations; sum: the
-    // decayed sum; seen: any value so far (for `sum`).
-    let (mut weight, mut w, mut w2, mut mean, mut m2, mut sum) = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
-    let mut seen = false;
-    // The mean and spread are tracked for values less this shift.
-    let shift = x.iter().copied().find(|a| !a.is_nan()).unwrap_or(0.0);
-    for v in x.iter_mut() {
-        let raw = *v;
-        let a = raw - shift;
-        weight *= decay;
-        w *= decay;
-        w2 *= decay * decay;
-        m2 *= decay;
-        sum *= decay;
-        if !a.is_nan() {
-            seen = true;
-            weight += alpha;
-            sum += raw;
-            let w_new = w + 1.0;
-            let delta = a - mean;
-            mean += delta / w_new;
-            m2 += delta * (a - mean);
-            w = w_new;
-            w2 += 1.0;
+/// The running state of one lane (numbagg's recurrences; West's updates, on values less the
+/// lane's first valid one, for the spread).
+#[derive(Clone, Copy, Default)]
+struct State {
+    /// Decayed sum of α (numbagg's `weight`, for `min_weight`).
+    weight: f64,
+    /// Decayed count, and sum of squared weights.
+    w: f64,
+    w2: f64,
+    /// Weighted mean and sum of squared deviations, of values less `shift`.
+    mean: f64,
+    m2: f64,
+    /// Decayed sum (of the values themselves).
+    sum: f64,
+    /// The lane's first valid value; `seen` once there is one.
+    shift: f64,
+    seen: bool,
+}
+
+impl State {
+    #[inline]
+    fn step(&mut self, raw: f64, alpha: f64, decay: f64) {
+        self.weight *= decay;
+        self.w *= decay;
+        self.w2 *= decay * decay;
+        self.m2 *= decay;
+        self.sum *= decay;
+        if raw.is_nan() {
+            return;
         }
-        let ok = weight >= min_weight;
-        let bias = if w > 0.0 { 1.0 - w2 / (w * w) } else { 0.0 };
-        *v = match stat {
-            Stat::Mean if ok && w > 0.0 => mean + shift,
-            Stat::Sum if ok && seen => sum,
-            Stat::Count if ok => w,
-            Stat::Var if ok && bias > 0.0 => (m2 / w) / bias,
-            Stat::Std if ok && bias > 0.0 => ((m2 / w) / bias).max(0.0).sqrt(),
-            _ => f64::NAN,
-        };
+        if !self.seen {
+            self.seen = true;
+            self.shift = raw;
+        }
+        let a = raw - self.shift;
+        self.weight += alpha;
+        self.sum += raw;
+        let w_new = self.w + 1.0;
+        let delta = a - self.mean;
+        self.mean += delta / w_new;
+        self.m2 += delta * (a - self.mean);
+        self.w = w_new;
+        self.w2 += 1.0;
     }
+
+    #[inline]
+    fn value(&self, stat: Stat, min_weight: f64) -> f64 {
+        let ok = self.weight >= min_weight;
+        let bias = if self.w > 0.0 {
+            1.0 - self.w2 / (self.w * self.w)
+        } else {
+            0.0
+        };
+        match stat {
+            Stat::Mean if ok && self.w > 0.0 => self.mean + self.shift,
+            Stat::Sum if ok && self.seen => self.sum,
+            Stat::Count if ok => self.w,
+            Stat::Var if ok && bias > 0.0 => (self.m2 / self.w) / bias,
+            Stat::Std if ok && bias > 0.0 => ((self.m2 / self.w) / bias).max(0.0).sqrt(),
+            _ => f64::NAN,
+        }
+    }
+}
+
+/// Columns per parallel task.
+const BLOCK: usize = 512;
+
+/// `f` over rows of `x` along `axis` (the axis moved first, so each step reads one
+/// contiguous row), in parallel blocks of columns; the result in `x`'s axis order.
+fn blocked<T: Copy + Send + Sync, O: Copy + Send + Sync>(
+    x: &ndarray::ArrayViewD<'_, T>,
+    axis: usize,
+    fill: O,
+    f: impl Fn(ndarray::ArrayView2<'_, T>, ndarray::ArrayViewMut2<'_, O>) + Sync + Send,
+) -> Result<ArrayD<O>> {
+    let nd = x.ndim();
+    let mut perm: Vec<usize> = vec![axis];
+    perm.extend((0..nd).filter(|a| *a != axis));
+    let moved = x.view().permuted_axes(ndarray::IxDyn(&perm));
+    let moved_shape = moved.shape().to_vec();
+    let contiguous = moved.as_standard_layout();
+    let n = moved_shape.first().copied().unwrap_or(1);
+    let m = moved_shape.iter().skip(1).product::<usize>();
+    let bad = |e: ndarray::ShapeError| CoreError::InvalidReduction(format!("rolling_exp: {e}"));
+    let input = contiguous
+        .view()
+        .into_shape_with_order((n, m))
+        .map_err(bad)?;
+    // The kernel writes every element: a zero `fill` lets the allocator hand out untouched
+    // pages, filled in parallel as the blocks write them.
+    let mut out =
+        ndarray::Array2::from_shape_vec((n, m), vec![fill; n.saturating_mul(m)]).map_err(bad)?;
+    let work = |(k, block): (usize, ndarray::ArrayViewMut2<'_, O>)| {
+        let c0 = k.saturating_mul(BLOCK);
+        let part = input.slice(ndarray::s![.., c0..c0.saturating_add(block.ncols())]);
+        f(part, block);
+    };
+    #[cfg(feature = "rayon")]
+    {
+        use rayon::prelude::*;
+        out.axis_chunks_iter_mut(Axis(1), BLOCK)
+            .into_par_iter()
+            .enumerate()
+            .for_each(work);
+    }
+    #[cfg(not(feature = "rayon"))]
+    out.axis_chunks_iter_mut(Axis(1), BLOCK)
+        .enumerate()
+        .for_each(work);
+    let shaped = out
+        .into_shape_with_order(ndarray::IxDyn(&moved_shape))
+        .map_err(bad)?;
+    let mut inverse = vec![0; nd];
+    for (i, p) in perm.iter().enumerate() {
+        if let Some(slot) = inverse.get_mut(*p) {
+            *slot = i;
+        }
+    }
+    let in_order = shaped.permuted_axes(ndarray::IxDyn(&inverse));
+    Ok(if in_order.is_standard_layout() {
+        in_order
+    } else {
+        in_order.as_standard_layout().into_owned()
+    })
+}
+
+/// `stat` of every lane of `x` along `axis`, in the data's own type (no `f64` copy).
+fn lanes_stat<T: Copy + Send + Sync, O: Copy + Send + Sync>(
+    x: &ndarray::ArrayViewD<'_, T>,
+    axis: usize,
+    to: impl Fn(T) -> f64 + Sync + Send,
+    from: impl Fn(f64) -> O + Sync + Send,
+    fill: O,
+    (stat, alpha, min_weight): (Stat, f64, f64),
+) -> Result<ArrayD<O>> {
+    let decay = 1.0 - alpha;
+    blocked(x, axis, fill, |input, mut out| {
+        let mut states = vec![State::default(); input.ncols()];
+        for (row, mut dst) in input.rows().into_iter().zip(out.rows_mut()) {
+            for ((v, st), o) in row.iter().zip(states.iter_mut()).zip(dst.iter_mut()) {
+                st.step(to(*v), alpha, decay);
+                *o = from(st.value(stat, min_weight));
+            }
+        }
+    })
 }
 
 /// The covariance (or correlation) of two lanes, written into `x`.
@@ -172,25 +279,6 @@ fn lane_pair(
     }
 }
 
-/// `values` (as `f64`) of a variable, lane-computed along `axis` by `f`, back in the input's
-/// float type.
-fn along(
-    v: &Variable,
-    axis: usize,
-    f: impl Fn(&mut ArrayViewMut1<'_, f64>),
-) -> Result<crate::TypedArray<crate::Owned>> {
-    let mut x = v.to_f64()?;
-    for mut l in x.lanes_mut(Axis(axis)) {
-        f(&mut l);
-    }
-    #[allow(clippy::cast_possible_truncation)] // f32 data gives f32 results
-    Ok(if v.dtype() == DType::F32 {
-        crate::TypedArray::F32(x.mapv(|a| a as f32))
-    } else {
-        crate::TypedArray::F64(x)
-    })
-}
-
 fn with_values(
     da: &DataArray,
     data: crate::TypedArray<crate::Owned>,
@@ -238,9 +326,20 @@ impl<S: Repr> RollingExp<'_, S> {
         let unit = reduced_unit(self.da.unit(), op, 1)?;
         let (alpha, min_weight) = (self.alpha, self.min_weight);
         let dim = self.dim.clone();
+        let p = (stat, alpha, min_weight);
         crate::slabs::by_lanes(self.da, &self.dim, |part| {
             let axis = part.variable().axis(&dim)?;
-            let data = along(part.variable(), axis, |l| lane(l, stat, alpha, min_weight))?;
+            #[allow(clippy::cast_possible_truncation)] // f32 data gives f32 results
+            let data = match part.variable().typed()? {
+                TypedArray::F32(x) => {
+                    TypedArray::F32(lanes_stat(&x, axis, f64::from, |v| v as f32, 0.0_f32, p)?)
+                }
+                TypedArray::F64(x) => TypedArray::F64(lanes_stat(&x, axis, |v| v, |v| v, 0.0, p)?),
+                _ => {
+                    let x = part.variable().to_f64()?;
+                    TypedArray::F64(lanes_stat(&x.view(), axis, |v| v, |v| v, 0.0, p)?)
+                }
+            };
             with_values(part, data, unit.clone())
         })
     }
@@ -296,9 +395,15 @@ impl<S: Repr> RollingExp<'_, S> {
         let axis = a.variable().axis(&self.dim)?;
         let y: ArrayD<f64> = b.to_f64()?;
         let mut x = a.to_f64()?;
-        for (mut lx, ly) in x.lanes_mut(Axis(axis)).into_iter().zip(y.lanes(Axis(axis))) {
-            lane_pair(&mut lx, ly, corr, self.alpha, self.min_weight);
-        }
+        let (alpha, min_weight) = (self.alpha, self.min_weight);
+        let zip = ndarray::Zip::from(x.lanes_mut(Axis(axis))).and(y.lanes(Axis(axis)));
+        let each = |mut lx: ArrayViewMut1<'_, f64>, ly: ndarray::ArrayView1<'_, f64>| {
+            lane_pair(&mut lx, ly, corr, alpha, min_weight);
+        };
+        #[cfg(feature = "rayon")]
+        zip.par_for_each(each);
+        #[cfg(not(feature = "rayon"))]
+        zip.for_each(each);
         let unit = if corr {
             None
         } else {

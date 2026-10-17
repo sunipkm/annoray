@@ -237,9 +237,8 @@ impl Backend for Netcdf3 {
         let file = std::fs::File::create(path).map_err(err)?;
         let mut out = std::io::BufWriter::new(file);
         write::write_to(ds, opts.format, &mut out)?;
-        out.into_inner()
-            .map_err(|e| err(e.into_error()))?
-            .sync_all()
-            .map_err(err)
+        // Flushed to the operating system, not synced to disk: as netCDF-C's `nc_close`.
+        out.into_inner().map_err(|e| err(e.into_error()))?;
+        Ok(())
     }
 }

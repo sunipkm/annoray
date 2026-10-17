@@ -782,13 +782,25 @@ impl<S: Repr> DataArrayBase<S> {
         self.binary(BinOp::Div, rhs, UnitPolicy::Strict)
     }
 
-    /// `self op scalar`, where the scalar is dimensionless.
+    /// `self op scalar`, where the scalar is dimensionless; for `f32` data the scalar is
+    /// taken as `f32` (numpy's weak scalars), so the result stays `f32`.
     ///
     /// # Errors
     /// As for [`binary`](Self::binary): adding a plain number to data with a dimensional unit
     /// is an error.
     pub fn binary_scalar(&self, op: BinOp, scalar: f64) -> Result<DataArray> {
-        self.binary(op, &scalar_array(scalar)?, UnitPolicy::Strict)
+        // A plain number takes the data's float type, as numpy's weak scalars: `f32` data
+        // stays `f32`.
+        let s = if self.dtype() == DType::F32 {
+            #[allow(clippy::cast_possible_truncation)] // the scalar in the data's type
+            DataArray::new(Variable::new(
+                Vec::<Name>::new(),
+                ArrayD::from_elem(IxDyn(&[]), scalar as f32),
+            )?)
+        } else {
+            scalar_array(scalar)?
+        };
+        self.binary(op, &s, UnitPolicy::Strict)
     }
 
     /// Convert the data to another unit: `f32` data stays `f32`, other numbers become `f64`.

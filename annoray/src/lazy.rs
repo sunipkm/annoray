@@ -196,6 +196,32 @@ impl LazyArray {
             .ok_or_else(|| CoreError::Read("lazy cache".into()))
     }
 
+    /// The selected values, owned: moved out of the cache when nothing else shares it, read
+    /// afresh (without caching) when nothing is cached, copied otherwise.
+    ///
+    /// # Errors
+    /// [`CoreError::Read`] if the source cannot be read.
+    pub fn into_loaded(self) -> Result<TypedArray<Owned>> {
+        match Arc::try_unwrap(self.cache) {
+            Ok(cell) => match cell.into_inner() {
+                Some(v) => Ok(v),
+                None => Self {
+                    cache: Arc::new(OnceLock::new()),
+                    ..self
+                }
+                .read(),
+            },
+            Err(shared) => match shared.get() {
+                Some(v) => Ok(v.clone()),
+                None => Self {
+                    cache: shared,
+                    ..self
+                }
+                .read(),
+            },
+        }
+    }
+
     /// Read the covering box of the selection, then apply steps and drop indexed axes.
     fn read(&self) -> Result<TypedArray<Owned>> {
         let mut start = Vec::with_capacity(self.sel.len());

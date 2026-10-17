@@ -137,17 +137,6 @@ impl Dataset {
         self
     }
 
-    /// How variable (or coordinate) `name` is to be stored on disk.
-    ///
-    /// # Errors
-    /// [`CoreError::NoSuchVariable`] if there is no such variable.
-    pub fn encoding_of_mut(&mut self, name: &str) -> Result<&mut crate::Encoding> {
-        self.data_vars
-            .get_mut(name)
-            .or_else(|| self.coords.get_mut(name))
-            .map(Variable::encoding_mut)
-            .ok_or_else(|| CoreError::NoSuchVariable(name.into()))
-    }
 
     /// The data variables and coordinates, mutably (for setters that keep them consistent).
     pub(crate) fn parts_mut(
@@ -161,10 +150,6 @@ impl Dataset {
         &mut self.attrs
     }
 
-    /// Mutable access to the dataset-level encoding.
-    pub fn encoding_mut(&mut self) -> &mut DatasetEncoding {
-        Arc::make_mut(&mut self.encoding)
-    }
 
     /// Remove a data variable or coordinate.
     ///
@@ -212,6 +197,26 @@ impl Dataset {
 }
 
 impl<S: Repr> DatasetBase<S> {
+    /// How variable (or coordinate) `name` is to be stored on disk (copied on write, so a
+    /// view can carry its own encoding without copying data).
+    ///
+    /// # Errors
+    /// [`CoreError::NoSuchVariable`] if there is no such variable.
+    pub fn encoding_of_mut(&mut self, name: &str) -> Result<&mut crate::Encoding> {
+        if let Some(v) = self.data_vars.get_mut(name) {
+            return Ok(v.encoding_mut());
+        }
+        self.coords
+            .get_mut(name)
+            .map(VariableBase::encoding_mut)
+            .ok_or_else(|| CoreError::NoSuchVariable(name.into()))
+    }
+
+    /// Mutable access to the dataset-level encoding (copied on write).
+    pub fn encoding_mut(&mut self) -> &mut DatasetEncoding {
+        Arc::make_mut(&mut self.encoding)
+    }
+
     /// Length of every dimension, in order of first appearance (coordinates first).
     #[must_use]
     pub fn sizes(&self) -> IndexMap<Name, usize> {

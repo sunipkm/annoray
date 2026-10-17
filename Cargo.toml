@@ -28,6 +28,7 @@ annoray-zarr = { path = "crates/annoray-zarr", version = "=0.0.0" }
 annoray-codecs = { path = "crates/annoray-codecs", version = "=0.0.0" }
 annoray-hdf5 = { path = "crates/annoray-hdf5", version = "=0.0.0" }
 
+bytemuck = "1"
 chrono = { version = "0.4", default-features = false, features = ["std"] }
 indexmap = "2"
 memmap2 = "0.9"

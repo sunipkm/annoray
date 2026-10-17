@@ -152,10 +152,68 @@ fn cast_as<T: CastTo>(t: &TypedArray<View<'_>>) -> Result<TypedArray<Owned>> {
     Ok(T::wrap(a))
 }
 
+/// `x` mapped by `f` elementwise (in parallel for large arrays).
+fn par_map<T: Copy + Send + Sync, U: Send>(
+    x: &ndarray::ArrayViewD<'_, T>,
+    f: impl Fn(T) -> U + Sync + Send,
+) -> ArrayD<U> {
+    let zip = ndarray::Zip::from(x);
+    let g = |v: &T| f(*v);
+    #[cfg(feature = "rayon")]
+    if x.len() > 1 << 16 {
+        return zip.par_map_collect(g);
+    }
+    zip.map_collect(g)
+}
+
+/// The conversions that cannot fail, and `f64` → `f32` after a range check: one pass.
+#[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)] // as the module notes
+fn cast_fast(t: &TypedArray<View<'_>>, dtype: DType) -> Option<Result<TypedArray<Owned>>> {
+    macro_rules! to {
+        ($x:expr, $ty:ty, $var:ident) => {
+            Some(Ok(TypedArray::$var(par_map($x, |v| v as $ty))))
+        };
+    }
+    match (t, dtype) {
+        (TypedArray::F32(x), DType::F64) => Some(Ok(TypedArray::F64(par_map(x, f64::from)))),
+        (TypedArray::I8(x), DType::F64) => to!(x, f64, F64),
+        (TypedArray::I16(x), DType::F64) => to!(x, f64, F64),
+        (TypedArray::I32(x), DType::F64) => to!(x, f64, F64),
+        (TypedArray::I64(x), DType::F64) => to!(x, f64, F64),
+        (TypedArray::U8(x), DType::F64) => to!(x, f64, F64),
+        (TypedArray::U16(x), DType::F64) => to!(x, f64, F64),
+        (TypedArray::U32(x), DType::F64) => to!(x, f64, F64),
+        (TypedArray::U64(x), DType::F64) => to!(x, f64, F64),
+        (TypedArray::I8(x), DType::F32) => to!(x, f32, F32),
+        (TypedArray::I16(x), DType::F32) => to!(x, f32, F32),
+        (TypedArray::I32(x), DType::F32) => to!(x, f32, F32),
+        (TypedArray::I64(x), DType::F32) => to!(x, f32, F32),
+        (TypedArray::U8(x), DType::F32) => to!(x, f32, F32),
+        (TypedArray::U16(x), DType::F32) => to!(x, f32, F32),
+        (TypedArray::U32(x), DType::F32) => to!(x, f32, F32),
+        (TypedArray::U64(x), DType::F32) => to!(x, f32, F32),
+        (TypedArray::F64(x), DType::F32) => {
+            let max = f64::from(f32::MAX);
+            if let Some(bad) = x.iter().find(|v| v.is_finite() && v.abs() > max) {
+                return Some(Err(CoreError::Cast {
+                    value: bad.to_string(),
+                    dtype,
+                    reason: "out of range",
+                }));
+            }
+            Some(Ok(TypedArray::F32(par_map(x, |v| v as f32))))
+        }
+        _ => None,
+    }
+}
+
 /// `t` converted to `dtype` (see the module notes).
 pub(crate) fn cast(t: &TypedArray<View<'_>>, dtype: DType) -> Result<TypedArray<Owned>> {
     if t.dtype() == dtype {
         return Ok(t.to_owned());
+    }
+    if let Some(r) = cast_fast(t, dtype) {
+        return r;
     }
     match dtype {
         DType::F32 => cast_as::<f32>(t),

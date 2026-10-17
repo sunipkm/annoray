@@ -61,7 +61,8 @@ impl PyDataset {
             other => return Err(PyValueError::new_err(format!("zarr_format={other}"))),
         };
         let opts = ZarrOptions::format(format).consolidated(consolidated.unwrap_or(true));
-        let mut ds = self.inner.clone();
+        // A view: the encoding given is applied without copying any data.
+        let mut ds = self.inner.view();
         for (k, v) in dict_iter(encoding.map(|e| e.as_any()))? {
             let given = v.cast::<PyDict>()?;
             // zarr's `chunks` is netCDF's `chunksizes`.

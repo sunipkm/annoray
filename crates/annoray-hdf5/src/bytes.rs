@@ -28,6 +28,24 @@ impl Deref for FileBytes {
     }
 }
 
+impl FileBytes {
+    /// Ask the operating system to page in `[offset, offset + len)` of a mapped file ahead of
+    /// a large read, in one call rather than a fault per page (Linux: `MADV_POPULATE_READ`;
+    /// other Unix: `MADV_WILLNEED`). Best effort: errors are ignored.
+    pub(crate) fn prefetch(&self, offset: usize, len: usize) {
+        #[cfg(unix)]
+        if let Self::Mapped(m) = self {
+            #[cfg(target_os = "linux")]
+            let advice = memmap2::Advice::PopulateRead;
+            #[cfg(not(target_os = "linux"))]
+            let advice = memmap2::Advice::WillNeed;
+            let _ = m.advise_range(advice, offset, len);
+        }
+        #[cfg(not(unix))]
+        let _ = (offset, len);
+    }
+}
+
 impl AsRef<[u8]> for FileBytes {
     fn as_ref(&self) -> &[u8] {
         self

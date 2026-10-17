@@ -80,6 +80,109 @@ fn quantile_sorted(v: &[f64], q: f64, method: QuantileMethod) -> f64 {
     }
 }
 
+/// The `qs`-quantiles of NaN-free `v` (reordered in place): by selection (O(n) per
+/// quantile) for one or two, by sorting for more. The same order statistics as sorting, so
+/// the same results.
+#[allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss
+)] // as quantile_sorted
+fn row_quantiles(v: &mut [f64], qs: &[f64], method: QuantileMethod) -> Vec<f64> {
+    if qs.len() > 2 || v.len() < 64 {
+        v.sort_by(f64::total_cmp);
+        return qs.iter().map(|q| quantile_sorted(v, *q, method)).collect();
+    }
+    let Some(last) = v.len().checked_sub(1) else {
+        return vec![f64::NAN; qs.len()];
+    };
+    qs.iter()
+        .map(|q| {
+            let pos = last as f64 * q;
+            let lo = (pos.floor() as usize).min(last);
+            let hi = (pos.ceil() as usize).min(last);
+            let (_, lo_v, upper) = v.select_nth_unstable_by(lo, f64::total_cmp);
+            let lo_v = *lo_v;
+            // The next order statistic is the least of the upper part.
+            let hi_v = if hi == lo {
+                lo_v
+            } else {
+                upper.iter().copied().fold(f64::INFINITY, f64::min)
+            };
+            let near = (pos.round_ties_even() as usize).min(last);
+            match method {
+                QuantileMethod::Linear => lerp(lo_v, hi_v, pos - pos.floor()),
+                QuantileMethod::Lower => lo_v,
+                QuantileMethod::Higher => hi_v,
+                QuantileMethod::Nearest => {
+                    if near == lo {
+                        lo_v
+                    } else {
+                        hi_v
+                    }
+                }
+                QuantileMethod::Midpoint => {
+                    if lo == hi {
+                        lo_v
+                    } else {
+                        lerp(lo_v, hi_v, 0.5)
+                    }
+                }
+            }
+        })
+        .collect()
+}
+
+/// The `qs`-quantiles of every lane of `v` along `dim` (kept dimensions in order), lanes in
+/// parallel and read where they lie; `None` for non-float data (the row path converts).
+fn lane_quantiles<S: Repr>(
+    v: &VariableBase<S>,
+    dim: &Name,
+    qs: &[f64],
+    method: QuantileMethod,
+    skipna: bool,
+) -> Result<Option<ArrayD<Vec<f64>>>> {
+    fn go<T: Copy + Send + Sync>(
+        x: &ndarray::ArrayViewD<'_, T>,
+        axis: usize,
+        to: impl Fn(T) -> f64 + Sync + Send,
+        qs: &[f64],
+        method: QuantileMethod,
+        skipna: bool,
+    ) -> ArrayD<Vec<f64>> {
+        let one = |lane: ndarray::ArrayView1<'_, T>| -> Vec<f64> {
+            let mut v: Vec<f64> = Vec::with_capacity(lane.len());
+            let mut has_nan = false;
+            for x in lane {
+                let f = to(*x);
+                if f.is_nan() {
+                    has_nan = true;
+                } else {
+                    v.push(f);
+                }
+            }
+            if has_nan && !skipna {
+                v.clear();
+            }
+            row_quantiles(&mut v, qs, method)
+        };
+        let zip = ndarray::Zip::from(x.lanes(ndarray::Axis(axis)));
+        #[cfg(feature = "rayon")]
+        return zip.par_map_collect(one);
+        #[cfg(not(feature = "rayon"))]
+        zip.map_collect(one)
+    }
+    if v.is_lazy() {
+        return Ok(None);
+    }
+    let axis = v.axis(dim)?;
+    Ok(match v.typed()? {
+        crate::TypedArray::F32(x) => Some(go(&x, axis, f64::from, qs, method, skipna)),
+        crate::TypedArray::F64(x) => Some(go(&x, axis, |f| f, qs, method, skipna)),
+        _ => None,
+    })
+}
+
 /// The data as rows: kept dimensions first (their names and shape), the reduced ones
 /// flattened into each row.
 struct Rows {
@@ -194,38 +297,72 @@ impl<S: Repr> DataArrayBase<S> {
                 "quantiles must be in [0, 1] (exactly one for a scalar quantile)".into(),
             ));
         }
+        // One reduced dimension: each lane gathered by its own task from the data as it is.
+        if let [dim] = reduced.as_slice()
+            && let Some(per_lane) = lane_quantiles(self.variable(), dim, qs, method, skipna)?
+        {
+            let kept: Vec<Name> = self.dims().iter().filter(|d| *d != dim).cloned().collect();
+            let shape = per_lane.shape().to_vec();
+            let per_row: Vec<Vec<f64>> = per_lane.into_iter().collect();
+            return self.quantile_result(qs, scalar_q, &reduced, (kept, shape), &per_row);
+        }
         let r = rows(self.variable(), &reduced)?;
-        let mut out = Vec::with_capacity(qs.len().saturating_mul(r.values.nrows()));
-        let mut per_row: Vec<Vec<f64>> = Vec::with_capacity(r.values.nrows());
-        for row in r.values.rows() {
+        // Each row's quantiles, rows in parallel.
+        let one = |row: ndarray::ArrayView1<'_, f64>| -> Vec<f64> {
             let has_nan = row.iter().any(|x| x.is_nan());
             let mut v: Vec<f64> = row.iter().copied().filter(|x| !x.is_nan()).collect();
             if has_nan && !skipna {
                 v.clear();
             }
-            v.sort_by(f64::total_cmp);
-            per_row.push(v);
-        }
-        for q in qs {
-            out.extend(per_row.iter().map(|v| quantile_sorted(v, *q, method)));
+            row_quantiles(&mut v, qs, method)
+        };
+        #[cfg(feature = "rayon")]
+        let per_row: Vec<Vec<f64>> = {
+            use rayon::prelude::*;
+            r.values
+                .axis_iter(ndarray::Axis(0))
+                .into_par_iter()
+                .map(one)
+                .collect()
+        };
+        #[cfg(not(feature = "rayon"))]
+        let per_row: Vec<Vec<f64>> = r.values.axis_iter(ndarray::Axis(0)).map(one).collect();
+        self.quantile_result(qs, scalar_q, &reduced, (r.kept, r.shape), &per_row)
+    }
+
+    /// The quantile array from each kept position's quantiles (in the kept dimensions'
+    /// order), with a leading `quantile` dimension for several.
+    fn quantile_result(
+        &self,
+        qs: &[f64],
+        scalar_q: bool,
+        reduced: &[Name],
+        (kept, kept_shape): (Vec<Name>, Vec<usize>),
+        per_row: &[Vec<f64>],
+    ) -> Result<DataArray> {
+        let mut out = Vec::with_capacity(qs.len().saturating_mul(per_row.len()));
+        for i in 0..qs.len() {
+            out.extend(
+                per_row
+                    .iter()
+                    .map(|v| v.get(i).copied().unwrap_or(f64::NAN)),
+            );
         }
         let (dims, shape): (Vec<Name>, Vec<usize>) = if scalar_q {
-            (r.kept.clone(), r.shape.clone())
+            (kept, kept_shape)
         } else {
             (
                 std::iter::once(Name::from("quantile"))
-                    .chain(r.kept.iter().cloned())
+                    .chain(kept)
                     .collect(),
-                std::iter::once(qs.len())
-                    .chain(r.shape.iter().copied())
-                    .collect(),
+                std::iter::once(qs.len()).chain(kept_shape).collect(),
             )
         };
         let mut var = Variable::new(dims, shaped(&shape, out)?)?;
         var.set_unit(self.unit().cloned());
         let mut coords = indexmap::IndexMap::new();
         coords.insert(Name::from("quantile"), quantile_coord(qs, scalar_q)?);
-        coords.extend(kept_coords(self, &reduced));
+        coords.extend(kept_coords(self, reduced));
         Ok(DataArrayBase::from_parts(self.name().cloned(), var, coords)
             .with_attrs_from(self.attrs()))
     }

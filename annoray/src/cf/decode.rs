@@ -462,7 +462,13 @@ fn plan(name: &str, raw: &RawVariable, opts: &DecodeOptions, warnings: &mut Vec<
             {
                 *masks = exact;
             }
-        } else if !masks.is_empty() || scale.is_some() || offset.is_some() {
+        } else if (!masks.is_empty() || scale.is_some() || offset.is_some())
+            // Floats whose only mask is NaN are already decoded: skip the pass.
+            && !(is_float(dtype)
+                && masks.iter().all(|m| m.is_nan())
+                && scale.is_none()
+                && offset.is_none())
+        {
             let target = float_dtype(dtype, scale.as_ref(), offset.as_ref());
             steps.push(Step::MaskScale {
                 masks,

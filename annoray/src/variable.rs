@@ -195,10 +195,6 @@ impl Variable {
         &mut self.attrs
     }
 
-    /// Mutable access to the encoding.
-    pub fn encoding_mut(&mut self) -> &mut Encoding {
-        Arc::make_mut(&mut self.encoding)
-    }
 
     /// Set the encoding.
     #[must_use]
@@ -234,7 +230,7 @@ impl Variable {
     /// [`CoreError::Read`] if the source cannot be read.
     pub fn load(&mut self) -> Result<()> {
         if let Data::Lazy(l) = &self.data {
-            self.data = Data::Loaded(l.load()?.clone());
+            self.data = Data::Loaded(l.clone().into_loaded()?);
         }
         Ok(())
     }
@@ -246,12 +242,18 @@ impl Variable {
     pub fn into_typed(self) -> Result<TypedArray<Owned>> {
         match self.data {
             Data::Loaded(a) => Ok(a),
-            Data::Lazy(l) => Ok(l.load()?.clone()),
+            Data::Lazy(l) => l.into_loaded(),
         }
     }
 }
 
 impl<S: Repr> VariableBase<S> {
+    /// Mutable access to the encoding (copied on write: views get their own, the data is
+    /// untouched).
+    pub fn encoding_mut(&mut self) -> &mut Encoding {
+        Arc::make_mut(&mut self.encoding)
+    }
+
     /// Dimension names, in axis order.
     #[must_use]
     pub fn dims(&self) -> &[Name] {

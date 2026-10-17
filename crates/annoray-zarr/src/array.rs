@@ -381,30 +381,57 @@ impl Array {
                     .unwrap_or(0)
             })
             .collect();
+        // The chunks the region touches, in C order.
+        let mut todo = Vec::new();
         let mut idx = lo.clone();
         loop {
-            if let Some(chunk) = self.read_chunk(&idx)? {
-                // Intersection of this chunk with the region, in both coordinate systems.
-                let mut src = Vec::with_capacity(ndim);
-                let mut dst = Vec::with_capacity(ndim);
-                let mut len = Vec::with_capacity(ndim);
-                for d in 0..ndim {
-                    let (Some(i), Some(c), Some(s), Some(n)) =
-                        (idx.get(d), self.chunks.get(d), start.get(d), count.get(d))
-                    else {
-                        return Err(bad("region"));
-                    };
-                    let c0 = i.saturating_mul(*c);
-                    let a = (*s).max(c0);
-                    let b = s.saturating_add(*n).min(c0.saturating_add(*c));
-                    src.push(a.saturating_sub(c0));
-                    dst.push(a.saturating_sub(*s));
-                    len.push(b.saturating_sub(a));
-                }
-                copy(&mut out, &dst, &chunk, &src, &len)?;
-            }
+            todo.push(idx.clone());
             if !next(&mut idx, &lo, &hi) {
                 break;
+            }
+        }
+        let place = |out: &mut ArrayData, idx: &[usize], chunk: &ArrayData| -> Result<(), Error> {
+            // Intersection of this chunk with the region, in both coordinate systems.
+            let mut src = Vec::with_capacity(ndim);
+            let mut dst = Vec::with_capacity(ndim);
+            let mut len = Vec::with_capacity(ndim);
+            for d in 0..ndim {
+                let (Some(i), Some(c), Some(s), Some(n)) =
+                    (idx.get(d), self.chunks.get(d), start.get(d), count.get(d))
+                else {
+                    return Err(bad("region"));
+                };
+                let c0 = i.saturating_mul(*c);
+                let a = (*s).max(c0);
+                let b = s.saturating_add(*n).min(c0.saturating_add(*c));
+                src.push(a.saturating_sub(c0));
+                dst.push(a.saturating_sub(*s));
+                len.push(b.saturating_sub(a));
+            }
+            copy(out, &dst, chunk, &src, &len)
+        };
+        #[cfg(feature = "rayon")]
+        if todo.len() > 1 {
+            use rayon::prelude::*;
+            // Decoded chunks in flight: up to four per thread, so large reads stay within
+            // memory.
+            let batch = rayon::current_num_threads().max(1).saturating_mul(4);
+            for group in todo.chunks(batch) {
+                let decoded = group
+                    .par_iter()
+                    .map(|i| self.read_chunk(i))
+                    .collect::<Result<Vec<_>, Error>>()?;
+                for (i, chunk) in group.iter().zip(decoded) {
+                    if let Some(chunk) = chunk {
+                        place(&mut out, i, &chunk)?;
+                    }
+                }
+            }
+            return Ok(out);
+        }
+        for i in &todo {
+            if let Some(chunk) = self.read_chunk(i)? {
+                place(&mut out, i, &chunk)?;
             }
         }
         Ok(out)

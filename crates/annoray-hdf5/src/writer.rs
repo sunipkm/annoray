@@ -385,9 +385,13 @@ fn dataspace(dims: Option<&[usize]>, unlimited: &[bool]) -> Vec<u8> {
 }
 
 fn le_bytes(d: &Array) -> Option<Vec<u8>> {
+    // Contiguous values on a little-endian machine are already their file bytes.
     macro_rules! le {
         ($x:expr) => {
-            $x.iter().flat_map(|v| v.to_le_bytes()).collect()
+            match $x.as_slice() {
+                Some(s) if cfg!(target_endian = "little") => bytemuck::cast_slice(s).to_vec(),
+                _ => $x.iter().flat_map(|v| v.to_le_bytes()).collect(),
+            }
         };
     }
     Some(match d {

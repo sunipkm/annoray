@@ -109,7 +109,7 @@ pub fn to_netcdf_with_backend<S: Repr>(
     opts: &WriteOptions,
 ) -> Result<(), Error> {
     let raw = crate::cf::encode(ds, &EncodeOptions::format(opts.format))?;
-    backend.write(&raw, path.as_ref(), opts)?;
+    backend.write_owned(raw, path.as_ref(), opts)?;
     Ok(())
 }
 
@@ -162,6 +162,14 @@ impl Backend for AutoBackend {
             netcdf3::Netcdf3.write(ds, path, opts)
         } else {
             netcdf4::Netcdf4.write(ds, path, opts)
+        }
+    }
+
+    fn write_owned(&self, ds: RawDataset, path: &Path, opts: &WriteOptions) -> Result<()> {
+        if opts.format.is_netcdf3() {
+            netcdf3::Netcdf3.write_owned(ds, path, opts)
+        } else {
+            netcdf4::Netcdf4.write_owned(ds, path, opts)
         }
     }
 }
@@ -349,7 +357,7 @@ impl ToZarr for DataTree {
 impl ToNetcdf for DataTree {
     fn to_netcdf_with(&self, path: impl AsRef<Path>, opts: &WriteOptions) -> Result<(), Error> {
         let raw = encode_tree(self, opts.format)?;
-        default_backend().write(&raw, path.as_ref(), opts)?;
+        default_backend().write_owned(raw, path.as_ref(), opts)?;
         Ok(())
     }
 }

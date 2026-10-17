@@ -33,7 +33,7 @@ whippyunits = { workspace = true, optional = true }
 default = ["rayon", "zstd", "lz4"]
 # Compute rolling windows, reductions and arithmetic, CF-decode, and decompress HDF5/netCDF-4
 # chunks, on several threads.
-rayon = ["dep:rayon", "ndarray/rayon", "annoray-hdf5/rayon"]
+rayon = ["dep:rayon", "ndarray/rayon", "annoray-hdf5/rayon", "annoray-zarr/rayon"]
 # Read and write Zstandard- and LZ4-compressed HDF5/netCDF-4 chunks (pure Rust). LZF is always
 # read.
 zstd = ["annoray-hdf5/zstd", "annoray-zarr/zstd"]

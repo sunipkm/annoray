@@ -848,6 +848,30 @@ fn build_root(ds: &RawDataset, opts: &WriteOptions) -> Result<WGroup> {
     Ok(root)
 }
 
+/// `ds` with its loaded, non-empty numeric arrays behind in-memory sources (recursively).
+fn held(mut ds: RawDataset) -> RawDataset {
+    ds.vars = ds
+        .vars
+        .into_iter()
+        .map(|(k, mut v)| {
+            v.data = match v.data {
+                RawData::Loaded(a)
+                    if a.ndim() > 0
+                        && !a.is_empty()
+                        && a.dtype() != DType::Str
+                        && value_type(a.dtype()).is_some() =>
+                {
+                    RawData::Lazy(Arc::new(super::raw::Held(a)))
+                }
+                other => other,
+            };
+            (k, v)
+        })
+        .collect();
+    ds.groups = ds.groups.into_iter().map(|(k, g)| (k, held(g))).collect();
+    ds
+}
+
 impl Backend for Netcdf4 {
     fn name(&self) -> &'static str {
         NAME
@@ -861,6 +885,11 @@ impl Backend for Netcdf4 {
         read_group(&File::open(path)?.root()?, &Scope::default(), true)
     }
 
+    /// Loaded numeric variables are written slice by slice from where they are, not copied.
+    fn write_owned(&self, ds: RawDataset, path: &Path, opts: &WriteOptions) -> Result<()> {
+        self.write(&held(ds), path, opts)
+    }
+
     /// Writes straight to the file, reading lazy variables slice by slice.
     fn write(&self, ds: &RawDataset, path: &Path, opts: &WriteOptions) -> Result<()> {
         let root = build_root(ds, opts)?;
@@ -868,9 +897,9 @@ impl Backend for Netcdf4 {
             std::fs::File::create(path).map_err(|e| bad(format!("{}: {e}", path.display())))?;
         let mut out = std::io::BufWriter::new(file);
         annoray_hdf5::write_to(&root, &mut out)?;
+        // Flushed to the operating system, not synced to disk: as netCDF-C's `nc_close`.
         out.into_inner()
-            .map_err(|e| bad(format!("{}: {e}", path.display())))?
-            .sync_all()
-            .map_err(|e| bad(format!("{}: {e}", path.display())))
+            .map_err(|e| bad(format!("{}: {e}", path.display())))?;
+        Ok(())
     }
 }

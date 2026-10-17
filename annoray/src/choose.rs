@@ -61,7 +61,7 @@ fn is_number(d: DType) -> bool {
 }
 
 /// `c ? a : b`, each broadcast from its own dimensions to `od`/`shape`.
-fn pick<T: Clone>(
+fn pick<T: Clone + Send + Sync>(
     (c, cd): (ArrayViewD<'_, bool>, &[Name]),
     (a, ad): (ArrayViewD<'_, T>, &[Name]),
     (b, bd): (ArrayViewD<'_, T>, &[Name]),
@@ -78,10 +78,13 @@ fn pick<T: Clone>(
     let a = a.broadcast(sh.clone()).ok_or_else(|| spread("x"))?;
     let b = broadcast_to_dims(b, bd, od)?;
     let b = b.broadcast(sh).ok_or_else(|| spread("y"))?;
-    Ok(ndarray::Zip::from(&c)
-        .and(&a)
-        .and(&b)
-        .map_collect(|c, a, b| if *c { a.clone() } else { b.clone() }))
+    let zip = ndarray::Zip::from(&c).and(&a).and(&b);
+    let f = |c: &bool, a: &T, b: &T| if *c { a.clone() } else { b.clone() };
+    #[cfg(feature = "rayon")]
+    if c.len() > 1 << 16 {
+        return Ok(zip.par_map_collect(f));
+    }
+    Ok(zip.map_collect(f))
 }
 
 /// `cond ? x : y`; the result's dimensions come from `cond` first when `cond_first`, else

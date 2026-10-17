@@ -603,7 +603,7 @@ fn write_var(store: &Store, path: &str, v: &RawVariable, opts: &ZarrOptions) -> 
         return Ok(());
     }
     let total = grid.iter().product::<usize>();
-    for k in 0..total {
+    let one = |k: usize| -> Result<()> {
         let mut idx = vec![0; grid.len()];
         let mut rest = k;
         for (slot, g) in idx.iter_mut().zip(&grid).rev() {
@@ -613,35 +613,28 @@ fn write_var(store: &Store, path: &str, v: &RawVariable, opts: &ZarrOptions) -> 
         let (start, count) = array.chunk_region(&idx);
         let part = match &v.data {
             RawData::Lazy(s) => s.read_slice(&start, &count)?,
-            RawData::Loaded(a) => slice(a, &start, &count)?,
+            RawData::Loaded(a) => super::raw::slice_of(a, &start, &count),
         };
-        array.write_chunk(&idx, &zdata(part)?).map_err(err)?;
+        array.write_chunk(&idx, &zdata(part)?).map_err(err)
+    };
+    // Chunks are encoded in parallel, a few per thread at a time (lazy data is read one
+    // chunk's region at a time, so memory stays bounded).
+    #[cfg(feature = "rayon")]
+    {
+        use rayon::prelude::*;
+        let batch = rayon::current_num_threads().max(1).saturating_mul(4);
+        let mut k = 0;
+        while k < total {
+            let end = k.saturating_add(batch).min(total);
+            (k..end).into_par_iter().try_for_each(one)?;
+            k = end;
+        }
+    }
+    #[cfg(not(feature = "rayon"))]
+    for k in 0..total {
+        one(k)?;
     }
     Ok(())
-}
-
-fn slice(a: &TypedArray<Owned>, start: &[usize], count: &[usize]) -> Result<TypedArray<Owned>> {
-    let ix: Vec<(String, crate::Indexer)> = start
-        .iter()
-        .zip(count)
-        .enumerate()
-        .map(|(i, (s, c))| {
-            let to = |x: usize| isize::try_from(x).map_err(|_| bad("chunk offset"));
-            Ok((
-                i.to_string(),
-                crate::Indexer::Slice(crate::PySlice::new(
-                    Some(to(*s)?),
-                    Some(to(s.saturating_add(*c))?),
-                    None,
-                )),
-            ))
-        })
-        .collect::<Result<_>>()?;
-    let dims: Vec<String> = (0..a.ndim()).map(|i| i.to_string()).collect();
-    let v = crate::Variable::from_typed(dims, a.clone())?;
-    Ok(v.isel(ix.iter().map(|(d, i)| (d.as_str(), *i)))?
-        .typed()?
-        .to_owned())
 }
 
 fn write_group(store: &Store, path: &str, ds: &RawDataset, opts: &ZarrOptions) -> Result<Group> {

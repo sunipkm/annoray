@@ -15,6 +15,7 @@ categories = ["science", "encoding", "parser-implementations"]
 
 [dependencies]
 annoray-codecs.workspace = true
+bytemuck.workspace = true
 memmap2.workspace = true
 ndarray.workspace = true
 rayon = { workspace = true, optional = true }

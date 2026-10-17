@@ -183,6 +183,38 @@ impl RawData {
     }
 }
 
+/// `a[start .. start + count]`, copied out of a view (never the whole array).
+pub(crate) fn slice_of(
+    a: &TypedArray<Owned>,
+    start: &[usize],
+    count: &[usize],
+) -> TypedArray<Owned> {
+    let range = |i: usize| {
+        let s = start.get(i).copied().unwrap_or(0);
+        ndarray::Slice::from(s..s.saturating_add(count.get(i).copied().unwrap_or(0)))
+    };
+    crate::array::typed_map!(a, x => x.slice_each_axis(|ax| range(ax.axis.index())).to_owned())
+}
+
+/// Values already in memory, served slice by slice: a writer that streams slices takes them
+/// from here without first copying the whole array.
+#[derive(Debug)]
+pub(crate) struct Held(pub(crate) TypedArray<Owned>);
+
+impl LazySource for Held {
+    fn dtype(&self) -> DType {
+        self.0.dtype()
+    }
+
+    fn shape(&self) -> &[usize] {
+        self.0.shape()
+    }
+
+    fn read_slice(&self, start: &[usize], count: &[usize]) -> crate::Result<TypedArray<Owned>> {
+        Ok(slice_of(&self.0, start, count))
+    }
+}
+
 /// A variable as stored: raw values in the on-disk type, attributes verbatim.
 #[derive(Debug, Clone)]
 pub struct RawVariable {
@@ -271,6 +303,15 @@ pub trait Backend {
     /// # Errors
     /// [`IoError::Format`] if the dataset needs features the format lacks.
     fn write(&self, ds: &RawDataset, path: &Path, options: &WriteOptions) -> Result<()>;
+
+    /// As [`write`](Self::write), taking the dataset: backends that stream values may then
+    /// write loaded arrays without a second in-memory copy.
+    ///
+    /// # Errors
+    /// As for [`write`](Self::write).
+    fn write_owned(&self, ds: RawDataset, path: &Path, options: &WriteOptions) -> Result<()> {
+        self.write(&ds, path, options)
+    }
 }
 
 pub use annoray_hdf5::FileBytes;

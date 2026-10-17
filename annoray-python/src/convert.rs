@@ -373,7 +373,11 @@ fn ns_to_numpy<'py>(py: Python<'py>, ns: ArrayD<i64>, dtype: &str) -> PyResult<B
 /// The width numpy's fixed-width text type needs for `a`: the most characters (code
 /// points) in an element, at least 1 (as numpy gives `<U1` for empty strings).
 pub(crate) fn text_width(a: &ndarray::ArrayViewD<'_, String>) -> usize {
-    a.iter().map(|s| s.chars().count()).max().unwrap_or(0).max(1)
+    a.iter()
+        .map(|s| s.chars().count())
+        .max()
+        .unwrap_or(0)
+        .max(1)
 }
 
 /// Text as numpy's fixed-width `U{n}` (n the longest element, in characters), as numpy

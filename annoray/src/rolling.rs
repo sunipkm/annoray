@@ -6,7 +6,10 @@
 //! `min_periods` non-NaN values (by default, the whole window) are NaN. The result keeps the
 //! input's shape and coordinates; integers become `f64`, `f32` stays `f32`.
 //!
-//! Reductions work one window at a time, so memory stays that of the input and output.
+//! Reductions work one window at a time, so memory stays that of the input and output: sums,
+//! means, counts and the spread (`var`, `std`) slide (one value in, one out per position,
+//! Welford's updates for the spread), in parallel over blocks of lanes and in the data's
+//! own type; the others reduce each window.
 //! [`construct`](DataArrayRolling::construct) exposes the windows themselves as a new
 //! trailing dimension, NaN-padded at the edges (which does take window-size times the memory).
 
@@ -203,6 +206,295 @@ fn roll_lane(
     }
 }
 
+/// Columns per parallel task of the sliding kernel.
+const BLOCK: usize = 512;
+
+/// A sliding statistic of [`running`].
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Running {
+    Sum,
+    Mean,
+    Count,
+    Var,
+    Std,
+}
+
+impl Running {
+    fn of(op: Reduction) -> Option<Self> {
+        Some(match op {
+            Reduction::Sum => Self::Sum,
+            Reduction::Mean => Self::Mean,
+            Reduction::Count => Self::Count,
+            Reduction::Var => Self::Var,
+            Reduction::Std => Self::Std,
+            _ => return None,
+        })
+    }
+}
+
+/// One block of columns (every row) of [`running`]: each window is the previous one with one
+/// value added and one removed (sums and counts; Welford's updates for the spread), O(1) per
+/// position whatever the window. Rows are contiguous slices.
+#[allow(clippy::too_many_arguments, clippy::cast_precision_loss)]
+fn running_block<T: Copy, O: Copy>(
+    input: ndarray::ArrayView2<'_, T>,
+    mut out: ndarray::ArrayViewMut2<'_, O>,
+    to: &(impl Fn(T) -> f64 + Sync),
+    from: &(impl Fn(f64) -> O + Sync),
+    window: usize,
+    back: usize,
+    min_periods: usize,
+    stat: Running,
+) {
+    let (n, m) = input.dim();
+    let need = min_periods.max(1) as f64;
+    let row = |r: usize| input.row(r);
+    let first = window.saturating_sub(back).min(n);
+    match stat {
+        Running::Sum | Running::Mean | Running::Count => {
+            let (mut c, mut s) = (vec![0.0_f64; m], vec![0.0_f64; m]);
+            let add = |r: usize, c: &mut [f64], s: &mut [f64]| {
+                for ((v, c), s) in row(r).iter().zip(c.iter_mut()).zip(s.iter_mut()) {
+                    let x = to(*v);
+                    if !x.is_nan() {
+                        *c += 1.0;
+                        *s += x;
+                    }
+                }
+            };
+            let remove = |r: usize, c: &mut [f64], s: &mut [f64]| {
+                for ((v, c), s) in row(r).iter().zip(c.iter_mut()).zip(s.iter_mut()) {
+                    let x = to(*v);
+                    if !x.is_nan() {
+                        *c -= 1.0;
+                        // Empty again: start afresh (no drift left behind).
+                        *s = if *c <= 0.0 { 0.0 } else { *s - x };
+                    }
+                }
+            };
+            for r in 0..first {
+                add(r, &mut c, &mut s);
+            }
+            for i in 0..n {
+                for ((o, c), s) in out.row_mut(i).iter_mut().zip(&c).zip(&s) {
+                    *o = from(if *c < need {
+                        f64::NAN
+                    } else {
+                        match stat {
+                            Running::Sum => *s,
+                            Running::Mean => *s / *c,
+                            _ => *c,
+                        }
+                    });
+                }
+                if let Some(r) = i
+                    .saturating_add(window)
+                    .checked_sub(back)
+                    .filter(|r| *r < n)
+                {
+                    add(r, &mut c, &mut s);
+                }
+                if let Some(r) = i.checked_sub(back) {
+                    remove(r, &mut c, &mut s);
+                }
+            }
+        }
+        Running::Var | Running::Std => {
+            let (mut c, mut mu, mut q) = (vec![0.0_f64; m], vec![0.0_f64; m], vec![0.0_f64; m]);
+            let add = |r: usize, c: &mut [f64], mu: &mut [f64], q: &mut [f64]| {
+                for (((v, c), mu), q) in row(r)
+                    .iter()
+                    .zip(c.iter_mut())
+                    .zip(mu.iter_mut())
+                    .zip(q.iter_mut())
+                {
+                    let x = to(*v);
+                    if !x.is_nan() {
+                        *c += 1.0;
+                        let d = x - *mu;
+                        *mu += d / *c;
+                        *q += d * (x - *mu);
+                    }
+                }
+            };
+            let remove = |r: usize, c: &mut [f64], mu: &mut [f64], q: &mut [f64]| {
+                for (((v, c), mu), q) in row(r)
+                    .iter()
+                    .zip(c.iter_mut())
+                    .zip(mu.iter_mut())
+                    .zip(q.iter_mut())
+                {
+                    let x = to(*v);
+                    if !x.is_nan() {
+                        *c -= 1.0;
+                        if *c <= 0.0 {
+                            (*c, *mu, *q) = (0.0, 0.0, 0.0);
+                        } else {
+                            let d = x - *mu;
+                            *mu -= d / *c;
+                            *q -= d * (x - *mu);
+                        }
+                    }
+                }
+            };
+            for r in 0..first {
+                add(r, &mut c, &mut mu, &mut q);
+            }
+            for i in 0..n {
+                for ((o, c), q) in out.row_mut(i).iter_mut().zip(&c).zip(&q) {
+                    *o = from(if *c < need {
+                        f64::NAN
+                    } else {
+                        let var = q.max(0.0) / *c;
+                        if stat == Running::Std {
+                            var.sqrt()
+                        } else {
+                            var
+                        }
+                    });
+                }
+                if let Some(r) = i
+                    .saturating_add(window)
+                    .checked_sub(back)
+                    .filter(|r| *r < n)
+                {
+                    add(r, &mut c, &mut mu, &mut q);
+                }
+                if let Some(r) = i.checked_sub(back) {
+                    remove(r, &mut c, &mut mu, &mut q);
+                }
+            }
+        }
+    }
+}
+
+/// [`running_block`] over a whole array along `axis`, in parallel blocks of columns (the
+/// axis moved first, so each step reads one contiguous row).
+#[allow(clippy::too_many_arguments)]
+fn running<T: Copy + Send + Sync, O: Copy + Send + Sync>(
+    x: &ArrayViewD<'_, T>,
+    axis: usize,
+    to: impl Fn(T) -> f64 + Sync + Send,
+    from: impl Fn(f64) -> O + Sync + Send,
+    fill: O,
+    window: usize,
+    back: usize,
+    min_periods: usize,
+    stat: Running,
+) -> Result<ArrayD<O>> {
+    let nd = x.ndim();
+    let mut perm: Vec<usize> = vec![axis];
+    perm.extend((0..nd).filter(|a| *a != axis));
+    let moved = x.view().permuted_axes(IxDyn(&perm));
+    let moved_shape = moved.shape().to_vec();
+    let contiguous = moved.as_standard_layout();
+    let n = moved_shape.first().copied().unwrap_or(1);
+    let m = moved_shape.iter().skip(1).product::<usize>();
+    let bad = |e: ndarray::ShapeError| invalid(format!("rolling: {e}"));
+    let input = contiguous
+        .view()
+        .into_shape_with_order((n, m))
+        .map_err(bad)?;
+    // The kernel writes every element: a zero `fill` lets the allocator hand out untouched
+    // pages, filled in parallel as the blocks write them.
+    let mut out =
+        ndarray::Array2::from_shape_vec((n, m), vec![fill; n.saturating_mul(m)]).map_err(bad)?;
+    let work = |(k, block): (usize, ndarray::ArrayViewMut2<'_, O>)| {
+        let c0 = k.saturating_mul(BLOCK);
+        let cols = block.ncols();
+        let part = input.slice(ndarray::s![.., c0..c0.saturating_add(cols)]);
+        running_block(part, block, &to, &from, window, back, min_periods, stat);
+    };
+    #[cfg(feature = "rayon")]
+    {
+        use rayon::prelude::*;
+        out.axis_chunks_iter_mut(Axis(1), BLOCK)
+            .into_par_iter()
+            .enumerate()
+            .for_each(work);
+    }
+    #[cfg(not(feature = "rayon"))]
+    out.axis_chunks_iter_mut(Axis(1), BLOCK)
+        .enumerate()
+        .for_each(work);
+    // Back to the input's axis order.
+    let shaped = out
+        .into_shape_with_order(IxDyn(&moved_shape))
+        .map_err(bad)?;
+    let mut inverse = vec![0; nd];
+    for (i, p) in perm.iter().enumerate() {
+        if let Some(slot) = inverse.get_mut(*p) {
+            *slot = i;
+        }
+    }
+    let in_order = shaped.permuted_axes(IxDyn(&inverse));
+    Ok(if in_order.is_standard_layout() {
+        in_order
+    } else {
+        in_order.as_standard_layout().into_owned()
+    })
+}
+
+/// The O(1)-per-position kernel for sums, means, counts and the spread, in the data's own
+/// type (no `f64` copy); `None` for other reductions and types.
+#[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
+fn rolling_fast(
+    typed: &TypedArray<crate::View<'_>>,
+    axis: usize,
+    window: usize,
+    back: usize,
+    min_periods: usize,
+    op: Reduction,
+) -> Option<Result<TypedArray<crate::Owned>>> {
+    let stat = Running::of(op)?;
+    let float_out = stat != Running::Count;
+    macro_rules! go {
+        ($x:expr, $to:expr) => {
+            Some(
+                running(
+                    $x,
+                    axis,
+                    $to,
+                    |v| v,
+                    f64::NAN,
+                    window,
+                    back,
+                    min_periods,
+                    stat,
+                )
+                .map(TypedArray::F64),
+            )
+        };
+    }
+    match typed {
+        TypedArray::F32(x) if float_out => Some(
+            running(
+                x,
+                axis,
+                f64::from,
+                |v| v as f32,
+                f32::NAN,
+                window,
+                back,
+                min_periods,
+                stat,
+            )
+            .map(TypedArray::F32),
+        ),
+        TypedArray::F32(x) => go!(x, f64::from),
+        TypedArray::F64(x) => go!(x, |v: f64| v),
+        TypedArray::I8(x) => go!(x, f64::from),
+        TypedArray::I16(x) => go!(x, f64::from),
+        TypedArray::I32(x) => go!(x, f64::from),
+        TypedArray::I64(x) => go!(x, |v: i64| v as f64),
+        TypedArray::U8(x) => go!(x, f64::from),
+        TypedArray::U16(x) => go!(x, f64::from),
+        TypedArray::U32(x) => go!(x, f64::from),
+        TypedArray::U64(x) => go!(x, |v: u64| v as f64),
+        _ => None,
+    }
+}
+
 /// Reduce a variable over moving windows, one window at a time (memory stays that of the
 /// input and output; [`windowed`] is only for `construct`).
 fn rolling_reduce<S: Repr>(
@@ -231,8 +523,13 @@ fn rolling_reduce<S: Repr>(
             dtype,
         });
     }
-    let data = to_f64(&typed, None)?;
     let back = back(window, opts.center);
+    if let Some(fast) = rolling_fast(&typed, axis, window, back, min_periods, op) {
+        let mut result = Variable::from_typed(v.dims().iter().cloned(), fast?)?;
+        result.set_unit(crate::reduce::reduced_unit(v.unit(), op, window)?);
+        return Ok(result);
+    }
+    let data = to_f64(&typed, None)?;
     let mut out = ArrayD::from_elem(data.raw_dim(), f64::NAN);
     let zip = ndarray::Zip::from(data.lanes(Axis(axis))).and(out.lanes_mut(Axis(axis)));
     let each = |lane: ArrayView1<'_, f64>, dst: ArrayViewMut1<'_, f64>| {

@@ -55,6 +55,7 @@ name = "annoray-hdf5"
 version = "0.0.0"
 dependencies = [
  "annoray-codecs",
+ "bytemuck",
  "memmap2",
  "ndarray",
  "proptest",
@@ -102,6 +103,7 @@ dependencies = [
  "annoray-codecs",
  "ndarray",
  "proptest",
+ "rayon",
  "serde_json",
  "thiserror",
 ]

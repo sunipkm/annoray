@@ -704,8 +704,14 @@ pub(crate) fn where_(
         .cast::<PyDataArray>()
         .map_err(|_| PyTypeError::new_err("cond must be a DataArray of booleans"))?;
     let missing = || PyTypeError::new_err("x and y must be DataArrays, quantities or scalars");
-    let xo = operand(py, x)?.ok_or_else(missing)?;
-    let yo = operand(py, y)?.ok_or_else(missing)?;
+    // Plain numbers take the arrays' float type (numpy's weak scalars).
+    let like = [x, y].iter().find_map(|o| {
+        o.cast::<PyDataArray>()
+            .ok()
+            .map(|d| d.borrow().inner.dtype())
+    });
+    let xo = crate::native::operand_like(py, x, like)?.ok_or_else(missing)?;
+    let yo = crate::native::operand_like(py, y, like)?.ok_or_else(missing)?;
     let cond = &c.borrow().inner;
     let (xa, ya) = (xo.get(), yo.get());
     let mut out = py.detach(|| annoray::where_(cond, xa, ya)).py_err()?;

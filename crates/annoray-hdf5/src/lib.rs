@@ -162,6 +162,17 @@ impl File {
         len.saturating_sub(addr.saturating_add(self.base))
     }
 
+    /// Page in `len` bytes at `addr` ahead of a large read (best effort).
+    pub(crate) fn prefetch(&self, addr: u64, len: usize) {
+        if let Some(at) = addr
+            .checked_add(self.base)
+            .and_then(|a| usize::try_from(a).ok())
+            .filter(|a| a.checked_add(len).is_some_and(|e| e <= self.buf.len()))
+        {
+            self.buf.prefetch(at, len);
+        }
+    }
+
     pub(crate) fn cursor(&self, addr: u64) -> Result<Cursor<'_>, Error> {
         let at = addr
             .checked_add(self.base)
@@ -697,6 +708,11 @@ impl Dataset {
                     self.file.cursor(*a)?.bytes(total)?.into()
                 }
             }
+            // The whole box as a slice: chunks placed in parallel, numbers straight into
+            // their typed buffer.
+            Layout::Chunked { .. } if !shape.is_empty() => {
+                return self.read_slice(&vec![0; shape.len()], &shape);
+            }
             Layout::Chunked { addr, chunk, index } => {
                 let mut out = filled(&fill, n);
                 if let Some(addr) = addr {
@@ -894,6 +910,13 @@ impl Dataset {
         out: &mut [u8],
     ) -> Result<(), Error> {
         #[cfg(feature = "rayon")]
+        if chunks.len() > 1
+            && (!self.filters.is_empty() || out.len() >= PARALLEL_COPY_BYTES)
+            && self.place_by_slab(chunks, cdims, shape, esize, lo, count, out)?
+        {
+            return Ok(());
+        }
+        #[cfg(feature = "rayon")]
         if !self.filters.is_empty() && chunks.len() > 1 {
             use rayon::prelude::*;
             // Decoded chunks in flight: up to four per thread, so large reads stay within
@@ -926,6 +949,98 @@ impl Dataset {
             }
         }
         Ok(())
+    }
+
+    /// [`place_chunks`](Self::place_chunks) in parallel by slab: the chunks starting at one
+    /// position on the first axis cover a contiguous run of rows of the box, so each such
+    /// slab of `out` is filled by one thread (decoding its chunks one at a time, so memory
+    /// stays at a chunk per thread). False, with nothing done, when there are fewer than two
+    /// slabs.
+    #[cfg(feature = "rayon")]
+    #[allow(clippy::too_many_arguments)]
+    fn place_by_slab(
+        &self,
+        chunks: &[ChunkRef],
+        cdims: &[u64],
+        shape: &[usize],
+        esize: usize,
+        lo: &[usize],
+        count: &[usize],
+        out: &mut [u8],
+    ) -> Result<bool, Error> {
+        use rayon::prelude::*;
+        let (Some(&lo0), Some(&n0), Some(&c0)) = (lo.first(), count.first(), cdims.first()) else {
+            return Ok(false);
+        };
+        let c0 = usize::try_from(c0).map_err(|_| bad("chunk too large"))?;
+        let row = count
+            .iter()
+            .skip(1)
+            .try_fold(Ck::from(esize), |a, c| Some(a * *c))
+            .and_then(Ck::usize)
+            .ok_or_else(|| bad("box too large"))?;
+        // Chunks grouped by their first-axis offset, in order.
+        let mut groups: std::collections::BTreeMap<u64, Vec<&ChunkRef>> =
+            std::collections::BTreeMap::new();
+        for c in chunks {
+            groups
+                .entry(c.offset.first().copied().unwrap_or(0))
+                .or_default()
+                .push(c);
+        }
+        if groups.len() < 2 {
+            return Ok(false);
+        }
+        // Each group's rows of the box, [a, b), cut out of `out` in order.
+        let mut slabs = Vec::with_capacity(groups.len());
+        let mut rest = out;
+        let mut at = 0usize;
+        for (o, group) in groups {
+            let o = usize::try_from(o).map_err(|_| bad("chunk offset"))?;
+            let a = o.max(lo0).saturating_sub(lo0);
+            let b = o
+                .saturating_add(c0)
+                .min(lo0.saturating_add(n0))
+                .saturating_sub(lo0);
+            if a >= b {
+                continue;
+            }
+            let skip = (Ck::from(a.saturating_sub(at)) * row)
+                .usize()
+                .ok_or_else(|| bad("box too large"))?;
+            let len = (Ck::from(b.saturating_sub(a)) * row)
+                .usize()
+                .ok_or_else(|| bad("box too large"))?;
+            let tail = rest
+                .get_mut(skip..)
+                .ok_or_else(|| bad("box out of range"))?;
+            if len > tail.len() {
+                return Err(bad("box out of range"));
+            }
+            let (slab, tail) = tail.split_at_mut(len);
+            rest = tail;
+            at = b;
+            slabs.push((slab, a, b, group));
+        }
+        slabs
+            .into_par_iter()
+            .try_for_each(|(slab, a, b, group)| -> Result<(), Error> {
+                let mut sub_lo = lo.to_vec();
+                let mut sub_count = count.to_vec();
+                if let (Some(l), Some(n)) = (sub_lo.first_mut(), sub_count.first_mut()) {
+                    *l = lo0.saturating_add(a);
+                    *n = b.saturating_sub(a);
+                }
+                for c in group {
+                    if let Some(p) =
+                        self.decode_chunk(c, cdims, shape, esize, &sub_lo, &sub_count)?
+                    {
+                        p.copy_into(slab, &sub_count, &sub_lo, esize)?;
+                    }
+                }
+                Ok(())
+            })?;
+        Ok(true)
     }
 
     /// Decode one chunk if it overlaps the box `[lo, lo + count)`.
@@ -1030,22 +1145,40 @@ impl Dataset {
             .usize()
             .filter(|t| *t <= self.file.load_limit)
             .ok_or_else(|| bad(format!("{}: slice too large to load", self.path)))?;
+        // A box that is one run of contiguous storage (single positions on the leading
+        // axes, then any range, then whole trailing axes) is decoded straight from the file.
+        if let Layout::Contiguous { addr: Some(a), .. } = &self.layout
+            && n > 0
+            && let Some((offset, len)) = contiguous_run(&shape, start, count, esize)
+        {
+            let at = u64::try_from(offset)
+                .ok()
+                .and_then(|o| a.checked_add(o))
+                .ok_or_else(|| bad("dataset too large"))?;
+            if len >= PREFETCH_BYTES {
+                self.file.prefetch(at, len);
+            }
+            let src = self.file.cursor(at)?.bytes(len)?;
+            return dtype::decode(&self.file, &self.dtype, src, count);
+        }
         let fill: Vec<u8> = match &self.fill {
             Some(f) if f.len() == esize => f.clone(),
             _ => vec![0; esize],
         };
-        let mut out = filled(&fill, n);
         let to: Vec<usize> = start
             .iter()
             .zip(count)
             .map(|(s, c)| s.saturating_add(*c))
             .collect();
         let origin = vec![0usize; shape.len()];
-        if n > 0 {
+        let place = |out: &mut [u8]| -> Result<(), Error> {
+            if n == 0 {
+                return Ok(());
+            }
             match &self.layout {
-                Layout::Compact(data) => copy_box(
-                    data, &shape, &origin, &mut out, count, start, start, &to, esize,
-                )?,
+                Layout::Compact(data) => {
+                    copy_box(data, &shape, &origin, out, count, start, start, &to, esize)
+                }
                 Layout::Contiguous { addr: Some(a), .. } => {
                     let full = shape
                         .iter()
@@ -1054,9 +1187,7 @@ impl Dataset {
                         .ok_or_else(|| bad("dataset too large"))?;
                     // A view of the mapped file; only the rows copied below are paged in.
                     let src = self.file.cursor(*a)?.bytes(full)?;
-                    copy_box(
-                        src, &shape, &origin, &mut out, count, start, start, &to, esize,
-                    )?;
+                    copy_box(src, &shape, &origin, out, count, start, start, &to, esize)
                 }
                 Layout::Chunked {
                     addr: Some(addr),
@@ -1065,13 +1196,117 @@ impl Dataset {
                 } => {
                     let cdims: Vec<u64> = chunk.iter().take(shape.len()).copied().collect();
                     let chunks = self.chunk_list(*addr, &cdims, index, &shape, esize)?;
-                    self.place_chunks(&chunks, &cdims, &shape, esize, start, count, &mut out)?;
+                    self.place_chunks(&chunks, &cdims, &shape, esize, start, count, out)
                 }
-                Layout::Contiguous { addr: None, .. } | Layout::Chunked { addr: None, .. } => {}
+                Layout::Contiguous { addr: None, .. } | Layout::Chunked { addr: None, .. } => {
+                    Ok(())
+                }
             }
+        };
+        // Native-endian numbers are placed straight into their typed buffer.
+        let shaped = |a: Result<Array, ndarray::ShapeError>| {
+            a.map_err(|e| bad(format!("data does not match its shape: {e}")))
+        };
+        let sh = ndarray::IxDyn(count);
+        let native = |be: bool| be == cfg!(target_endian = "big");
+        match self.dtype {
+            Datatype::Int {
+                size,
+                signed,
+                big_endian,
+            } if native(big_endian) => {
+                return shaped(match (size, signed) {
+                    (1, true) => ndarray::ArrayD::from_shape_vec(sh, typed_fill(n, &fill, place)?)
+                        .map(Array::I8),
+                    (1, false) => ndarray::ArrayD::from_shape_vec(sh, typed_fill(n, &fill, place)?)
+                        .map(Array::U8),
+                    (2, true) => ndarray::ArrayD::from_shape_vec(sh, typed_fill(n, &fill, place)?)
+                        .map(Array::I16),
+                    (2, false) => ndarray::ArrayD::from_shape_vec(sh, typed_fill(n, &fill, place)?)
+                        .map(Array::U16),
+                    (4, true) => ndarray::ArrayD::from_shape_vec(sh, typed_fill(n, &fill, place)?)
+                        .map(Array::I32),
+                    (4, false) => ndarray::ArrayD::from_shape_vec(sh, typed_fill(n, &fill, place)?)
+                        .map(Array::U32),
+                    (8, true) => ndarray::ArrayD::from_shape_vec(sh, typed_fill(n, &fill, place)?)
+                        .map(Array::I64),
+                    _ => ndarray::ArrayD::from_shape_vec(sh, typed_fill(n, &fill, place)?)
+                        .map(Array::U64),
+                });
+            }
+            Datatype::Float {
+                size: 4,
+                big_endian,
+            } if native(big_endian) => {
+                return shaped(
+                    ndarray::ArrayD::from_shape_vec(sh, typed_fill(n, &fill, place)?)
+                        .map(Array::F32),
+                );
+            }
+            Datatype::Float {
+                size: 8,
+                big_endian,
+            } if native(big_endian) => {
+                return shaped(
+                    ndarray::ArrayD::from_shape_vec(sh, typed_fill(n, &fill, place)?)
+                        .map(Array::F64),
+                );
+            }
+            _ => {}
         }
+        let mut out = filled(&fill, n);
+        place(&mut out)?;
         dtype::decode(&self.file, &self.dtype, &out, count)
     }
+}
+
+/// Uncompressed chunked reads at least this large are copied in parallel.
+#[cfg(feature = "rayon")]
+const PARALLEL_COPY_BYTES: usize = 1 << 22;
+
+/// Contiguous reads at least this large are paged in up front.
+const PREFETCH_BYTES: usize = 1 << 22;
+
+/// The byte range `(offset, len)` of the box `[start, start + count)` in C-order storage of
+/// `shape`, if the box is one contiguous run: single positions on the leading axes, any range
+/// on one axis, whole trailing axes.
+fn contiguous_run(
+    shape: &[usize],
+    start: &[usize],
+    count: &[usize],
+    esize: usize,
+) -> Option<(usize, usize)> {
+    // The first axis (from the end) that is not taken whole.
+    let k = (0..shape.len())
+        .rev()
+        .find(|&d| start.get(d) != Some(&0) || count.get(d) != shape.get(d))
+        .unwrap_or(0);
+    if count.iter().take(k).any(|c| *c != 1) {
+        return None;
+    }
+    let mut stride = esize;
+    let mut offset = 0usize;
+    for d in (0..shape.len()).rev() {
+        if d <= k {
+            offset = offset.checked_add(start.get(d)?.checked_mul(stride)?)?;
+        }
+        stride = stride.checked_mul(*shape.get(d)?)?;
+    }
+    let len = count.iter().try_fold(esize, |a, c| a.checked_mul(*c))?;
+    Some((offset, len))
+}
+
+/// `n` values, each the fill value (`fill`, one element's bytes), then filled in by `place`
+/// through a byte view: native-endian numbers need no separate decoding pass.
+fn typed_fill<T: bytemuck::Pod>(
+    n: usize,
+    fill: &[u8],
+    place: impl FnOnce(&mut [u8]) -> Result<(), Error>,
+) -> Result<Vec<T>, Error> {
+    let f: T = bytemuck::try_pod_read_unaligned(fill).unwrap_or_else(|_| T::zeroed());
+    let mut v = vec![f; n];
+    place(bytemuck::cast_slice_mut(&mut v))?;
+    Ok(v)
 }
 
 /// `n` copies of the fill value (zeros straight from the allocator).
@@ -1193,4 +1428,34 @@ fn ravel(idx: &[u64], dims: &[u64]) -> Option<u64> {
     idx.iter()
         .zip(dims)
         .try_fold(0u64, |acc, (i, d)| acc.checked_mul(*d)?.checked_add(*i))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::contiguous_run;
+
+    #[test]
+    fn contiguous_runs() {
+        let shape = [4, 3, 5];
+        // The whole array; a range of leading rows; one row's tail.
+        assert_eq!(
+            contiguous_run(&shape, &[0, 0, 0], &[4, 3, 5], 4),
+            Some((0, 240))
+        );
+        assert_eq!(
+            contiguous_run(&shape, &[1, 0, 0], &[2, 3, 5], 4),
+            Some((60, 120))
+        );
+        assert_eq!(
+            contiguous_run(&shape, &[2, 1, 0], &[1, 2, 5], 4),
+            Some((140, 40))
+        );
+        assert_eq!(
+            contiguous_run(&shape, &[2, 1, 3], &[1, 1, 2], 4),
+            Some((152, 8))
+        );
+        // Not one run: a partial trailing axis under a range.
+        assert_eq!(contiguous_run(&shape, &[0, 0, 1], &[2, 3, 4], 4), None);
+        assert_eq!(contiguous_run(&shape, &[0, 1, 0], &[2, 2, 5], 4), None);
+    }
 }

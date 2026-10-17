@@ -16,6 +16,7 @@ categories = ["science", "encoding", "parser-implementations"]
 [dependencies]
 annoray-codecs.workspace = true
 ndarray.workspace = true
+rayon = { workspace = true, optional = true }
 serde_json.workspace = true
 thiserror.workspace = true
 
@@ -24,6 +25,8 @@ thiserror.workspace = true
 zstd = ["annoray-codecs/zstd"]
 # LZ4 chunks (alone and inside Blosc; zarr-python v2's default Blosc codec), in pure Rust.
 lz4 = ["annoray-codecs/lz4"]
+# Chunks of a region decoded in parallel.
+rayon = ["dep:rayon"]
 
 [dev-dependencies]
 proptest.workspace = true

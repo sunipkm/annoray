@@ -661,6 +661,37 @@ pub(crate) fn operand<'py>(
     py: Python<'py>,
     o: &Bound<'py, PyAny>,
 ) -> PyResult<Option<Operand<'py>>> {
+    operand_like(py, o, None)
+}
+
+/// Whether `o` is a plain Python `float` or `int` (not a numpy scalar, not a bool): numpy's
+/// "weak" scalars, which take the other operand's type.
+fn is_weak_scalar(o: &Bound<'_, PyAny>) -> bool {
+    let t = o.get_type();
+    t.is(o.py().get_type::<pyo3::types::PyFloat>()) || t.is(o.py().get_type::<pyo3::types::PyInt>())
+}
+
+/// [`operand`], with a plain Python number (or a quantity's) taken as `f32` beside `f32`
+/// data (`like`), as numpy's weak scalars: `f32 * 2.0` stays `f32`.
+pub(crate) fn operand_like<'py>(
+    py: Python<'py>,
+    o: &Bound<'py, PyAny>,
+    like: Option<annoray::DType>,
+) -> PyResult<Option<Operand<'py>>> {
+    let weak = like == Some(annoray::DType::F32)
+        && (is_weak_scalar(o)
+            || o.is_instance_of::<crate::units::PyQuantity>()
+            || quantity_parts(o)?.is_some_and(|(m, _)| is_weak_scalar(&m)));
+    let out = operand_strong(py, o)?;
+    match out {
+        Some(Operand::Owned(a)) if weak && a.dtype() == annoray::DType::F64 => Ok(Some(
+            Operand::Owned(Box::new(a.astype(annoray::DType::F32).py_err()?)),
+        )),
+        other => Ok(other),
+    }
+}
+
+fn operand_strong<'py>(py: Python<'py>, o: &Bound<'py, PyAny>) -> PyResult<Option<Operand<'py>>> {
     if let Ok(da) = o.cast::<PyDataArray>() {
         return Ok(Some(Operand::Array(da.borrow())));
     }
@@ -716,7 +747,7 @@ impl PyDataArray {
         o: &Bound<'_, PyAny>,
         reflected: bool,
     ) -> PyResult<Py<PyAny>> {
-        let Some(other) = operand(py, o)? else {
+        let Some(other) = operand_like(py, o, Some(self.inner.dtype()))? else {
             return Ok(py.NotImplemented());
         };
         let other = other.get();
@@ -1868,11 +1899,8 @@ impl PyDataset {
         }
         let this = slf.borrow();
         let opts = WriteOptions::format(crate::raw::format_from_name(format)?);
-        let write = |ds: &Dataset| py.detach(|| ds.to_netcdf_with(&path, &opts));
-        if encoding.is_none() && unlimited_dims.is_none() {
-            return write(&this.inner).map_err(xr_error);
-        }
-        let mut ds = this.inner.clone();
+        // A view: the encoding given is applied without copying any data.
+        let mut ds = this.inner.view();
         if let Some(u) = unlimited_dims {
             ds.encoding_mut().unlimited_dims = u.into_iter().map(Into::into).collect();
         }
@@ -1880,7 +1908,8 @@ impl PyDataset {
             let enc = ds.encoding_of_mut(&k).py_err()?;
             crate::raw::update_encoding(enc, v.cast::<PyDict>()?)?;
         }
-        write(&ds).map_err(xr_error)
+        py.detach(|| ds.to_netcdf_with(&path, &opts))
+            .map_err(xr_error)
     }
 
     /// As an `xarray.Dataset` (units as `"units"` attributes).

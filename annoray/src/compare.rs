@@ -87,7 +87,7 @@ fn bad_shape(e: ndarray::ShapeError) -> CoreError {
 /// `x op y` elementwise over the broadcast shape; `missing` values compare false (true for
 /// `!=`).
 #[allow(clippy::too_many_arguments)]
-fn zip_cmp<T: PartialOrd>(
+fn zip_cmp<T: PartialOrd + Sync>(
     x: ArrayViewD<'_, T>,
     xd: &[Name],
     y: ArrayViewD<'_, T>,
@@ -95,7 +95,7 @@ fn zip_cmp<T: PartialOrd>(
     od: &[Name],
     shape: &[usize],
     op: CmpOp,
-    missing: impl Fn(&T) -> bool,
+    missing: impl Fn(&T) -> bool + Sync + Send,
 ) -> Result<ArrayD<bool>> {
     let x = broadcast_to_dims(x, xd, od)?;
     let y = broadcast_to_dims(y, yd, od)?;
@@ -104,18 +104,75 @@ fn zip_cmp<T: PartialOrd>(
         x.broadcast(IxDyn(shape)).ok_or_else(no)?,
         y.broadcast(IxDyn(shape)).ok_or_else(no)?,
     );
-    let v = xb
-        .iter()
-        .zip(yb.iter())
-        .map(|(p, q)| {
-            if missing(p) || missing(q) {
+    let f = |p: &T, q: &T| {
+        if missing(p) || missing(q) {
+            op == CmpOp::Ne
+        } else {
+            op.holds(p, q)
+        }
+    };
+    let zip = ndarray::Zip::from(&xb).and(&yb);
+    #[cfg(feature = "rayon")]
+    if xb.len() > PAR_ELEMENTS {
+        return Ok(zip.par_map_collect(f));
+    }
+    Ok(zip.map_collect(f))
+}
+
+/// Elements above which comparisons are split across threads.
+#[cfg(feature = "rayon")]
+const PAR_ELEMENTS: usize = 1 << 16;
+
+/// `a op s` for numeric `a` against the number `s` (both in `f64`, `a` converted by `conv`
+/// element by element, nothing materialized); NaN compares false (true for `!=`). `None`
+/// for non-numeric `a`.
+fn cmp_scalar(
+    a: &TypedArray<View<'_>>,
+    conv: Option<&Converter>,
+    s: f64,
+    op: CmpOp,
+) -> Option<ArrayD<bool>> {
+    #[allow(clippy::cast_precision_loss)] // i64/u64 compared as f64, as to_f64 does
+    fn go<T: Copy + Send + Sync>(
+        x: &ArrayViewD<'_, T>,
+        to: impl Fn(T) -> f64 + Sync + Send,
+        conv: Option<&Converter>,
+        s: f64,
+        op: CmpOp,
+    ) -> ArrayD<bool> {
+        let s_nan = s.is_nan();
+        let f = |v: &T| {
+            let mut p = to(*v);
+            if let Some(c) = conv {
+                p = c.apply(p);
+            }
+            if p.is_nan() || s_nan {
                 op == CmpOp::Ne
             } else {
-                op.holds(p, q)
+                op.holds(&p, &s)
             }
-        })
-        .collect();
-    ArrayD::from_shape_vec(IxDyn(shape), v).map_err(bad_shape)
+        };
+        let zip = ndarray::Zip::from(x);
+        #[cfg(feature = "rayon")]
+        if x.len() > PAR_ELEMENTS {
+            return zip.par_map_collect(f);
+        }
+        zip.map_collect(f)
+    }
+    #[allow(clippy::cast_precision_loss)]
+    Some(match a {
+        TypedArray::F32(x) => go(x, f64::from, conv, s, op),
+        TypedArray::F64(x) => go(x, |v| v, conv, s, op),
+        TypedArray::I8(x) => go(x, f64::from, conv, s, op),
+        TypedArray::I16(x) => go(x, f64::from, conv, s, op),
+        TypedArray::I32(x) => go(x, f64::from, conv, s, op),
+        TypedArray::I64(x) => go(x, |v| v as f64, conv, s, op),
+        TypedArray::U8(x) => go(x, f64::from, conv, s, op),
+        TypedArray::U16(x) => go(x, f64::from, conv, s, op),
+        TypedArray::U32(x) => go(x, f64::from, conv, s, op),
+        TypedArray::U64(x) => go(x, |v| v as f64, conv, s, op),
+        _ => return None,
+    })
 }
 
 fn is_int(d: DType) -> bool {
@@ -189,6 +246,20 @@ fn compute(
         return zip_cmp(x.view(), ad, y.view(), bd, od, shape, op, |_| false);
     }
     if numeric(adt) && numeric(bdt) {
+        // Against a single number (the common case): converted element by element, in
+        // parallel, without an f64 copy of the array.
+        if bd.is_empty() && b.len() == 1 && ad == od {
+            let s = to_f64(b, bc)?.iter().next().copied().unwrap_or(f64::NAN);
+            if let Some(r) = cmp_scalar(a, ac, s, op) {
+                return Ok(r);
+            }
+        }
+        if ad.is_empty() && a.len() == 1 && bd == od {
+            let s = to_f64(a, ac)?.iter().next().copied().unwrap_or(f64::NAN);
+            if let Some(r) = cmp_scalar(b, bc, s, op.swapped()) {
+                return Ok(r);
+            }
+        }
         let (x, y) = (to_f64(a, ac)?, to_f64(b, bc)?);
         return zip_cmp(x.view(), ad, y.view(), bd, od, shape, op, |v: &f64| {
             v.is_nan()
