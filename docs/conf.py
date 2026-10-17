@@ -40,7 +40,6 @@ extensions = [
 
 exclude_patterns = ["_build", "README.md", "requirements.txt", "jupyter_execute"]
 templates_path = ["_templates"]
-html_static_path = ["_static"]
 
 # Docstrings write code in single backticks.
 default_role = "code"
