@@ -1,18 +1,19 @@
 name: Docs deploy
 
 # Publishes the `docs-html` artifact of the calling run (built by docs.yml) to GitHub Pages:
-# the gh-pages branch, under /<version>/, and /stable/ for the newest release. Pages must be
-# enabled for the repository, serving the gh-pages branch.
+# the gh-pages branch, under /<version>/ (one directory per release, never replaced by later
+# ones), and /stable/ for the newest final release. Pages must be enabled for the repository,
+# serving the gh-pages branch.
 
 on:
   workflow_call:
     inputs:
       version:
-        description: "X.Y, or dev"
+        description: "X.Y.Z, X.Y.Z-preN, or dev"
         type: string
         required: true
       stable:
-        description: "Also publish as /stable/ (when the version is the newest release)"
+        description: "Also publish as /stable/ (when the version is the newest final release)"
         type: boolean
         required: true
 

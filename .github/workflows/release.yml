@@ -2,7 +2,8 @@ name: Release
 
 # Pushing a tag vX.Y.Z (or vX.Y.Z-preN) publishes that version: the Rust crates to crates.io,
 # the Python package to PyPI, and a GitHub release (marked as a pre-release for -preN tags),
-# then the documentation of releases (not pre-releases) to GitHub Pages. The version comes
+# then the documentation of the release to GitHub Pages (its own directory; finals also as
+# /stable/). The version comes
 # from the tag (tools/version.py). The full CI (ci.yml) and the documentation build (docs.yml)
 # run first; every release job waits for both, so nothing is built or published unless both
 # pass.
@@ -134,10 +135,16 @@ jobs:
     permissions:
       id-token: write
     steps:
+      # The distributions only: the run also holds the documentation (`docs-html`).
       - uses: actions/download-artifact@v4
         with:
+          pattern: wheels-*
           path: dist
           merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: sdist
+          path: dist
       - uses: pypa/gh-action-pypi-publish@release/v1
 
   # A GitHub release for the tag, with the wheels and sdist, once both registries have the
@@ -150,10 +157,16 @@ jobs:
     permissions:
       contents: write
     steps:
+      # The distributions only: the run also holds the documentation (`docs-html`).
       - uses: actions/download-artifact@v4
         with:
+          pattern: wheels-*
           path: dist
           merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: sdist
+          path: dist
       - name: Create the release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -171,14 +184,14 @@ jobs:
             --generate-notes \
             "${kind[@]}"
 
-  # The documentation built (and checked) above, on GitHub Pages under /X.Y/ and /stable/,
-  # once the release is out. Pre-releases leave the published versions as they are.
+  # The documentation built (and checked) above, on GitHub Pages under /<version>/ once the
+  # release is out; earlier releases keep theirs. A final release also becomes /stable/
+  # (when it is the newest); pre-releases never do.
   docs-deploy:
     needs: [docs, github-release]
-    if: ${{ !contains(github.ref_name, '-pre') }}
     permissions:
       contents: write
     uses: ./.github/workflows/docs-deploy.yml
     with:
       version: ${{ needs.docs.outputs.version }}
-      stable: true
+      stable: ${{ !contains(github.ref_name, '-pre') }}

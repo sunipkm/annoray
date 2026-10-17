@@ -1,12 +1,22 @@
 """Place a documentation build in a checkout of the ``gh-pages`` branch.
 
-The site keeps one build per minor version (``0.3/``), ``dev/`` for builds by hand, and
-``stable/``, a copy of the newest release, so links into it keep working across releases.
-``switcher.json`` (read by the theme's version menu) is rebuilt from the directories present,
-and the site root redirects to ``stable/`` (``dev/`` before the first release).
+Every release keeps its own directory (``0.3.1/``, ``0.4.0-pre1/``), which later releases
+never touch, so the documentation of any published version stays reachable. Besides those:
 
-    python docs/_tools/deploy.py --site SITE --html docs/_build/html --version 0.3 --stable
+- ``stable/`` is a copy of the newest final (not pre-) release, so links into it follow
+  releases;
+- ``dev/`` holds builds made by hand from a branch;
+- ``switcher.json`` (the theme's version menu) is rebuilt from the directories present:
+  ``dev``, then every release, newest first; the newest final release is preferred;
+- the site root redirects to ``stable/`` (before the first final release, to the newest
+  pre-release; before any release, to ``dev/``).
+
+    python docs/_tools/deploy.py --site SITE --html docs/_build/html --version 0.3.1 --stable
+    python docs/_tools/deploy.py --site SITE --html docs/_build/html --version 0.4.0-pre1
     python docs/_tools/deploy.py --site SITE --html docs/_build/html --version dev
+
+Deploying a version that is already present replaces only that version (a rebuild of the
+same release).
 """
 
 from __future__ import annotations
@@ -17,7 +27,22 @@ import re
 import shutil
 from pathlib import Path
 
-RELEASE = re.compile(r"^\d+\.\d+$")
+RELEASE = re.compile(r"^(\d+)\.(\d+)\.(\d+)(?:-pre(\d+))?$")
+
+
+def key(version: str) -> tuple[int, int, int, int, int]:
+    """Sort key: a pre-release sorts before its final release."""
+    m = RELEASE.match(version)
+    if m is None:
+        raise ValueError(version)
+    major, minor, patch, pre = m.groups()
+    final = pre is None
+    return (int(major), int(minor), int(patch), int(final), int(pre or 0))
+
+
+def is_final(version: str) -> bool:
+    m = RELEASE.match(version)
+    return m is not None and m.group(4) is None
 
 
 def replace_dir(src: Path, dst: Path) -> None:
@@ -28,22 +53,26 @@ def replace_dir(src: Path, dst: Path) -> None:
 
 def releases(site: Path) -> list[str]:
     found = [p.name for p in site.iterdir() if p.is_dir() and RELEASE.match(p.name)]
-    return sorted(
-        found, key=lambda v: tuple(int(x) for x in v.split(".")), reverse=True
-    )
+    return sorted(found, key=key, reverse=True)
 
 
 def switcher(site: Path, base_url: str) -> list[dict[str, object]]:
     entries: list[dict[str, object]] = []
     if (site / "dev").is_dir():
         entries.append({"name": "dev", "version": "dev", "url": f"{base_url}/dev/"})
-    for i, v in enumerate(releases(site)):
+    found = releases(site)
+    finals = [v for v in found if is_final(v)]
+    preferred = finals[0] if finals else (found[0] if found else None)
+    for v in found:
         entry: dict[str, object] = {"version": v, "url": f"{base_url}/{v}/"}
-        if i == 0:
+        if v == preferred and is_final(v):
             entry["name"] = f"{v} (stable)"
-            entry["preferred"] = True
+        elif not is_final(v):
+            entry["name"] = f"{v} (pre-release)"
         else:
             entry["name"] = v
+        if v == preferred:
+            entry["preferred"] = True
         entries.append(entry)
     return entries
 
@@ -64,25 +93,36 @@ def main() -> None:
     )
     ap.add_argument("--html", type=Path, required=True, help="the Sphinx HTML build")
     ap.add_argument(
-        "--version", required=True, help="'dev' or a minor version such as 0.3"
+        "--version", required=True, help="'dev' or a release: X.Y.Z or X.Y.Z-preN"
     )
-    ap.add_argument("--stable", action="store_true", help="also publish as stable/")
+    ap.add_argument(
+        "--stable",
+        action="store_true",
+        help="also publish as stable/ (when this is the newest final release)",
+    )
     ap.add_argument("--base-url", default="https://sunipkm.github.io/annoray")
     a = ap.parse_args()
     if a.version != "dev" and not RELEASE.match(a.version):
-        raise SystemExit(f"version must be 'dev' or X.Y, not {a.version!r}")
+        raise SystemExit(
+            f"version must be 'dev', X.Y.Z or X.Y.Z-preN, not {a.version!r}"
+        )
     if not (a.html / "index.html").is_file():
         raise SystemExit(f"{a.html} is not an HTML build")
     base = a.base_url.rstrip("/")
 
     replace_dir(a.html, a.site / a.version)
-    newest = releases(a.site)
-    if a.stable and newest and newest[0] == a.version:
+    finals = [v for v in releases(a.site) if is_final(v)]
+    if a.stable and finals and finals[0] == a.version:
         replace_dir(a.html, a.site / "stable")
     (a.site / "switcher.json").write_text(
         json.dumps(switcher(a.site, base), indent=2) + "\n"
     )
-    target = "stable/" if (a.site / "stable").is_dir() else "dev/"
+    if (a.site / "stable").is_dir():
+        target = "stable/"
+    elif releases(a.site):
+        target = f"{releases(a.site)[0]}/"
+    else:
+        target = "dev/"
     (a.site / "index.html").write_text(redirect(target))
     (a.site / ".nojekyll").write_text("")
     print(f"deployed {a.version} to {a.site} (root -> {target})")

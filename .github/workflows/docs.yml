@@ -18,7 +18,7 @@ on:
         default: ""
     outputs:
       version:
-        description: "Where the build belongs on the site: X.Y, or dev"
+        description: "Where the build belongs on the site: X.Y.Z, X.Y.Z-preN, or dev"
         value: ${{ jobs.build.outputs.version }}
 
 permissions:
@@ -42,8 +42,8 @@ jobs:
           TAG: ${{ inputs.tag }}
         run: |
           if [[ -n "$TAG" ]]; then
-            v="${TAG#v}"; v="${v%%-*}"
-            echo "version=${v%.*}" >> "$GITHUB_OUTPUT"
+            # One directory per release on the site (X.Y.Z or X.Y.Z-preN).
+            echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
           else
             echo "version=dev" >> "$GITHUB_OUTPUT"
           fi

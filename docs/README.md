@@ -3,8 +3,10 @@
 The documentation site (Sphinx, pydata-sphinx-theme, MyST): user pages in Markdown, the
 Python API reference generated from docstrings, with signatures from the type stubs
 (`_ext/stubsig.py`). `.github/workflows/docs.yml` builds and checks it; a release waits for
-that build as for the CI, and `docs-deploy.yml` publishes it to GitHub Pages (`/X.Y/` and
-`/stable/`) once the release is out. `docs-dev.yml`, run by hand, publishes `/dev/`.
+that build as for the CI, and `docs-deploy.yml` publishes it to GitHub Pages once the
+release is out: each release in its own directory (`/0.3.1/`, `/0.4.0-pre1/`), never replaced
+by later releases, and the newest final release also as `/stable/`. `docs-dev.yml`, run by
+hand, publishes `/dev/`.
 
 ```sh
 cd annoray-python && maturin develop --release && cd ..
