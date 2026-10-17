@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../" data-theme="auto">
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Top-level functions &#8212; annoray</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "auto";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "auto";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../_static/styles/theme.css?digest=18bd87630a240e9c25be" rel="stylesheet" />
+<link href="../_static/styles/pydata-sphinx-theme.css?digest=18bd87630a240e9c25be" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../_static/mystnb.11b39860a7a0cbfd473a3ad8a317855267ff0bd372690045ca344a6b62be495e.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
+  
+  <!-- So that users can add custom icons -->
+  <script defer src="../_static/scripts/fontawesome.js?digest=18bd87630a240e9c25be"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=18bd87630a240e9c25be" />
+<link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=18bd87630a240e9c25be" />
+
+    <script src="../_static/documentation_options.js?v=29168a31"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../_static/copybutton.js?v=f281be69"></script>
+    <script src="../_static/design-tabs.js?v=f930bc37"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'api/functions';</script>
+    <script>
+        DOCUMENTATION_OPTIONS.theme_version = '0.23.0';
+        DOCUMENTATION_OPTIONS.theme_switcher_json_url = 'https://sunipkm.github.io/annoray/switcher.json';
+        DOCUMENTATION_OPTIONS.theme_switcher_version_match = '0.0.1-pre0';
+        DOCUMENTATION_OPTIONS.show_version_warning_banner =
+            false;
+        </script>
+    <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="annoray.open_dataset" href="generated/annoray.open_dataset.html" />
+    <link rel="prev" title="annoray.DataTree.from_dict" href="generated/annoray.DataTree.from_dict.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="color-scheme" content="light dark"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="0.0" />
+  
+    
+    <script src="../_static/searchtools.js"></script>
+    <script src="../_static/language_data.js"></script>
+    <script src="../searchindex.js"></script>
+  
+  </head>
+  <body data-default-mode="auto">
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+  
+  
+  
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header id="pst-header" class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button type="button" class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-3 navbar-header-items__start">
+    
+      <div class="navbar-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../index.html">
+  
+  
+  
+  
+  
+  
+    <p class="title logo__title">annoray</p>
+  
+</a></div>
+    
+  </div>
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    <div class="me-auto navbar-header-items__center">
+      
+        <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../getting-started/installation.html">
+    Installation
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../getting-started/overview.html">
+    Overview
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../getting-started/examples.html">
+    Examples
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../xarray-differences.html">
+    Differences from xarray
+  </a>
+</li>
+
+
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="index.html">
+    API reference
+  </a>
+</li>
+
+            <li class="nav-item dropdown">
+                <button class="btn dropdown-toggle nav-item" type="button"
+                data-bs-toggle="dropdown" aria-expanded="false"
+                aria-controls="pst-nav-more-links">
+                    More
+                </button>
+                <ul id="pst-nav-more-links" class="dropdown-menu">
+                    
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="../rust.html">
+    Rust crates
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="../performance.html">
+    Performance
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-external" href="https://docs.rs/annoray">
+    Rust API
+  </a>
+</li>
+
+                </ul>
+            </li>
+            
+  </ul>
+</nav></div>
+      
+    </div>
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button type="button" class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+        </div>
+      
+      
+        <div class="navbar-item">
+<div class="version-switcher__container dropdown pst-js-only">
+  <button id="pst-version-switcher-button-2"
+    type="button"
+    class="version-switcher__button btn btn-sm dropdown-toggle"
+    data-bs-toggle="dropdown"
+    aria-haspopup="listbox"
+    aria-controls="pst-version-switcher-list-2"
+    aria-label="Version switcher list"
+  >
+    Choose version  <!-- this text may get changed later by javascript -->
+    <span class="caret"></span>
+  </button>
+  <div id="pst-version-switcher-list-2"
+    class="version-switcher__menu dropdown-menu list-group-flush py-0"
+    role="listbox" aria-labelledby="pst-version-switcher-button-2">
+    <!-- dropdown will be populated by javascript on page load -->
+  </div>
+</div></div>
+      
+        <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button type="button" class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+      
+        <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/sunipkm/annoray" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-square-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
+        </li>
+</ul></div>
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button type="button" class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+    </div>
+  
+
+  
+    <button type="button" class="pst-navbar-icon sidebar-toggle secondary-toggle" aria-label="On this page">
+      <span class="fa-solid fa-outdent"></span>
+    </button>
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../getting-started/installation.html">
+    Installation
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../getting-started/overview.html">
+    Overview
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../getting-started/examples.html">
+    Examples
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../xarray-differences.html">
+    Differences from xarray
+  </a>
+</li>
+
+
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="index.html">
+    API reference
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../rust.html">
+    Rust crates
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../performance.html">
+    Performance
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-external" href="https://docs.rs/annoray">
+    Rust API
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+<div class="version-switcher__container dropdown pst-js-only">
+  <button id="pst-version-switcher-button-3"
+    type="button"
+    class="version-switcher__button btn btn-sm dropdown-toggle"
+    data-bs-toggle="dropdown"
+    aria-haspopup="listbox"
+    aria-controls="pst-version-switcher-list-3"
+    aria-label="Version switcher list"
+  >
+    Choose version  <!-- this text may get changed later by javascript -->
+    <span class="caret"></span>
+  </button>
+  <div id="pst-version-switcher-list-3"
+    class="version-switcher__menu dropdown-menu list-group-flush py-0"
+    role="listbox" aria-labelledby="pst-version-switcher-button-3">
+    <!-- dropdown will be populated by javascript on page load -->
+  </div>
+</div></div>
+        
+          <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button type="button" class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+        
+          <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/sunipkm/annoray" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-square-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
+        </li>
+</ul></div>
+        
+      </div>
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item pst-sidebar-collapse"><button type="button" id="pst-collapse-sidebar-button" aria-expanded="true" aria-controls="pst-primary-sidebar">
+  <svg class="pst-icon" role="img" aria-hidden="true" focusable="false" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+    <path fill="currentColor" d="M3 15.5C2.36232 15.5 1.74874 15.2564 1.28478 14.8189C0.820828 14.3815 0.541576 13.7832 0.504167 13.1467L0.5 13L0.5 3C0.499965 2.36232 0.743605 1.74874 1.18107 1.28478C1.61854 0.820828 2.21676 0.541576 2.85333 0.504167L3 0.5L13 0.5C13.6377 0.499965 14.2513 0.743605 14.7152 1.18107C15.1792 1.61854 15.4584 2.21676 15.4958 2.85333L15.5 3L15.5 13C15.5 13.6377 15.2564 14.2513 14.8189 14.7152C14.3815 15.1792 13.7832 15.4584 13.1467 15.4958L13 15.5L3 15.5ZM3 13.8333L10.5 13.8333L10.5 2.16667L3 2.16667C2.79589 2.16669 2.59889 2.24163 2.44636 2.37726C2.29383 2.5129 2.19638 2.69979 2.1725 2.9025L2.16667 3L2.16667 13C2.16669 13.2041 2.24163 13.4011 2.37726 13.5536C2.5129 13.7062 2.69979 13.8036 2.9025 13.8275L3 13.8333ZM6.65583 10.325L6.5775 10.2558L4.91083 8.58917C4.76735 8.44567 4.68116 8.25476 4.66843 8.05223C4.65569 7.84971 4.71729 7.6495 4.84167 7.48917L4.91083 7.41083L6.5775 5.74417C6.72747 5.59471 6.9287 5.50794 7.14032 5.50148C7.35194 5.49502 7.55809 5.56935 7.7169 5.70937C7.8757 5.8494 7.97525 6.04463 7.99533 6.25539C8.01541 6.46616 7.95451 6.67667 7.825 6.84417L7.75583 6.9225L6.67917 8L7.75583 9.0775C7.89931 9.22099 7.98551 9.41191 7.99824 9.61443C8.01097 9.81695 7.94938 10.0172 7.825 10.1775L7.75583 10.2558C7.61234 10.3993 7.42142 10.4855 7.2189 10.4982C7.01638 10.511 6.81617 10.4494 6.65583 10.325Z"/>
+  </svg>
+  <span class="pst-collapse-sidebar-label">Collapse Sidebar</span>
+  <span class="pst-expand-sidebar-label">Expand Sidebar</span>
+</button></div>
+        <div class="sidebar-primary-item">
+
+<nav class="bd-docs-nav bd-links"
+     aria-label="Section Navigation">
+  <p class="bd-links__title" role="heading" aria-level="1">Section Navigation</p>
+  <div class="bd-toc-item navbar-nav"><ul class="current nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="dataarray.html">DataArray</a></li>
+<li class="toctree-l1"><a class="reference internal" href="dataset.html">Dataset</a></li>
+<li class="toctree-l1"><a class="reference internal" href="datatree.html">DataTree</a></li>
+<li class="toctree-l1 current active has-children"><a aria-current="page" class="current reference internal" href="#">Top-level functions</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.open_dataset.html">annoray.open_dataset</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.open_dataarray.html">annoray.open_dataarray</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.open_datatree.html">annoray.open_datatree</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.open_groups.html">annoray.open_groups</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.open_mfdataset.html">annoray.open_mfdataset</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.open_zarr.html">annoray.open_zarr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.load_dataset.html">annoray.load_dataset</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.load_dataarray.html">annoray.load_dataarray</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.decode_cf.html">annoray.decode_cf</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.to_netcdf.html">annoray.to_netcdf</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.to_zarr.html">annoray.to_zarr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.save_mfdataset.html">annoray.save_mfdataset</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.concat.html">annoray.concat</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.merge.html">annoray.merge</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.align.html">annoray.align</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.broadcast.html">annoray.broadcast</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.combine_by_coords.html">annoray.combine_by_coords</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.combine_nested.html">annoray.combine_nested</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.where.html">annoray.where</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.apply_ufunc.html">annoray.apply_ufunc</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.dot.html">annoray.dot</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.cross.html">annoray.cross</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.corr.html">annoray.corr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.cov.html">annoray.cov</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.polyval.html">annoray.polyval</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.full_like.html">annoray.full_like</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.zeros_like.html">annoray.zeros_like</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.ones_like.html">annoray.ones_like</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.map_blocks.html">annoray.map_blocks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.map_over_datasets.html">annoray.map_over_datasets</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.group_subtrees.html">annoray.group_subtrees</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.unify_chunks.html">annoray.unify_chunks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.date_range.html">annoray.date_range</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.cftime_range.html">annoray.cftime_range</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.infer_freq.html">annoray.infer_freq</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.set_stream_bytes.html">annoray.set_stream_bytes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.stream_bytes.html">annoray.stream_bytes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.set_options.html">annoray.set_options</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.get_options.html">annoray.get_options</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.show_versions.html">annoray.show_versions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.from_xarray.html">annoray.from_xarray</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.to_astropy.html">annoray.to_astropy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.from_astropy.html">annoray.from_astropy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.register_dataarray_accessor.html">annoray.register_dataarray_accessor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.register_dataset_accessor.html">annoray.register_dataset_accessor</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1"><a class="reference internal" href="units.html">Units</a></li>
+<li class="toctree-l1"><a class="reference internal" href="helpers.html">GroupBy, windows and weights</a></li>
+<li class="toctree-l1"><a class="reference internal" href="testing.html">Testing</a></li>
+</ul>
+</div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+<nav aria-label="Breadcrumb" class="d-print-none">
+  <ul class="bd-breadcrumbs">
+    
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="../index.html" class="nav-link" aria-label="Home">
+        <i class="fa-solid fa-home"></i>
+      </a>
+    </li>
+    
+    <li class="breadcrumb-item"><a href="index.html" class="nav-link">API reference</a></li>
+    
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">Top-level functions</span></li>
+  </ul>
+</nav>
+</div>
+      
+    </div>
+  
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section id="top-level-functions">
+<h1>Top-level functions<a class="headerlink" href="#top-level-functions" title="Link to this heading">#</a></h1>
+<section id="opening-and-saving">
+<h2>Opening and saving<a class="headerlink" href="#opening-and-saving" title="Link to this heading">#</a></h2>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.open_dataset.html#annoray.open_dataset" title="annoray.open_dataset"><code class="xref py py-obj docutils literal notranslate"><span class="pre">open_dataset</span></code></a>(path, *[, group, ...])</p></td>
+<td><p>Open a netCDF-3/4, HDF5 file or Zarr store lazily and CF-decode it (xarray's <code class="docutils literal notranslate"><span class="pre">open_dataset</span></code>).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.open_dataarray.html#annoray.open_dataarray" title="annoray.open_dataarray"><code class="xref py py-obj docutils literal notranslate"><span class="pre">open_dataarray</span></code></a>(filename_or_obj, **kwargs)</p></td>
+<td><p>Open a file holding one data variable, as a DataArray.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.open_datatree.html#annoray.open_datatree" title="annoray.open_datatree"><code class="xref py py-obj docutils literal notranslate"><span class="pre">open_datatree</span></code></a>(path, *[, mask_and_scale, ...])</p></td>
+<td><p>Open every group of a netCDF-4/HDF5 file or Zarr store as a DataTree (lazily).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.open_groups.html#annoray.open_groups" title="annoray.open_groups"><code class="xref py py-obj docutils literal notranslate"><span class="pre">open_groups</span></code></a>(filename_or_obj, **kwargs)</p></td>
+<td><p>Every group of a file (or Zarr store) as a dataset, by path.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.open_mfdataset.html#annoray.open_mfdataset" title="annoray.open_mfdataset"><code class="xref py py-obj docutils literal notranslate"><span class="pre">open_mfdataset</span></code></a>(paths, *[, concat_dim, lazy])</p></td>
+<td><p>Open several files as one dataset (xarray's <code class="docutils literal notranslate"><span class="pre">open_mfdataset</span></code>): a glob pattern or a list of paths, combined by their coordinates (<code class="docutils literal notranslate"><span class="pre">combine=&quot;by_coords&quot;</span></code>) or concatenated along <code class="docutils literal notranslate"><span class="pre">concat_dim</span></code> in the order given (<code class="docutils literal notranslate"><span class="pre">combine=&quot;nested&quot;</span></code>).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.open_zarr.html#annoray.open_zarr" title="annoray.open_zarr"><code class="xref py py-obj docutils literal notranslate"><span class="pre">open_zarr</span></code></a>(store[, group])</p></td>
+<td><p>Open a Zarr store (v2 or v3 directory) lazily and CF-decode it; <code class="code docutils literal notranslate"><span class="pre">open_dataset</span></code> recognises stores too.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.load_dataset.html#annoray.load_dataset" title="annoray.load_dataset"><code class="xref py py-obj docutils literal notranslate"><span class="pre">load_dataset</span></code></a>(filename_or_obj, **kwargs)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">open_dataset</span></code> with every variable read into memory.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.load_dataarray.html#annoray.load_dataarray" title="annoray.load_dataarray"><code class="xref py py-obj docutils literal notranslate"><span class="pre">load_dataarray</span></code></a>(filename_or_obj, **kwargs)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">open_dataarray</span></code> with the data read into memory.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.decode_cf.html#annoray.decode_cf" title="annoray.decode_cf"><code class="xref py py-obj docutils literal notranslate"><span class="pre">decode_cf</span></code></a>(obj, *[, mask_and_scale, ...])</p></td>
+<td><p>CF-decode a dataset opened (or built) without decoding (xarray's <code class="code docutils literal notranslate"><span class="pre">decode_cf</span></code>): times, packing, fill values, units and coordinates, by the same rules as <code class="code docutils literal notranslate"><span class="pre">open_dataset</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.to_netcdf.html#annoray.to_netcdf" title="annoray.to_netcdf"><code class="xref py py-obj docutils literal notranslate"><span class="pre">to_netcdf</span></code></a>(obj, path, **kwargs)</p></td>
+<td><p>Write an annoray <code class="docutils literal notranslate"><span class="pre">Dataset</span></code> or <code class="docutils literal notranslate"><span class="pre">DataTree</span></code> (or, with xarray installed, an <code class="docutils literal notranslate"><span class="pre">xarray.Dataset</span></code>) with annoray's pure-Rust writers.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.to_zarr.html#annoray.to_zarr" title="annoray.to_zarr"><code class="xref py py-obj docutils literal notranslate"><span class="pre">to_zarr</span></code></a>(obj, store, **kwargs)</p></td>
+<td><p>Write an annoray <code class="docutils literal notranslate"><span class="pre">Dataset</span></code> (or <code class="docutils literal notranslate"><span class="pre">DataArray</span></code>, as a one-variable dataset) as a Zarr store; see <code class="docutils literal notranslate"><span class="pre">Dataset.to_zarr</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.save_mfdataset.html#annoray.save_mfdataset" title="annoray.save_mfdataset"><code class="xref py py-obj docutils literal notranslate"><span class="pre">save_mfdataset</span></code></a>(datasets, paths[, mode])</p></td>
+<td><p>Write each dataset to its path.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="combining">
+<h2>Combining<a class="headerlink" href="#combining" title="Link to this heading">#</a></h2>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.concat.html#annoray.concat" title="annoray.concat"><code class="xref py py-obj docutils literal notranslate"><span class="pre">concat</span></code></a>(objs, dim, *[, data_vars, coords, ...])</p></td>
+<td><p>Concatenate data arrays (or datasets) along a dimension (new or existing).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.merge.html#annoray.merge" title="annoray.merge"><code class="xref py py-obj docutils literal notranslate"><span class="pre">merge</span></code></a>(objs, *[, join, compat])</p></td>
+<td><p>Merge datasets (or named data arrays) into one dataset; <code class="code docutils literal notranslate"><span class="pre">compat</span></code> decides variables of the same name (<code class="code docutils literal notranslate"><span class="pre">&quot;override&quot;</span></code>, <code class="code docutils literal notranslate"><span class="pre">&quot;equals&quot;</span></code>, <code class="code docutils literal notranslate"><span class="pre">&quot;identical&quot;</span></code>, <code class="code docutils literal notranslate"><span class="pre">&quot;no_conflicts&quot;</span></code>).</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.align.html#annoray.align" title="annoray.align"><code class="xref py py-obj docutils literal notranslate"><span class="pre">align</span></code></a>(*objs[, join])</p></td>
+<td><p>Align objects on their shared dimension coordinates; dimensions in <code class="docutils literal notranslate"><span class="pre">exclude</span></code> are left as they are (not aligned).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.broadcast.html#annoray.broadcast" title="annoray.broadcast"><code class="xref py py-obj docutils literal notranslate"><span class="pre">broadcast</span></code></a>(*args[, exclude])</p></td>
+<td><p>Data arrays aligned (outer join) and broadcast against one another.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.combine_by_coords.html#annoray.combine_by_coords" title="annoray.combine_by_coords"><code class="xref py py-obj docutils literal notranslate"><span class="pre">combine_by_coords</span></code></a>(data_objects, **kwargs)</p></td>
+<td><p>Combine datasets that tile one dimension, ordered by its coordinate (xarray's <code class="code docutils literal notranslate"><span class="pre">combine_by_coords</span></code>); datasets that do not differ along any dimension are merged.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.combine_nested.html#annoray.combine_nested" title="annoray.combine_nested"><code class="xref py py-obj docutils literal notranslate"><span class="pre">combine_nested</span></code></a>(datasets, concat_dim, *[, join])</p></td>
+<td><p>Combine a nested list of datasets (or arrays): the outer level along the first of <code class="docutils literal notranslate"><span class="pre">concat_dim</span></code>, the next along the second, …; <code class="docutils literal notranslate"><span class="pre">None</span></code> merges that level.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="computation">
+<h2>Computation<a class="headerlink" href="#computation" title="Link to this heading">#</a></h2>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.where.html#annoray.where" title="annoray.where"><code class="xref py py-obj docutils literal notranslate"><span class="pre">where</span></code></a>(cond, x, y[, keep_attrs])</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">cond</span> <span class="pre">?</span> <span class="pre">x</span> <span class="pre">:</span> <span class="pre">y</span></code>, elementwise (xarray's <code class="code docutils literal notranslate"><span class="pre">xr.where</span></code>): <code class="code docutils literal notranslate"><span class="pre">x</span></code> and <code class="code docutils literal notranslate"><span class="pre">y</span></code> data arrays, quantities or numbers.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.apply_ufunc.html#annoray.apply_ufunc" title="annoray.apply_ufunc"><code class="xref py py-obj docutils literal notranslate"><span class="pre">apply_ufunc</span></code></a>(func, *args[, input_core_dims, ...])</p></td>
+<td><p>Apply <code class="code docutils literal notranslate"><span class="pre">func</span></code> (which works on plain arrays) to DataArrays and Datasets; see the module notes.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.dot.html#annoray.dot" title="annoray.dot"><code class="xref py py-obj docutils literal notranslate"><span class="pre">dot</span></code></a>(*arrays[, dim])</p></td>
+<td><p>The product of <code class="code docutils literal notranslate"><span class="pre">arrays</span></code> summed over the dimensions more than one of them has (or <code class="code docutils literal notranslate"><span class="pre">dim</span></code>; <code class="code docutils literal notranslate"><span class="pre">...</span></code> for all), as <code class="code docutils literal notranslate"><span class="pre">xr.dot</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.cross.html#annoray.cross" title="annoray.cross"><code class="xref py py-obj docutils literal notranslate"><span class="pre">cross</span></code></a>(a, b, *, dim)</p></td>
+<td><p>The cross product of two 3-vectors along <code class="docutils literal notranslate"><span class="pre">dim</span></code> (units multiply).</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.corr.html#annoray.corr" title="annoray.corr"><code class="xref py py-obj docutils literal notranslate"><span class="pre">corr</span></code></a>(da_a, da_b[, dim])</p></td>
+<td><p>The Pearson correlation of <code class="code docutils literal notranslate"><span class="pre">da_a</span></code> and <code class="code docutils literal notranslate"><span class="pre">da_b</span></code> over <code class="code docutils literal notranslate"><span class="pre">dim</span></code> (all dimensions by default).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.cov.html#annoray.cov" title="annoray.cov"><code class="xref py py-obj docutils literal notranslate"><span class="pre">cov</span></code></a>(da_a, da_b[, dim, ddof])</p></td>
+<td><p>The covariance of <code class="code docutils literal notranslate"><span class="pre">da_a</span></code> and <code class="code docutils literal notranslate"><span class="pre">da_b</span></code> over <code class="code docutils literal notranslate"><span class="pre">dim</span></code> (all dimensions by default), normalised by the number of valid pairs less <code class="code docutils literal notranslate"><span class="pre">ddof</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.polyval.html#annoray.polyval" title="annoray.polyval"><code class="xref py py-obj docutils literal notranslate"><span class="pre">polyval</span></code></a>(coord, coeffs[, degree_dim])</p></td>
+<td><p>Evaluate the polynomials of <code class="code docutils literal notranslate"><span class="pre">coeffs</span></code> (along <code class="code docutils literal notranslate"><span class="pre">degree_dim</span></code>, as <code class="code docutils literal notranslate"><span class="pre">polyfit</span></code> gives them) at <code class="code docutils literal notranslate"><span class="pre">coord</span></code>, restoring the units <code class="code docutils literal notranslate"><span class="pre">polyfit</span></code> recorded.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.full_like.html#annoray.full_like" title="annoray.full_like"><code class="xref py py-obj docutils literal notranslate"><span class="pre">full_like</span></code></a>(other, fill_value[, dtype])</p></td>
+<td><p>A DataArray or Dataset shaped like <code class="code docutils literal notranslate"><span class="pre">other</span></code>, filled with <code class="code docutils literal notranslate"><span class="pre">fill_value</span></code> (in <code class="code docutils literal notranslate"><span class="pre">other</span></code>'s unit, or a quantity converted into it) as <code class="code docutils literal notranslate"><span class="pre">dtype</span></code> (<code class="code docutils literal notranslate"><span class="pre">other</span></code>'s by default).</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.zeros_like.html#annoray.zeros_like" title="annoray.zeros_like"><code class="xref py py-obj docutils literal notranslate"><span class="pre">zeros_like</span></code></a>(other[, dtype])</p></td>
+<td><p>A DataArray or Dataset shaped like <code class="docutils literal notranslate"><span class="pre">other</span></code>, filled with 0 (in <code class="docutils literal notranslate"><span class="pre">other</span></code>'s unit).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.ones_like.html#annoray.ones_like" title="annoray.ones_like"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ones_like</span></code></a>(other[, dtype])</p></td>
+<td><p>A DataArray or Dataset shaped like <code class="docutils literal notranslate"><span class="pre">other</span></code>, filled with 1 (in <code class="docutils literal notranslate"><span class="pre">other</span></code>'s unit).</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.map_blocks.html#annoray.map_blocks" title="annoray.map_blocks"><code class="xref py py-obj docutils literal notranslate"><span class="pre">map_blocks</span></code></a>(func, obj[, args, kwargs, template])</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">func(obj,</span> <span class="pre">*args,</span> <span class="pre">**kwargs)</span></code>: without dask the object is a single block, which is what xarray does for unchunked data.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.map_over_datasets.html#annoray.map_over_datasets" title="annoray.map_over_datasets"><code class="xref py py-obj docutils literal notranslate"><span class="pre">map_over_datasets</span></code></a>(func, *args[, kwargs])</p></td>
+<td><p>xarray's module-level <code class="docutils literal notranslate"><span class="pre">map_over_datasets</span></code>: the trees among <code class="docutils literal notranslate"><span class="pre">args</span></code> must be isomorphic; <code class="docutils literal notranslate"><span class="pre">func</span></code> gets each node's datasets in their place.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.group_subtrees.html#annoray.group_subtrees" title="annoray.group_subtrees"><code class="xref py py-obj docutils literal notranslate"><span class="pre">group_subtrees</span></code></a>(*trees)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">(relative</span> <span class="pre">path,</span> <span class="pre">nodes)</span></code> for every position of isomorphic trees, breadth first.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.unify_chunks.html#annoray.unify_chunks" title="annoray.unify_chunks"><code class="xref py py-obj docutils literal notranslate"><span class="pre">unify_chunks</span></code></a>(*objects)</p></td>
+<td><p>No-op without dask: the objects as they are.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="time">
+<h2>Time<a class="headerlink" href="#time" title="Link to this heading">#</a></h2>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.date_range.html#annoray.date_range" title="annoray.date_range"><code class="xref py py-obj docutils literal notranslate"><span class="pre">date_range</span></code></a>(start, periods, freq)</p></td>
+<td><p>Regular dates (xarray's <code class="docutils literal notranslate"><span class="pre">date_range</span></code>; annoray's <code class="docutils literal notranslate"><span class="pre">date_range(start,</span> <span class="pre">periods,</span> <span class="pre">freq)</span></code> positional form also works): numpy <code class="docutils literal notranslate"><span class="pre">datetime64</span></code> for the standard calendars (through pandas, as xarray; <code class="docutils literal notranslate"><span class="pre">periods</span></code> without pandas), CF dates for other calendars or with <code class="docutils literal notranslate"><span class="pre">use_cftime=True</span></code> (fixed steps and period starts <code class="docutils literal notranslate"><span class="pre">MS</span></code>/<code class="docutils literal notranslate"><span class="pre">QS</span></code>/<code class="docutils literal notranslate"><span class="pre">YS</span></code>, from <code class="docutils literal notranslate"><span class="pre">start</span></code> with <code class="docutils literal notranslate"><span class="pre">periods</span></code> or up to <code class="docutils literal notranslate"><span class="pre">end</span></code>).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.cftime_range.html#annoray.cftime_range" title="annoray.cftime_range"><code class="xref py py-obj docutils literal notranslate"><span class="pre">cftime_range</span></code></a>(*args[, calendar])</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">date_range</span></code> as CF dates (xarray's deprecated <code class="docutils literal notranslate"><span class="pre">cftime_range</span></code>).</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.infer_freq.html#annoray.infer_freq" title="annoray.infer_freq"><code class="xref py py-obj docutils literal notranslate"><span class="pre">infer_freq</span></code></a>(index)</p></td>
+<td><p>The frequency string of regularly spaced times (pandas' <code class="docutils literal notranslate"><span class="pre">infer_freq</span></code>), from a 1-D DataArray of times or a sequence of them; <code class="docutils literal notranslate"><span class="pre">None</span></code> if irregular.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="streaming-and-options">
+<h2>Streaming and options<a class="headerlink" href="#streaming-and-options" title="Link to this heading">#</a></h2>
+<p>Lazy data (opened from files, or computed from it) is reduced and written in slabs within a
+memory budget.</p>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.set_stream_bytes.html#annoray.set_stream_bytes" title="annoray.set_stream_bytes"><code class="xref py py-obj docutils literal notranslate"><span class="pre">set_stream_bytes</span></code></a>(bytes)</p></td>
+<td><p>Set the streaming budget (default 64 MiB): how much on-disk data reductions of lazy data (<code class="code docutils literal notranslate"><span class="pre">mean</span></code>, <code class="code docutils literal notranslate"><span class="pre">sum</span></code>, <code class="code docutils literal notranslate"><span class="pre">std</span></code>, <code class="code docutils literal notranslate"><span class="pre">var</span></code>, <code class="code docutils literal notranslate"><span class="pre">min</span></code>, <code class="code docutils literal notranslate"><span class="pre">max</span></code>) read at a time, and how many bytes of chunks reading and writing decode or compress at once.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.stream_bytes.html#annoray.stream_bytes" title="annoray.stream_bytes"><code class="xref py py-obj docutils literal notranslate"><span class="pre">stream_bytes</span></code></a>()</p></td>
+<td><p>The current streaming budget, in bytes.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.set_options.html#annoray.set_options" title="annoray.set_options"><code class="xref py py-obj docutils literal notranslate"><span class="pre">set_options</span></code></a>(**kwargs)</p></td>
+<td><p>xarray's <code class="docutils literal notranslate"><span class="pre">set_options</span></code>, as a call or a <code class="docutils literal notranslate"><span class="pre">with</span></code> block.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.get_options.html#annoray.get_options" title="annoray.get_options"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_options</span></code></a>()</p></td>
+<td><p>The options annoray always uses (see <code class="docutils literal notranslate"><span class="pre">set_options</span></code>).</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.show_versions.html#annoray.show_versions" title="annoray.show_versions"><code class="xref py py-obj docutils literal notranslate"><span class="pre">show_versions</span></code></a>([file])</p></td>
+<td><p>The versions of annoray, Python, numpy and the optional dependencies.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="interoperability">
+<h2>Interoperability<a class="headerlink" href="#interoperability" title="Link to this heading">#</a></h2>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.from_xarray.html#annoray.from_xarray" title="annoray.from_xarray"><code class="xref py py-obj docutils literal notranslate"><span class="pre">from_xarray</span></code></a>(obj)</p></td>
+<td><p>Convert an <code class="code docutils literal notranslate"><span class="pre">xarray.DataArray</span></code> or <code class="code docutils literal notranslate"><span class="pre">xarray.Dataset</span></code> (units from <code class="code docutils literal notranslate"><span class="pre">&quot;units&quot;</span></code> attributes).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.to_astropy.html#annoray.to_astropy" title="annoray.to_astropy"><code class="xref py py-obj docutils literal notranslate"><span class="pre">to_astropy</span></code></a>(obj)</p></td>
+<td><p>An annoray unit, quantity or array as its astropy counterpart (arrays lose their coordinates and attributes).</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.from_astropy.html#annoray.from_astropy" title="annoray.from_astropy"><code class="xref py py-obj docutils literal notranslate"><span class="pre">from_astropy</span></code></a>(obj[, dims, coords, name, attrs])</p></td>
+<td><p>An astropy unit or quantity as annoray's: a <a class="reference internal" href="generated/annoray.Unit.html#annoray.Unit" title="annoray.Unit"><code class="xref py py-class docutils literal notranslate"><span class="pre">Unit</span></code></a>, a <a class="reference internal" href="generated/annoray.Quantity.html#annoray.Quantity" title="annoray.Quantity"><code class="xref py py-class docutils literal notranslate"><span class="pre">Quantity</span></code></a> for scalars, a <a class="reference internal" href="generated/annoray.DataArray.html#annoray.DataArray" title="annoray.DataArray"><code class="xref py py-class docutils literal notranslate"><span class="pre">DataArray</span></code></a> (with <code class="docutils literal notranslate"><span class="pre">dims</span></code>, <code class="docutils literal notranslate"><span class="pre">coords</span></code>, ...) for arrays.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="extending">
+<h2>Extending<a class="headerlink" href="#extending" title="Link to this heading">#</a></h2>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.register_dataarray_accessor.html#annoray.register_dataarray_accessor" title="annoray.register_dataarray_accessor"><code class="xref py py-obj docutils literal notranslate"><span class="pre">register_dataarray_accessor</span></code></a>(name)</p></td>
+<td><p>Register a custom accessor on DataArray objects: <code class="docutils literal notranslate"><span class="pre">&#64;register_dataarray_accessor(&quot;geo&quot;)</span></code> then <code class="docutils literal notranslate"><span class="pre">da.geo</span></code>; the class is called with the array.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.register_dataset_accessor.html#annoray.register_dataset_accessor" title="annoray.register_dataset_accessor"><code class="xref py py-obj docutils literal notranslate"><span class="pre">register_dataset_accessor</span></code></a>(name)</p></td>
+<td><p>Register a custom accessor on Dataset objects (see <code class="docutils literal notranslate"><span class="pre">register_dataarray_accessor</span></code>).</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+</section>
+
+
+                </article>
+              
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="generated/annoray.DataTree.from_dict.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">annoray.DataTree.from_dict</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="generated/annoray.open_dataset.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">annoray.open_dataset</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <dialog id="pst-secondary-sidebar-modal"></dialog>
+                <div id="pst-secondary-sidebar" class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+<div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> On this page
+  </div>
+  <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#opening-and-saving">Opening and saving</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#combining">Combining</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#computation">Computation</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#time">Time</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#streaming-and-options">Streaming and options</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#interoperability">Interoperability</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#extending">Extending</a></li>
+</ul>
+  </nav></div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="../_static/scripts/bootstrap.js?digest=18bd87630a240e9c25be"></script>
+<script defer src="../_static/scripts/pydata-sphinx-theme.js?digest=18bd87630a240e9c25be"></script>
+
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item">
+
+  <p class="copyright">
+    
+      © Copyright 2026, Sunip K. Mukherjee.
+      <br/>
+    
+  </p>
+</div>
+      
+        <div class="footer-item">
+
+  <p class="sphinx-version">
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 9.1.0.
+  </p>
+</div>
+      
+    </div>
+  
+  
+  
+    <div class="footer-items__end">
+      
+        <div class="footer-item">
+<p class="theme-version">
+  <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.23.0.
+</p></div>
+      
+    </div>
+  
+</div>
+
+  </footer>
+  </body>
+</html>
