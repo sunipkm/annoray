@@ -132,7 +132,7 @@ pub(crate) fn f64_to_int(
         let v = if v.is_nan() {
             fill.ok_or_else(|| CfError::Invalid {
                 var: var.into(),
-                reason: format!("missing values in {to} data need a _FillValue"),
+                reason: format!("missing values in {to} data need a _FillValue (or missing_value)"),
             })?
         } else {
             v

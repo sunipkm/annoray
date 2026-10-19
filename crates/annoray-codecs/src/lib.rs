@@ -19,11 +19,15 @@
 pub mod bits;
 pub mod bitshuffle;
 pub mod blosc;
+pub mod blosc2;
 pub mod bzip2;
 mod ck;
 pub mod crc;
 pub mod lz4;
 pub mod shuffle;
+pub mod sz2;
+pub mod sz3;
+pub mod zfp;
 pub mod zlib;
 pub mod zstd;
 

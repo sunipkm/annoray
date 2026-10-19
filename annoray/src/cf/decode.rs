@@ -1,6 +1,6 @@
 //! Raw netCDF → `Dataset` (xarray's `decode_cf`).
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use crate::io::{RawData, RawDataset, RawVariable};
@@ -30,6 +30,11 @@ pub struct DecodeOptions {
     /// Promote variables named in `coordinates` attributes (and dimension variables) to
     /// coordinates.
     pub decode_coords: bool,
+    /// With `decode_coords`, also promote the variables named in [`CF_RELATED`] attributes
+    /// (cell bounds, grid mappings, cell measures, formula terms, …), moving those attributes
+    /// to the encoding (xarray's `decode_coords="all"`). An attribute naming a variable the
+    /// file lacks stays an attribute (xarray drops it), with a warning.
+    pub decode_coords_all: bool,
     /// Join `NC_CHAR` arrays into strings along their last dimension.
     pub concat_characters: bool,
     /// Keep data variables lazy when the backend provides lazy data (read on first access,
@@ -44,6 +49,7 @@ impl Default for DecodeOptions {
             decode_times: true,
             decode_units: true,
             decode_coords: true,
+            decode_coords_all: false,
             concat_characters: true,
             lazy: true,
         }
@@ -59,10 +65,52 @@ impl DecodeOptions {
             decode_times: false,
             decode_units: false,
             decode_coords: false,
+            decode_coords_all: false,
             concat_characters: false,
             lazy: true,
         }
     }
+}
+
+/// CF attributes whose values name other variables (xarray's `CF_RELATED_DATA`).
+pub const CF_RELATED: [&str; 10] = [
+    "bounds",
+    "grid_mapping",
+    "climatology",
+    "geometry",
+    "node_coordinates",
+    "node_count",
+    "part_node_count",
+    "interior_ring",
+    "cell_measures",
+    "formula_terms",
+];
+
+/// The variables a [`CF_RELATED`] attribute names. `grid_mapping` is a name, or
+/// `"mapping: coord …"` pairs (the mappings are the variables); `cell_measures` and
+/// `formula_terms` are `"role: variable"` pairs (the variables are). `Err` for a list that
+/// does not start with a `role:` where one is needed.
+fn related_names(attr: &str, value: &str) -> std::result::Result<Vec<String>, String> {
+    let value = value.replace(" :", ":");
+    let words: Vec<&str> = value.split_whitespace().collect();
+    let keyed = matches!(attr, "grid_mapping" | "cell_measures" | "formula_terms");
+    if !keyed || words.len() <= 1 {
+        return Ok(words.into_iter().map(str::to_owned).collect());
+    }
+    let mut keys: Vec<String> = Vec::new();
+    let mut values: Vec<String> = Vec::new();
+    for w in words {
+        if w.contains(':') {
+            keys.push(w.trim_matches(':').to_owned());
+        } else if keys.is_empty() {
+            return Err(format!(
+                "{attr} {value:?}: {w:?} comes before any \"role:\", so the variables are unknown"
+            ));
+        } else {
+            values.push(w.to_owned());
+        }
+    }
+    Ok(if attr == "grid_mapping" { keys } else { values })
 }
 
 /// A decoded dataset plus anything that could not be decoded.
@@ -368,8 +416,38 @@ fn plan(name: &str, raw: &RawVariable, opts: &DecodeOptions, warnings: &mut Vec<
         deflate: raw.storage.deflate,
         shuffle: raw.storage.shuffle,
         compression: raw.storage.compression,
+        fletcher32: raw.storage.fletcher32,
+        big_endian: raw.storage.big_endian,
+        contiguous: raw.storage.contiguous,
+        float16: raw.storage.float16,
+        ragged: raw.storage.ragged.clone(),
+        compound: raw.storage.compound.clone(),
+        enumeration: raw.storage.enumeration.clone(),
         ..Encoding::default()
     };
+    // Quantization is recorded in an attribute; it becomes part of the encoding (the values
+    // are already the quantized ones), so writing the variable back quantizes it alike.
+    let quantized = attrs.iter().find_map(|(k, a)| {
+        let nsd = crate::cf::num::attr_f64(a).and_then(|v| {
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            (v.fract() == 0.0 && (1.0..=255.0).contains(&v)).then_some(v as u8)
+        })?;
+        crate::cf::Quantize::from_attribute(k, nsd).map(|q| (k.clone(), q))
+    });
+    if let Some((k, q)) = quantized {
+        attrs.shift_remove(&k);
+        enc.quantize = Some(q);
+    }
+    if let Some(d) = attrs
+        .get("least_significant_digit")
+        .and_then(crate::cf::num::attr_f64)
+        .filter(|d| d.fract() == 0.0 && d.abs() < 64.0)
+    {
+        attrs.shift_remove("least_significant_digit");
+        #[allow(clippy::cast_possible_truncation)]
+        let d = d as i32;
+        enc.least_significant_digit = Some(d);
+    }
     let mut steps = Vec::new();
 
     // Text stored as characters.
@@ -730,12 +808,50 @@ pub fn decode(raw: &RawDataset, opts: &DecodeOptions) -> Result<Decoded> {
         }
     }
 
+    // With `decode_coords_all`: CF attributes naming variables, which become coordinates
+    // and the attributes encoding.
+    let mut related: HashMap<&str, Vec<(String, String)>> = HashMap::new();
+    if opts.decode_coords && opts.decode_coords_all {
+        for (name, v) in &raw.vars {
+            for attr in CF_RELATED {
+                let Some(AttrValue::Str(value)) = v.attrs.get(attr) else {
+                    continue;
+                };
+                match related_names(attr, value) {
+                    Ok(names) if names.iter().all(|n| raw.vars.contains_key(n.as_str())) => {
+                        coords.extend(names);
+                        related
+                            .entry(name.as_str())
+                            .or_default()
+                            .push((attr.to_owned(), value.clone()));
+                    }
+                    Ok(names) => {
+                        let missing: Vec<&String> = names
+                            .iter()
+                            .filter(|n| !raw.vars.contains_key(n.as_str()))
+                            .collect();
+                        warnings.push(format!(
+                            "{name}: {attr} names variables not in the file: {missing:?} (kept as an attribute)"
+                        ));
+                    }
+                    Err(why) => warnings.push(format!("{name}: {why}")),
+                }
+            }
+        }
+    }
+
     let mut ds = Dataset::new();
     let mut data_vars = Vec::new();
     for (name, v) in &raw.vars {
         let mut var = decode_var(name, v, opts, &mut warnings)?;
         if opts.decode_coords {
             var.attrs_mut().shift_remove("coordinates");
+        }
+        if let Some(moved) = related.remove(name.as_str()) {
+            for (attr, _) in &moved {
+                var.attrs_mut().shift_remove(attr.as_str());
+            }
+            var.encoding_mut().cf_related = moved;
         }
         if coords.contains(name.as_str()) {
             ds.add_coord(name.clone(), var)?;

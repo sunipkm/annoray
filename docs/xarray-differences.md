@@ -195,12 +195,24 @@ attribute is decoded into it when a file is opened.
 - **Files are flushed to the operating system on close, not `fsync`ed**, as netCDF-C's
   `nc_close` does.
 - **`to_netcdf(mode="a")`** writes a temporary file and moves it over the original, so a
-  failed append leaves the file as it was.
+  failed append leaves the file as it was. With `append_dim` or `region` (xarray has these
+  for Zarr only) the file is written in place instead: see
+  [Writing in place](user-guide/io.md#writing-in-place) and `NetcdfWriter`.
+- **Opening** also takes the bytes of a file and binary file-like objects (read whole).
+- **`decode_coords="all"`** keeps a CF attribute that names a variable the file lacks, with a
+  warning. *xarray:* drops the attribute.
 - **`close()` and `with` blocks do nothing.** Files are memory-mapped and released with the
   object.
 - **HDF5.**
-  - Compound, reference, opaque and array types are reported as unsupported, not misread.
-  - bzip2 and BloscLZ filters are read-only.
+  - Compound variables are read as one variable per field (`var.field`) and variable-length
+    variables as CF contiguous ragged arrays; both are written back in their own form.
+    Reference, opaque and top-level array types are reported as unsupported, not misread.
+  - Enumerations keep their names (in `encoding["dtype"].metadata`, as in xarray); h5py's
+    booleans read as booleans.
+  - Virtual datasets are read; a missing source file is an error. *HDF5:* fills its part
+    with the fill value.
+  - bzip2, BloscLZ, LZF, Bitshuffle, n-bit, scale-offset, szip, Blosc2, ZFP, SZ and SZ3
+    chunks are read but not written.
 - **Zarr.**
   - Local directory stores only.
   - Appending, region writes and complex types are not supported.
@@ -230,6 +242,10 @@ attribute is decoded into it when a file is opened.
 - `curvefit` (it wraps scipy's `curve_fit`; annoray does not depend on scipy).
 - MultiIndexes, `to_stacked_array`, `set_xindex`, `unstack(sparse=True)`.
 - Remote Zarr stores, Zarr appends and region writes.
+- SZ and SZ3 chunks of integer data; SZ's non-regression 2-D/3-D Lorenzo path and its
+  point-wise relative mode without acceleration (not written with the default settings).
+- Writing in place to HDF5 datasets indexed by fixed or extensible arrays or version-2
+  B-trees (files written with h5py's `libver="latest"`).
 - Complex numbers.
 - dask arrays.
 - Free-threaded CPython builds.

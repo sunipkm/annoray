@@ -36,12 +36,12 @@ fn heap_str(seg: &[u8], off: u64) -> Result<String, Error> {
 
 // ----- v1 B-trees -----
 
-/// Every `(name, object header address)` of an old-style group.
+/// Every `(name, target)` of an old-style group: object header addresses, or soft links.
 pub(crate) fn group_btree(
     file: &File,
     addr: u64,
     heap: &[u8],
-) -> Result<Vec<(String, u64)>, Error> {
+) -> Result<Vec<(String, crate::format::Target)>, Error> {
     let mut out = Vec::new();
     group_node(file, addr, heap, &mut out, 0)?;
     Ok(out)
@@ -51,7 +51,7 @@ fn group_node(
     file: &File,
     addr: u64,
     heap: &[u8],
-    out: &mut Vec<(String, u64)>,
+    out: &mut Vec<(String, crate::format::Target)>,
     depth: usize,
 ) -> Result<(), Error> {
     if depth > MAX_DEPTH {
@@ -81,11 +81,18 @@ fn group_node(
             let m = s.u16()?;
             for _ in 0..m {
                 let name_off = s.length()?;
-                let obj = s
-                    .addr()?
-                    .ok_or_else(|| bad("undefined symbol table entry"))?;
-                s.skip(24)?; // cache type, reserved, scratch pad
-                out.push((heap_str(heap, name_off)?, obj));
+                let obj = s.addr()?;
+                let cache = s.u32()?;
+                s.skip(4)?; // reserved
+                // Scratch pad (16 bytes): for a soft link, the link value's heap offset.
+                let soft = s.u32()?;
+                s.skip(12)?;
+                let target = match (cache, obj) {
+                    (2, _) => crate::format::Target::Soft(heap_str(heap, u64::from(soft))?),
+                    (_, Some(a)) => crate::format::Target::Hard(a),
+                    (_, None) => crate::format::Target::Unknown(0),
+                };
+                out.push((heap_str(heap, name_off)?, target));
             }
         }
     }
@@ -282,6 +289,8 @@ pub(crate) struct FractalHeap {
     root: Option<u64>,
     root_rows: u64,
     filtered: bool,
+    id_len: usize,
+    huge_btree: Option<u64>,
 }
 
 impl FractalHeap {
@@ -289,12 +298,12 @@ impl FractalHeap {
         let mut c = file.cursor(addr)?;
         c.expect(b"FRHP")?;
         c.skip(1)?;
-        let _id_len = c.u16()?;
+        let id_len = usize::from(c.u16()?);
         let filter_len = c.u16()?;
         c.skip(1)?; // flags
         let max_managed = u64::from(c.u32()?);
         c.length()?; // next huge id
-        c.addr()?; // huge object B-tree
+        let huge_btree = c.addr()?;
         c.length()?; // free space
         c.addr()?; // free space manager
         for _ in 0..8 {
@@ -333,6 +342,8 @@ impl FractalHeap {
             root,
             root_rows,
             filtered: filter_len > 0,
+            id_len,
+            huge_btree,
         })
     }
 
@@ -364,8 +375,46 @@ impl FractalHeap {
                 let len = usize::from(flags & 0x0F).saturating_add(1);
                 Ok(c.bytes(len)?.to_vec())
             }
-            _ => Err(bad("huge fractal heap objects are not supported")),
+            1 => self.huge(file, &mut c),
+            _ => Err(bad("bad fractal heap ID")),
         }
+    }
+
+    /// A huge object: stored outside the heap's blocks, at an address the heap ID holds
+    /// (when it is long enough) or a v2 B-tree maps the ID's key to (H5HF__huge_init).
+    fn huge(&self, file: &File, c: &mut Cursor<'_>) -> Result<Vec<u8>, Error> {
+        if self.filtered {
+            return Err(Error::Unsupported("filtered fractal heap objects".into()));
+        }
+        let so = usize::from(file.sizes.offset);
+        let sl = usize::from(file.sizes.length);
+        let (addr, len) = if self.id_len >= 1usize.saturating_add(so).saturating_add(sl) {
+            (c.addr()?, c.length()?)
+        } else {
+            let key_len = self.id_len.saturating_sub(1).min(sl);
+            let key = c.uvar(key_len)?;
+            let tree = self
+                .huge_btree
+                .ok_or_else(|| bad("huge object without a B-tree"))?;
+            let (typ, records) = btree2(file, tree)?;
+            if typ != 1 {
+                return Err(bad(format!("huge object B-tree of type {typ}")));
+            }
+            let mut found = None;
+            for r in &records {
+                let mut rc = Cursor::new(r, 0, file.sizes);
+                let addr = rc.addr()?;
+                let len = rc.length()?;
+                if rc.length()? == key {
+                    found = Some((addr, len));
+                    break;
+                }
+            }
+            found.ok_or_else(|| bad("huge object not in its B-tree"))?
+        };
+        let addr = addr.ok_or_else(|| bad("huge object at an undefined address"))?;
+        let len = usize::try_from(len).map_err(|_| bad("object too large"))?;
+        Ok(file.cursor(addr)?.bytes(len)?.to_vec())
     }
 
     fn locate(&self, file: &File, off: u64) -> Result<u64, Error> {

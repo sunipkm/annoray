@@ -40,10 +40,13 @@ mod codecs;
 mod compression;
 mod cursor;
 mod dtype;
+mod edit;
 mod error;
 mod filters;
 mod format;
+pub mod half;
 mod storage;
+mod virtual_ds;
 mod writer;
 
 use std::path::Path;
@@ -56,12 +59,13 @@ pub use checksum::lookup3;
 use ck::Ck;
 pub use compression::{BloscCodec, BloscShuffle, Compression};
 use cursor::{Cursor, Sizes};
-pub use dtype::{Datatype, StrPad};
+pub use dtype::{Datatype, Member, StrPad, compound_fields};
+pub use edit::Editor;
 pub(crate) use error::bad;
 pub use error::{Error, Result};
 use format::{ChunkIndex, Filter, Layout, Message, Space, kind};
 use storage::{ChunkRef, Element, FractalHeap};
-pub use writer::{AttrData, Source, WDataset, WGroup, WNode, write_file, write_to};
+pub use writer::{AttrData, Source, WCompound, WDataset, WGroup, WNode, write_file, write_to};
 
 /// Default limit on the decoded size of one dataset read ([`File::with_load_limit`]).
 /// Chunked data can legitimately decode to more than the file size (unwritten chunks become
@@ -92,11 +96,14 @@ pub fn is_hdf5(bytes: &[u8]) -> bool {
 #[derive(Debug, Clone)]
 pub struct File {
     buf: Arc<FileBytes>,
+    /// The directory of the file (for external links), when it was opened from a path.
+    dir: Option<Arc<std::path::PathBuf>>,
     pub(crate) sizes: Sizes,
     base: u64,
     root: u64,
     superblock_version: u8,
     load_limit: usize,
+    pub(crate) superblock: format::Superblock,
 }
 
 impl File {
@@ -107,7 +114,7 @@ impl File {
     /// # Errors
     /// [`Error::Io`], or [`Error::Invalid`] if it is not a readable HDF5 file.
     pub fn open(path: impl AsRef<Path>) -> Result<Self, Error> {
-        Self::from_file_bytes(map_file(path.as_ref())?)
+        Ok(Self::from_file_bytes(map_file(path.as_ref())?)?.at(path.as_ref()))
     }
 
     /// Open a file by reading it entirely into memory.
@@ -115,7 +122,13 @@ impl File {
     /// # Errors
     /// As for [`File::open`].
     pub fn open_in_memory(path: impl AsRef<Path>) -> Result<Self, Error> {
-        Self::from_file_bytes(read_file(path.as_ref())?)
+        Ok(Self::from_file_bytes(read_file(path.as_ref())?)?.at(path.as_ref()))
+    }
+
+    /// Remember where the file is: external links are resolved from its directory.
+    fn at(mut self, path: &Path) -> Self {
+        self.dir = path.parent().map(|d| Arc::new(d.to_path_buf()));
+        self
     }
 
     /// Parse a file held in memory.
@@ -134,11 +147,13 @@ impl File {
         let sb = format::superblock(&buf)?;
         Ok(Self {
             buf: Arc::new(buf),
+            dir: None,
             sizes: sb.sizes,
             base: sb.base,
             root: sb.root,
             superblock_version: sb.version,
             load_limit: MAX_LOAD_BYTES,
+            superblock: sb,
         })
     }
 
@@ -243,6 +258,9 @@ pub struct Group {
     path: String,
 }
 
+/// How many soft or external links a resolution may pass through (a cycle stops here).
+const MAX_LINK_DEPTH: usize = 16;
+
 fn child_path(parent: &str, name: &str) -> String {
     if parent.ends_with('/') {
         format!("{parent}{name}")
@@ -270,21 +288,67 @@ impl Group {
         &self.file
     }
 
-    /// Members in creation order when the file tracks it, otherwise in name order.
+    /// The committed (named) datatypes linked from the group (by hard link): their names,
+    /// object header addresses (which [`Dataset::committed_type`] refers to) and types.
+    ///
+    /// # Errors
+    /// If the group's structures are corrupt.
+    pub fn datatypes(&self) -> Result<Vec<(String, u64, Datatype)>, Error> {
+        let mut out = Vec::new();
+        for (name, target) in self.links()? {
+            let format::Target::Hard(addr) = target else {
+                continue;
+            };
+            let msgs = format::object_header(&self.file, addr)?;
+            let has = |k: u16| msgs.iter().any(|m| m.kind == k);
+            if has(kind::LAYOUT)
+                || has(kind::LINK)
+                || has(kind::LINK_INFO)
+                || has(kind::SYMBOL_TABLE)
+            {
+                continue;
+            }
+            if let Some(m) = msgs.iter().find(|m| m.kind == kind::DATATYPE) {
+                out.push((name, addr, Datatype::parse(&m.data)?));
+            }
+        }
+        Ok(out)
+    }
+
+    /// Members in creation order when the file tracks it, otherwise in name order. Soft and
+    /// external links to datasets are followed; links that cannot be resolved, and links to
+    /// groups (which would repeat or loop the tree), are left out: see
+    /// [`members_and_skipped`](Self::members_and_skipped).
     ///
     /// # Errors
     /// If the group's structures are corrupt.
     pub fn members(&self) -> Result<Vec<(String, Node)>, Error> {
+        Ok(self.members_at(0)?.0)
+    }
+
+    /// [`members`](Self::members), and the links left out, with the reason.
+    ///
+    /// # Errors
+    /// As for [`members`](Self::members).
+    #[allow(clippy::type_complexity)]
+    pub fn members_and_skipped(
+        &self,
+    ) -> Result<(Vec<(String, Node)>, Vec<(String, String)>), Error> {
+        self.members_at(0)
+    }
+
+    /// The links of the group, in member order.
+    fn links(&self) -> Result<Vec<(String, format::Target)>, Error> {
         let msgs = format::object_header(&self.file, self.addr)?;
         let s = self.file.sizes;
-        let mut links: Vec<(String, Option<u64>, Option<u64>)> = Vec::new();
+        let mut links: Vec<(String, format::Target, Option<u64>)> = Vec::new();
         for m in &msgs {
             match m.kind {
                 kind::SYMBOL_TABLE => {
                     let (bt, heap) = format::symbol_table(&m.data, s)?;
                     let seg = storage::local_heap(&self.file, heap)?;
-                    for (name, addr) in storage::group_btree(&self.file, bt, &seg)? {
-                        links.push((name, Some(addr), None));
+                    for (name, target) in storage::group_btree(&self.file, bt, &seg)? {
+                        links.push((name, target, None));
                     }
                 }
                 kind::LINK => {
@@ -311,14 +375,83 @@ impl Group {
         } else {
             links.sort_by(|a, b| a.0.cmp(&b.0));
         }
-        links
-            .into_iter()
-            .filter_map(|(name, addr, _)| addr.map(|a| (name, a)))
-            .map(|(name, addr)| {
-                let path = child_path(&self.path, &name);
-                Ok((name, self.file.node(addr, path)?))
-            })
-            .collect()
+        Ok(links.into_iter().map(|(n, t, _)| (n, t)).collect())
+    }
+
+    /// What one link leads to: `Ok(Some(node))`, `Ok(None)` for an object that is not a member
+    /// (a committed datatype), or why it is not followed.
+    fn follow(
+        &self,
+        name: &str,
+        target: format::Target,
+        depth: usize,
+    ) -> Result<Result<Option<Node>, String>, Error> {
+        let linked = match target {
+            format::Target::Hard(addr) => {
+                let node = self.file.node(addr, child_path(&self.path, name))?;
+                return Ok(Ok(Some(node).filter(|n| !matches!(n, Node::Other))));
+            }
+            format::Target::Soft(to) => self.resolve_soft(&to, depth),
+            format::Target::External { file, path: to } => self.resolve_external(&file, &to, depth),
+            format::Target::Unknown(t) => Err(format!("link of unsupported type {t}")),
+        };
+        Ok(match linked {
+            Ok(Node::Dataset(d)) => Ok(Some(Node::Dataset(d))),
+            Ok(Node::Group(_)) => Err(
+                "a link to a group is not followed (it would repeat or loop the tree)".to_owned(),
+            ),
+            Ok(Node::Other) => Ok(None),
+            Err(why) => Err(why),
+        })
+    }
+
+    #[allow(clippy::type_complexity)]
+    fn members_at(
+        &self,
+        depth: usize,
+    ) -> Result<(Vec<(String, Node)>, Vec<(String, String)>), Error> {
+        let mut members = Vec::new();
+        let mut skipped = Vec::new();
+        for (name, target) in self.links()? {
+            match self.follow(&name, target, depth)? {
+                Ok(Some(node)) => members.push((name, node)),
+                Ok(None) => {}
+                Err(why) => skipped.push((name, why)),
+            }
+        }
+        Ok((members, skipped))
+    }
+
+    /// The object a soft link names: an absolute path, or one relative to this group.
+    fn resolve_soft(&self, to: &str, depth: usize) -> Result<Node, String> {
+        if depth >= MAX_LINK_DEPTH {
+            return Err("soft links nest too deeply (a cycle?)".to_owned());
+        }
+        let start = if to.starts_with('/') {
+            self.file.root().map_err(|e| e.to_string())?
+        } else {
+            self.clone()
+        };
+        start
+            .get_at(to, depth.saturating_add(1))
+            .map_err(|e| format!("dangling soft link to {to:?}: {e}"))
+    }
+
+    /// The object an external link names, in a file relative to this file's directory.
+    fn resolve_external(&self, file: &str, to: &str, depth: usize) -> Result<Node, String> {
+        if depth >= MAX_LINK_DEPTH {
+            return Err("external links nest too deeply (a cycle?)".to_owned());
+        }
+        let p = Path::new(file);
+        let full = match (&self.file.dir, p.is_absolute()) {
+            (Some(dir), false) => dir.join(p),
+            _ => p.to_path_buf(),
+        };
+        let other = File::open(&full).map_err(|e| format!("external file {file:?}: {e}"))?;
+        other
+            .root()
+            .and_then(|r| r.get_at(to, depth.saturating_add(1)))
+            .map_err(|e| format!("external link to {to:?} in {file:?}: {e}"))
     }
 
     /// The member at a relative `/`-separated path.
@@ -326,16 +459,27 @@ impl Group {
     /// # Errors
     /// [`Error::NotFound`] if it does not exist.
     pub fn get(&self, path: &str) -> Result<Node, Error> {
+        self.get_at(path, 0)
+    }
+
+    fn get_at(&self, path: &str, depth: usize) -> Result<Node, Error> {
         let mut node = Node::Group(self.clone());
         for part in path.split('/').filter(|p| !p.is_empty()) {
             let Node::Group(g) = node else {
                 return Err(Error::NotFound(path.to_owned()));
             };
-            node = g
-                .members()?
+            // Only the link needed is followed (following all of them at every step of a
+            // chain of links would grow exponentially).
+            let target = g
+                .links()?
                 .into_iter()
                 .find(|(n, _)| n == part)
-                .map(|(_, n)| n)
+                .map(|(_, t)| t)
+                .ok_or_else(|| Error::NotFound(path.to_owned()))?;
+            node = g
+                .follow(part, target, depth)?
+                .ok()
+                .flatten()
                 .ok_or_else(|| Error::NotFound(path.to_owned()))?;
         }
         Ok(node)
@@ -485,6 +629,7 @@ pub struct Dataset {
     path: String,
     space: Option<Space>,
     dtype: Datatype,
+    committed: Option<u64>,
     layout: Layout,
     filters: Vec<Filter>,
     fill: Option<Vec<u8>>,
@@ -497,10 +642,11 @@ impl Dataset {
         let find = |k: u16| msgs.iter().find(|m| m.kind == k);
         let dt_msg = find(kind::DATATYPE)
             .ok_or_else(|| bad(format!("{path}: dataset without a datatype")))?;
-        let dtype = if dt_msg.flags & 2 != 0 {
-            dtype::shared_datatype(&file, &dt_msg.data)?
+        let (dtype, committed) = if dt_msg.flags & 2 != 0 {
+            let (t, at) = dtype::shared_datatype_at(&file, &dt_msg.data)?;
+            (t, Some(at))
         } else {
-            Datatype::parse(&dt_msg.data)?
+            (Datatype::parse(&dt_msg.data)?, None)
         };
         let space = format::dataspace(
             &find(kind::DATASPACE)
@@ -523,11 +669,19 @@ impl Dataset {
             path,
             space,
             dtype,
+            committed,
             layout,
             filters,
             fill,
             msgs: msgs.to_vec(),
         })
+    }
+
+    /// The address of the committed (named) datatype the dataset's type is, if it is one:
+    /// [`Group::datatypes`] gives the names.
+    #[must_use]
+    pub fn committed_type(&self) -> Option<u64> {
+        self.committed
     }
 
     /// The address of the dataset's object header (what object references point to).
@@ -650,6 +804,35 @@ impl Dataset {
         })
     }
 
+    /// Whether chunks carry a Fletcher-32 checksum.
+    #[must_use]
+    pub fn fletcher32(&self) -> bool {
+        self.filters.iter().any(|f| f.id == filters::FLETCHER32)
+    }
+
+    /// Whether the values are stored big-endian.
+    #[must_use]
+    pub fn big_endian(&self) -> bool {
+        match &self.dtype {
+            Datatype::Int { big_endian, .. }
+            | Datatype::PackedInt { big_endian, .. }
+            | Datatype::Float { big_endian, .. } => *big_endian,
+            _ => false,
+        }
+    }
+
+    /// Whether the values are stored as IEEE half precision (read as `f32`).
+    #[must_use]
+    pub fn half(&self) -> bool {
+        matches!(self.dtype, Datatype::Float { size: 2, .. })
+    }
+
+    /// Whether the values are stored contiguously (not chunked, not compact).
+    #[must_use]
+    pub fn contiguous(&self) -> bool {
+        matches!(self.layout, Layout::Contiguous { .. })
+    }
+
     /// Attributes, in creation order.
     ///
     /// # Errors
@@ -710,8 +893,13 @@ impl Dataset {
             }
             // The whole box as a slice: chunks placed in parallel, numbers straight into
             // their typed buffer.
-            Layout::Chunked { .. } if !shape.is_empty() => {
+            Layout::Chunked { .. } | Layout::Virtual { .. } if !shape.is_empty() => {
                 return self.read_slice(&vec![0; shape.len()], &shape);
+            }
+            Layout::Virtual { .. } => {
+                let mut out = filled(&fill, n);
+                self.place_box(&shape, &[], &[], esize, &mut out)?;
+                out.into()
             }
             Layout::Chunked { addr, chunk, index } => {
                 let mut out = filled(&fill, n);
@@ -725,6 +913,128 @@ impl Dataset {
             }
         };
         dtype::decode(&self.file, &self.dtype, &bytes, &shape)
+    }
+
+    /// A variable-length sequence dataset (a ragged array, [`Datatype::VarSeq`]): each
+    /// element's length, shaped like the dataset, and all elements' values concatenated in C
+    /// order.
+    ///
+    /// # Errors
+    /// [`Error::Unsupported`] for any other datatype; otherwise as for [`read`](Self::read).
+    pub fn read_ragged(&self) -> Result<(ndarray::ArrayD<u64>, Array), Error> {
+        let Datatype::VarSeq { base } = &self.dtype else {
+            return Err(Error::Unsupported(format!(
+                "{}: not a variable-length sequence",
+                self.path
+            )));
+        };
+        let shape = self.shape();
+        let bytes = self.raw_bytes(&shape)?;
+        dtype::decode_ragged(&self.file, base, &bytes, &shape)
+    }
+
+    /// A compound (record) dataset as one array per leaf field, in declaration order: nested
+    /// members get dotted paths (`wind.u`), and array members their dimensions after the
+    /// dataset's.
+    ///
+    /// # Errors
+    /// [`Error::Unsupported`] for other datatypes and for members this reader cannot decode
+    /// (arrays of records, variable-length sequences); otherwise as for [`read`](Self::read).
+    pub fn read_compound(&self) -> Result<Vec<(String, Array)>, Error> {
+        let Datatype::Compound { size, members } = &self.dtype else {
+            return Err(Error::Unsupported(format!(
+                "{}: not a compound type",
+                self.path
+            )));
+        };
+        let shape = self.shape();
+        let bytes = self.raw_bytes(&shape)?;
+        let mut leaves = Vec::new();
+        dtype::fields(members, "", 0, &mut leaves)?;
+        let n = bytes.len().checked_div(*size).unwrap_or(0);
+        let mut out = Vec::with_capacity(leaves.len());
+        for f in leaves {
+            let fsize = f
+                .dims
+                .iter()
+                .try_fold(f.dtype.element_size(self.file.sizes.offset), |a, d| {
+                    a.checked_mul(*d)
+                })
+                .ok_or_else(|| bad("compound member too large"))?;
+            if f.offset.saturating_add(fsize) > *size {
+                return Err(bad(format!(
+                    "compound member {:?} outside its record",
+                    f.path
+                )));
+            }
+            let mut column = Vec::with_capacity(n.saturating_mul(fsize));
+            for i in 0..n {
+                let start = i.saturating_mul(*size).saturating_add(f.offset);
+                column.extend_from_slice(
+                    bytes
+                        .get(start..start.saturating_add(fsize))
+                        .ok_or_else(|| bad("compound data truncated"))?,
+                );
+            }
+            let mut fshape = shape.clone();
+            fshape.extend(&f.dims);
+            let values =
+                dtype::decode(&self.file, f.dtype, &column, &fshape).map_err(|e| match e {
+                    Error::Unsupported(m) => {
+                        Error::Unsupported(format!("compound member {:?}: {m}", f.path))
+                    }
+                    other => other,
+                })?;
+            out.push((f.path, values));
+        }
+        Ok(out)
+    }
+
+    /// Every element's stored bytes (before decoding), in C order.
+    fn raw_bytes(&self, shape: &[usize]) -> Result<Vec<u8>, Error> {
+        let esize = self.dtype.element_size(self.file.sizes.offset);
+        let n = shape
+            .iter()
+            .try_fold(Ck::from(1usize), |a, d| Some(a * *d))
+            .and_then(Ck::usize)
+            .ok_or_else(|| bad("dataset too large"))?;
+        let total = (Ck::from(n) * esize)
+            .usize()
+            .filter(|t| *t <= self.file.load_limit)
+            .ok_or_else(|| bad(format!("{}: too large to load", self.path)))?;
+        Ok(match &self.layout {
+            Layout::Compact(data) => data
+                .get(..total)
+                .ok_or_else(|| bad(format!("{}: compact data truncated", self.path)))?
+                .to_vec(),
+            Layout::Contiguous { addr: None, .. } | Layout::Chunked { addr: None, .. } => {
+                vec![0; total]
+            }
+            Layout::Virtual { .. } => {
+                let mut out = filled(&self.fill_bytes(esize), n);
+                self.place_box(shape, &vec![0; shape.len()], shape, esize, &mut out)?;
+                out
+            }
+            Layout::Contiguous { addr: Some(a), .. } => {
+                if total == 0 {
+                    Vec::new()
+                } else {
+                    self.file.cursor(*a)?.bytes(total)?.to_vec()
+                }
+            }
+            Layout::Chunked {
+                addr: Some(addr),
+                chunk,
+                index,
+            } => {
+                let mut out = vec![0; total];
+                let cdims: Vec<u64> = chunk.iter().take(shape.len()).copied().collect();
+                let whole = vec![0usize; shape.len()];
+                let chunks = self.chunk_list(*addr, &cdims, index, shape, esize)?;
+                self.place_chunks(&chunks, &cdims, shape, esize, &whole, shape, &mut out)?;
+                out
+            }
+        })
     }
 
     fn chunk_list(
@@ -1165,44 +1475,7 @@ impl Dataset {
             Some(f) if f.len() == esize => f.clone(),
             _ => vec![0; esize],
         };
-        let to: Vec<usize> = start
-            .iter()
-            .zip(count)
-            .map(|(s, c)| s.saturating_add(*c))
-            .collect();
-        let origin = vec![0usize; shape.len()];
-        let place = |out: &mut [u8]| -> Result<(), Error> {
-            if n == 0 {
-                return Ok(());
-            }
-            match &self.layout {
-                Layout::Compact(data) => {
-                    copy_box(data, &shape, &origin, out, count, start, start, &to, esize)
-                }
-                Layout::Contiguous { addr: Some(a), .. } => {
-                    let full = shape
-                        .iter()
-                        .try_fold(Ck::from(esize), |acc, d| Some(acc * *d))
-                        .and_then(Ck::usize)
-                        .ok_or_else(|| bad("dataset too large"))?;
-                    // A view of the mapped file; only the rows copied below are paged in.
-                    let src = self.file.cursor(*a)?.bytes(full)?;
-                    copy_box(src, &shape, &origin, out, count, start, start, &to, esize)
-                }
-                Layout::Chunked {
-                    addr: Some(addr),
-                    chunk,
-                    index,
-                } => {
-                    let cdims: Vec<u64> = chunk.iter().take(shape.len()).copied().collect();
-                    let chunks = self.chunk_list(*addr, &cdims, index, &shape, esize)?;
-                    self.place_chunks(&chunks, &cdims, &shape, esize, start, count, out)
-                }
-                Layout::Contiguous { addr: None, .. } | Layout::Chunked { addr: None, .. } => {
-                    Ok(())
-                }
-            }
-        };
+        let place = |out: &mut [u8]| self.place_box(&shape, start, count, esize, out);
         // Native-endian numbers are placed straight into their typed buffer.
         let shaped = |a: Result<Array, ndarray::ShapeError>| {
             a.map_err(|e| bad(format!("data does not match its shape: {e}")))
@@ -1257,6 +1530,66 @@ impl Dataset {
         let mut out = filled(&fill, n);
         place(&mut out)?;
         dtype::decode(&self.file, &self.dtype, &out, count)
+    }
+}
+
+impl Dataset {
+    /// Copy the stored bytes of the box `[start, start + count)` into `out` (C order, `esize`
+    /// bytes per element, already holding the fill value): what is not stored is left as it
+    /// is.
+    fn place_box(
+        &self,
+        shape: &[usize],
+        start: &[usize],
+        count: &[usize],
+        esize: usize,
+        out: &mut [u8],
+    ) -> Result<(), Error> {
+        if count.contains(&0) {
+            return Ok(());
+        }
+        let to: Vec<usize> = start
+            .iter()
+            .zip(count)
+            .map(|(s, c)| s.saturating_add(*c))
+            .collect();
+        let origin = vec![0usize; shape.len()];
+        match &self.layout {
+            Layout::Compact(data) => {
+                copy_box(data, shape, &origin, out, count, start, start, &to, esize)
+            }
+            Layout::Contiguous { addr: Some(a), .. } => {
+                let full = shape
+                    .iter()
+                    .try_fold(Ck::from(esize), |acc, d| Some(acc * *d))
+                    .and_then(Ck::usize)
+                    .ok_or_else(|| bad("dataset too large"))?;
+                // A view of the mapped file; only the rows copied below are paged in.
+                let src = self.file.cursor(*a)?.bytes(full)?;
+                copy_box(src, shape, &origin, out, count, start, start, &to, esize)
+            }
+            Layout::Chunked {
+                addr: Some(addr),
+                chunk,
+                index,
+            } => {
+                let cdims: Vec<u64> = chunk.iter().take(shape.len()).copied().collect();
+                let chunks = self.chunk_list(*addr, &cdims, index, shape, esize)?;
+                self.place_chunks(&chunks, &cdims, shape, esize, start, count, out)
+            }
+            Layout::Virtual { heap, index } => {
+                virtual_ds::place(self, *heap, *index, shape, start, count, esize, out)
+            }
+            Layout::Contiguous { addr: None, .. } | Layout::Chunked { addr: None, .. } => Ok(()),
+        }
+    }
+
+    /// The fill value's bytes (zeros when there is none).
+    fn fill_bytes(&self, esize: usize) -> Vec<u8> {
+        match &self.fill {
+            Some(f) if f.len() == esize => f.clone(),
+            _ => vec![0; esize],
+        }
     }
 }
 

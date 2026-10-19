@@ -115,6 +115,18 @@ fn encode_times(
                 ArrayD::from_shape_vec(shape, ints).map_err(|e| invalid(var, e.to_string()))?,
             )
         }
+        // Integers asked for (the file's own type, say) but the times are not whole
+        // multiples of the units: an error, as in xarray, not floats.
+        Err(e) if enc.dtype.is_some_and(is_int) => {
+            return Err(invalid(
+                var,
+                format!(
+                    "the times cannot be stored as {} in {units:?} ({e}); finer units \
+                     (or a float dtype) in the encoding would hold them",
+                    enc.dtype.map_or_else(String::new, |d| d.to_string())
+                ),
+            ));
+        }
         _ => {
             let floats = dates
                 .iter()
@@ -314,10 +326,63 @@ impl<'a> Vals<'a> {
     }
 }
 
+/// Where a slab sits in its variable: BitGroom quantization alternates by position in the
+/// whole array.
+#[derive(Clone, Copy)]
+struct At<'b> {
+    start: &'b [usize],
+    full: &'b [usize],
+}
+
+/// `t` quantized as `enc` asks (netCDF-C's algorithms, netCDF4-python's
+/// `least_significant_digit`); `fill` values are left as they are.
+fn quantized(
+    t: TypedArray<Owned>,
+    enc: &crate::Encoding,
+    fill: Option<f64>,
+    at: Option<At<'_>>,
+) -> Result<TypedArray<Owned>> {
+    let shape = t.shape().to_vec();
+    // Odd position of local element `i` in the whole array (C order).
+    let odd = move |i: usize| -> bool {
+        let Some(At { start, full }) = at else {
+            return i % 2 == 1;
+        };
+        let (mut rest, mut flat, mut stride) = (i, 0usize, 1usize);
+        for ((n, s), f) in shape.iter().zip(start).zip(full).rev() {
+            let local = rest.checked_rem(*n).unwrap_or(0);
+            rest = rest.checked_div(*n).unwrap_or(0);
+            flat = flat.wrapping_add(s.wrapping_add(local).wrapping_mul(stride));
+            stride = stride.wrapping_mul(*f);
+        }
+        flat % 2 == 1
+    };
+    macro_rules! go {
+        ($a:expr, $v:ident) => {{
+            let mut a = $a.as_standard_layout().into_owned();
+            if let Some(values) = a.as_slice_mut() {
+                if let Some(q) = enc.quantize {
+                    crate::cf::quantize::quantize(values, q, fill, &odd);
+                }
+                if let Some(d) = enc.least_significant_digit {
+                    crate::cf::quantize::least_significant_digit(values, d, fill);
+                }
+            }
+            TypedArray::$v(a)
+        }};
+    }
+    Ok(match t {
+        TypedArray::F32(a) => go!(a, F32),
+        TypedArray::F64(a) => go!(a, F64),
+        other => other,
+    })
+}
+
 fn encode_var<'a, R: Repr>(
     name: &str,
     v: &'a VariableBase<R>,
     format: Format,
+    at: Option<At<'_>>,
 ) -> Result<Encoded<'a>> {
     let enc = v.encoding();
     let mut attrs = v.attrs().clone();
@@ -330,6 +395,16 @@ fn encode_var<'a, R: Repr>(
     if let Some(u) = v.unit() {
         attrs.insert("units".into(), AttrValue::Str(u.to_string()));
     }
+    // CF attributes `decode_coords_all` moved to the encoding.
+    for (attr, value) in &enc.cf_related {
+        if attrs.contains_key(attr.as_str()) {
+            return Err(invalid(
+                name,
+                format!("{attr:?} is both an attribute and in the encoding"),
+            ));
+        }
+        attrs.insert(attr.as_str().into(), AttrValue::Str(value.clone()));
+    }
 
     let int64_ok = format.supports(DType::I64);
     let was_time = matches!(
@@ -338,7 +413,7 @@ fn encode_var<'a, R: Repr>(
     );
     let converted = was_time
         || view.dtype() == DType::Bool
-        || (view.dtype() == DType::Str && format.is_classic_model());
+        || (view.dtype() == DType::Str && (format.is_classic_model() || enc.char_dim.is_some()));
     let mut data = if !converted {
         Vals::Borrowed(view)
     } else {
@@ -375,7 +450,9 @@ fn encode_var<'a, R: Repr>(
                 attrs.insert("dtype".into(), AttrValue::from("bool"));
                 TypedArray::I8(a.mapv(i8::from))
             }
-            TypedArray::Str(a) if format.is_classic_model() => {
+            // Characters in the classic model, or where the encoding names a character
+            // dimension (strings read from a character array go back as one, as in xarray).
+            TypedArray::Str(a) if format.is_classic_model() || enc.char_dim.is_some() => {
                 let (chars, width) = strings_to_chars(&a, name)?;
                 let dim = enc
                     .char_dim
@@ -395,6 +472,8 @@ fn encode_var<'a, R: Repr>(
     // Masking and packing back to the on-disk type.
     if is_float(data.dtype()) {
         let fill = enc.fill_value.as_ref().and_then(attr_f64);
+        // What NaN becomes: the fill value, else `missing_value` (as xarray masks).
+        let nan_as = fill.or_else(|| enc.missing_value.as_ref().and_then(attr_f64));
         // Times already chose their stored type (floats only when NaT needs NaN).
         let target = enc.dtype.filter(|d| is_int(*d) && !was_time);
         let packed = enc.scale_factor.is_some() || enc.add_offset.is_some();
@@ -405,7 +484,7 @@ fn encode_var<'a, R: Repr>(
                 .ok_or_else(|| invalid(name, "not numeric"))?
                 .mapv(|x| (x - o) / s);
             let to = target.unwrap_or(DType::I16);
-            data = Vals::Owned(f64_to_int(&f, to, fill, name)?);
+            data = Vals::Owned(f64_to_int(&f, to, nan_as, name)?);
             for (k, a) in [
                 ("scale_factor", &enc.scale_factor),
                 ("add_offset", &enc.add_offset),
@@ -414,7 +493,7 @@ fn encode_var<'a, R: Repr>(
                     attrs.insert(k.into(), a.clone());
                 }
             }
-        } else if let Some(fv) = fill.filter(|f| !f.is_nan()) {
+        } else if let Some(fv) = nan_as.filter(|f| !f.is_nan()) {
             // Replace NaN with a non-NaN fill value.
             data = Vals::Owned(match data.into_owned() {
                 TypedArray::F32(a) => {
@@ -427,14 +506,23 @@ fn encode_var<'a, R: Repr>(
             });
         }
         let disk = data.dtype();
+        if is_float(disk) && (enc.quantize.is_some() || enc.least_significant_digit.is_some()) {
+            data = Vals::Owned(quantized(data.into_owned(), enc, fill, at)?);
+            if let Some(q) = enc.quantize {
+                attrs.insert(q.attribute().into(), AttrValue::I32(vec![i32::from(q.nsd)]));
+            }
+            if let Some(d) = enc.least_significant_digit {
+                attrs.insert("least_significant_digit".into(), AttrValue::I32(vec![d]));
+            }
+        }
         match fill {
             Some(f) => {
                 if let Some(a) = attr_of(disk, f) {
                     attrs.insert("_FillValue".into(), a);
                 }
             }
-            // xarray's default for floats.
-            None if is_float(disk) => {
+            // xarray's default for floats (unless `_FillValue: None` asked for none).
+            None if is_float(disk) && !enc.no_fill_value => {
                 if let Some(a) = attr_of(disk, f64::NAN) {
                     attrs.insert("_FillValue".into(), a);
                 }
@@ -474,6 +562,13 @@ fn encode_var<'a, R: Repr>(
         storage.deflate = enc.deflate;
         storage.compression = enc.compression;
         storage.shuffle = enc.shuffle;
+        storage.fletcher32 = enc.fletcher32;
+        storage.big_endian = enc.big_endian;
+        storage.contiguous = enc.contiguous;
+        storage.float16 = enc.float16 && is_float(data.dtype());
+        storage.ragged.clone_from(&enc.ragged);
+        storage.compound.clone_from(&enc.compound);
+        storage.enumeration.clone_from(&enc.enumeration);
     }
     Ok(Encoded {
         raw: RawVariable {
@@ -504,19 +599,29 @@ fn encodable_lazily<R: Repr>(v: &VariableBase<R>, format: Format) -> bool {
 
 /// Encode `v`, lazily when possible: its attributes and stored type come from encoding its
 /// first element, and its values are encoded as they are read.
+/// One variable CF-encoded on its own (values, attributes, on-disk dimensions), for writing
+/// into an existing file.
+pub(crate) fn encode_variable<'a, R: Repr>(
+    name: &str,
+    v: &'a VariableBase<R>,
+    format: Format,
+) -> Result<RawVariable<'a>> {
+    encode_maybe_lazy(name, v, format).map(|e| e.raw)
+}
+
 fn encode_maybe_lazy<'a, R: Repr>(
     name: &str,
     v: &'a VariableBase<R>,
     format: Format,
 ) -> Result<Encoded<'a>> {
     if !encodable_lazily(v, format) {
-        return encode_var(name, v, format);
+        return encode_var(name, v, format, None);
     }
     let first: Vec<(Name, std::ops::Range<usize>)> =
         v.dims().iter().map(|d| (d.clone(), 0..1)).collect();
     let mut probe = v.isel(first)?.to_owned();
     probe.load()?;
-    let e = encode_var(name, &probe, format)?;
+    let e = encode_var(name, &probe, format, None)?;
     let RawVariable {
         dims,
         data: probed,
@@ -589,7 +694,11 @@ impl LazySource for EncodeSource {
         var.set_unit(self.unit.clone());
         var.attrs_mut()
             .extend(self.attrs.iter().map(|(k, a)| (k.clone(), a.clone())));
-        let e = encode_var(&self.name, &var, self.format).map_err(err)?;
+        let at = At {
+            start,
+            full: &self.shape,
+        };
+        let e = encode_var(&self.name, &var, self.format, Some(at)).map_err(err)?;
         let data = e
             .raw
             .data
@@ -641,11 +750,28 @@ fn encode_plain<'a, S: Repr>(
         );
     }
 
-    // Non-dimension coordinates are listed in each data variable's `coordinates` attribute.
+    // Non-dimension coordinates are listed in each data variable's `coordinates` attribute,
+    // except those a CF attribute (cell bounds, grid mapping, …) refers to: they are not
+    // coordinates in CF's sense, as xarray has it.
+    let referenced: Vec<String> = ds
+        .coords()
+        .values()
+        .map(|c| c.encoding())
+        .chain(ds.data_vars().values().map(|v| v.encoding()))
+        .flat_map(|e| e.cf_related.iter())
+        .flat_map(|(_, value)| {
+            value
+                .replace(" :", ":")
+                .split_whitespace()
+                .filter(|w| !w.ends_with(':'))
+                .map(str::to_owned)
+                .collect::<Vec<_>>()
+        })
+        .collect();
     let aux: Vec<(&Name, &[Name])> = ds
         .coords()
         .iter()
-        .filter(|(k, c)| c.dims() != [k.as_str()])
+        .filter(|(k, c)| c.dims() != [k.as_str()] && !referenced.iter().any(|r| r == k.as_str()))
         .map(|(k, c)| (k, c.dims()))
         .collect();
     let mut attached: Vec<&Name> = Vec::new();

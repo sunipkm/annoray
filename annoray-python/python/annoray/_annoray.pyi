@@ -9,7 +9,7 @@ Python's type system cannot compute dimensions (Rust's `Quantity<_D>` does).
 import os
 from collections.abc import Callable, Hashable, Iterable, Iterator, Mapping, Sequence
 from types import EllipsisType
-from typing import Any, Generic, Literal, Self, TypeAlias, TypeVar, overload
+from typing import IO, Any, Generic, Literal, Self, TypeAlias, TypeVar, overload
 
 import numpy as np
 import numpy.typing as npt
@@ -28,6 +28,9 @@ _InterpMethod: TypeAlias = Literal[
 ]
 _Extrapolate: TypeAlias = Literal["nan", "edge", "extend"] | float | None
 _Path: TypeAlias = str | os.PathLike[str]
+# A path, a file's bytes, or a binary file-like object (read whole, from the start).
+_Source: TypeAlias = _Path | bytes | bytearray | memoryview | IO[bytes]
+_DecodeCoords: TypeAlias = bool | Literal["coordinates", "all"]
 _Dims: TypeAlias = str | Sequence[str] | None
 _Join: TypeAlias = Literal["inner", "outer", "left", "right", "exact"]
 _Compat: TypeAlias = Literal["override", "equals", "identical", "no_conflicts"]
@@ -1043,6 +1046,8 @@ class Dataset(_Reductions):
         encoding: Mapping[str, Mapping[str, Any]] | None = None,
         unlimited_dims: Sequence[str] | None = None,
         mode: Literal["w", "a"] = "w",
+        append_dim: str | None = None,
+        region: Mapping[str, int | slice] | None = None,
     ) -> None: ...
     def __add__(self, other: Any) -> Dataset: ...
     def __radd__(self, other: Any) -> Dataset: ...
@@ -1383,24 +1388,48 @@ class RawGroup:
     def info(self, name: str) -> dict[str, Any]: ...
     def read(self, name: str, start: Sequence[int], count: Sequence[int]) -> npt.NDArray[Any]: ...
 
+class NetcdfWriter:
+    """A netCDF-4 file open for writing in place (streaming, appending, regions)."""
+
+    def __init__(self, path: _Path) -> None: ...
+    @staticmethod
+    def create(
+        path: _Path,
+        template: Dataset,
+        *,
+        format: str = "NETCDF4",
+        encoding: Mapping[str, Mapping[str, Any]] | None = None,
+        unlimited_dims: Sequence[str] | None = None,
+    ) -> NetcdfWriter: ...
+    def write(self, ds: Dataset, region: Mapping[str, int | slice] | None = None) -> None: ...
+    def append(self, ds: Dataset, dim: str) -> None: ...
+    def dim_len(self, dim: str) -> int: ...
+    def dataset(self) -> Dataset: ...
+    def flush(self) -> None: ...
+    def close(self) -> None: ...
+    @property
+    def closed(self) -> bool: ...
+    def __enter__(self) -> Self: ...
+    def __exit__(self, *args: object) -> bool: ...
+
 def open_dataset(
-    path: _Path,
+    path: _Source,
     *,
     group: str | None = None,
     mask_and_scale: bool = True,
     decode_times: bool = True,
     decode_units: bool = True,
-    decode_coords: bool = True,
+    decode_coords: _DecodeCoords = True,
     concat_characters: bool = True,
     lazy: bool = True,
 ) -> Dataset: ...
 def open_datatree(
-    path: _Path,
+    path: _Source,
     *,
     mask_and_scale: bool = True,
     decode_times: bool = True,
     decode_units: bool = True,
-    decode_coords: bool = True,
+    decode_coords: _DecodeCoords = True,
     concat_characters: bool = True,
     lazy: bool = True,
 ) -> DataTree: ...
@@ -1439,7 +1468,7 @@ def decode_cf(
     mask_and_scale: bool = True,
     decode_times: bool = True,
     decode_units: bool = True,
-    decode_coords: bool = True,
+    decode_coords: _DecodeCoords = True,
     concat_characters: bool = True,
 ) -> Dataset: ...
 def _date_range_in(
@@ -1483,6 +1512,7 @@ def combine_by_coords(
 ) -> Dataset: ...
 def set_stream_bytes(bytes: int) -> None: ...
 def stream_bytes() -> int: ...
+def _check_encoding(var: str, encoding: dict[str, Any], format: str) -> None: ...
 def write(
     path: _Path,
     format: str,

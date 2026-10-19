@@ -19,9 +19,12 @@
 mod decode;
 mod encode;
 pub(crate) mod num;
+pub(crate) mod quantize;
 
-pub use decode::{DecodeOptions, Decoded, decode};
+pub use decode::{CF_RELATED, DecodeOptions, Decoded, decode};
+pub(crate) use encode::encode_variable;
 pub use encode::{EncodeOptions, encode};
+pub use quantize::{Quantize, QuantizeMode};
 
 use crate::Name;
 

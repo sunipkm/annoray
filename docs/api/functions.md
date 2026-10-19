@@ -22,6 +22,17 @@
    save_mfdataset
 ```
 
+## Writing in place
+
+```{eval-rst}
+.. currentmodule:: annoray
+
+.. autosummary::
+   :toctree: generated/
+
+   NetcdfWriter
+```
+
 ## Combining
 
 ```{eval-rst}

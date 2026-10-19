@@ -77,3 +77,22 @@ data.
 ```
 :::
 ::::
+
+## Streaming to a new file
+
+A file made from a template and filled in hour by hour along an unlimited dimension, read
+back while it is written, then corrected in place. See also
+[Writing in place](../user-guide/io.md#writing-in-place).
+
+::::{tab-set}
+:::{tab-item} Python
+```{literalinclude} ../../annoray-python/examples/stream_to_file.py
+:language: python
+```
+:::
+:::{tab-item} Rust
+```{literalinclude} ../../annoray/examples/stream_to_file.rs
+:language: rust
+```
+:::
+::::

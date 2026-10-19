@@ -16,6 +16,7 @@
 
 use std::path::Path;
 
+mod nc_writer;
 pub mod netcdf3;
 pub mod netcdf4;
 #[cfg(feature = "netcdf-c")]
@@ -24,11 +25,12 @@ mod raw;
 pub mod zarr;
 
 pub use raw::{
-    Backend, FileBytes, Format, IoError, RawData, RawDataset, RawDim, RawVariable, Result, Storage,
-    WriteOptions, map_file, read_file,
+    Backend, CompoundField, EnumType, FileBytes, Format, IoError, RawData, RawDataset, RawDim,
+    RawVariable, Result, Storage, WriteOptions, map_file, read_file,
 };
 
 pub use crate::cf::{DecodeOptions, EncodeOptions};
+pub use nc_writer::NetcdfWriter;
 
 use crate::{DataTree, Dataset, DatasetBase, Error, Repr};
 
@@ -90,6 +92,49 @@ pub fn open_dataset_with_backend(
     } else {
         backend.read(path.as_ref())?
     };
+    decode_opened(&raw, opts)
+}
+
+/// Read a netCDF-3, netCDF-4 or HDF5 file held in memory (its format detected from the
+/// bytes); with `lazy`, values are read from the bytes on demand.
+///
+/// # Errors
+/// [`IoError::Unsupported`] for other formats; errors of the format's reader.
+pub fn read_bytes(bytes: Vec<u8>, lazy: bool) -> Result<RawDataset<'static>> {
+    let bytes = FileBytes::Owned(bytes);
+    if netcdf3::is_netcdf3(&bytes) {
+        let file = netcdf3::Netcdf3File::from_file_bytes(bytes)?;
+        return if lazy {
+            Ok(std::sync::Arc::new(file).to_raw_lazy())
+        } else {
+            file.to_raw()
+        };
+    }
+    if annoray_hdf5::is_hdf5(&bytes) {
+        return netcdf4::read_file_bytes(bytes, lazy);
+    }
+    Err(IoError::Unsupported(
+        "the bytes are not a netCDF or HDF5 file".into(),
+    ))
+}
+
+/// [`open_dataset_with`] for a file held in memory (netCDF-3, netCDF-4 or HDF5).
+///
+/// # Errors
+/// As for [`read_bytes`], and decoding errors.
+pub fn open_dataset_from_bytes(bytes: Vec<u8>, opts: &OpenOptions) -> Result<Opened, Error> {
+    decode_opened(&read_bytes(bytes, opts.decode.lazy)?, opts)
+}
+
+/// [`open_datatree_with`] for a file held in memory (netCDF-3, netCDF-4 or HDF5).
+///
+/// # Errors
+/// As for [`read_bytes`], and decoding errors.
+pub fn open_datatree_from_bytes(bytes: Vec<u8>, opts: &OpenOptions) -> Result<OpenedTree, Error> {
+    decode_opened_tree(&read_bytes(bytes, opts.decode.lazy)?, opts)
+}
+
+fn decode_opened(raw: &RawDataset<'static>, opts: &OpenOptions) -> Result<Opened, Error> {
     let group = raw.group(opts.group.as_deref().unwrap_or(""))?;
     let decoded = crate::cf::decode(group, &opts.decode)?;
     Ok(Opened {
@@ -308,6 +353,10 @@ pub fn open_datatree_with_backend(
     } else {
         backend.read(path.as_ref())?
     };
+    decode_opened_tree(&raw, opts)
+}
+
+fn decode_opened_tree(raw: &RawDataset<'static>, opts: &OpenOptions) -> Result<OpenedTree, Error> {
     let root = opts.group.as_deref().unwrap_or("");
     let mut warnings = Vec::new();
     let tree = decode_tree(raw.group(root)?, &opts.decode, "", &mut warnings)?;

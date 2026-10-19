@@ -9,10 +9,12 @@ from typing import Any
 import numpy as np
 import xarray as xr
 
+from annoray._annoray import _check_encoding
 from annoray._annoray import write as _write
 
-# Encoding keys (netCDF4-python names) annoray understands; the rest are dropped, as
-# xarray's own backends drop keys they don't use.
+# Encoding keys (netCDF4-python names) annoray understands. Keys of a variable's own
+# ``.encoding`` outside this set are bookkeeping (``source``, ``original_shape``, …) and are
+# dropped; keys of the explicit ``encoding=`` argument are checked, as xarray checks them.
 _ENCODING_KEYS = {
     "dtype",
     "_FillValue",
@@ -21,11 +23,33 @@ _ENCODING_KEYS = {
     "add_offset",
     "units",
     "calendar",
+    "_Unsigned",
+    "char_dim_name",
     "chunksizes",
+    "contiguous",
     "zlib",
     "complevel",
     "shuffle",
+    "fletcher32",
     "compression",
+    "blosc_shuffle",
+    "szip_coding",
+    "szip_pixels_per_block",
+    "endian",
+    "least_significant_digit",
+    "significant_digits",
+    "quantize_mode",
+    "ragged_counts",
+    "bounds",
+    "grid_mapping",
+    "climatology",
+    "geometry",
+    "node_coordinates",
+    "node_count",
+    "part_node_count",
+    "interior_ring",
+    "cell_measures",
+    "formula_terms",
 }
 
 
@@ -77,11 +101,13 @@ def _encoding(enc: Mapping[str, Any]) -> dict[str, Any]:
             if v is str:
                 v = "str"
             else:
-                v = np.dtype(v).name
+                dt = np.dtype(v)
+                # An enumeration lives in the dtype's metadata (xarray's NativeEnumCoder).
+                v = dt if (dt.metadata or {}).get("enum") else dt.name
         elif k == "chunksizes" and v is not None:
             v = [int(c) for c in v]
         elif k == "_FillValue" and v is False:
-            continue
+            v = None  # netCDF4-python's spelling of "no fill value"
         out[k] = v
     return out
 
@@ -102,6 +128,8 @@ def to_netcdf(
     annoray can write: zlib (deflate), zstd, lz4 and blosc_{lz4, lz4hc, zlib, zstd}.
     """
     encoding = encoding or {}
+    for name, given in encoding.items():
+        _check_encoding(str(name), dict(given), format)
     variables = []
     for name, var in ds.variables.items():
         enc = {**var.encoding, **encoding.get(name, {})}

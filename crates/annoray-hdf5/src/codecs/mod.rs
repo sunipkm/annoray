@@ -5,6 +5,7 @@
 pub(crate) mod bitshuffle;
 pub(crate) mod nbit;
 pub(crate) mod scaleoffset;
+pub(crate) mod szip;
 
 use crate::Error;
 

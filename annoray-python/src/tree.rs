@@ -434,29 +434,35 @@ impl PyDataTree {
 /// Open a netCDF-4/HDF5 file's groups as a `DataTree` (lazily: values are read on demand).
 #[pyfunction]
 #[pyo3(signature = (path, *, mask_and_scale=true, decode_times=true, decode_units=true,
-    decode_coords=true, concat_characters=true, lazy=true))]
+    decode_coords=None, concat_characters=true, lazy=true))]
 #[allow(clippy::fn_params_excessive_bools, clippy::too_many_arguments)]
 pub(crate) fn open_datatree(
     py: Python<'_>,
-    path: PathBuf,
+    path: &Bound<'_, PyAny>,
     mask_and_scale: bool,
     decode_times: bool,
     decode_units: bool,
-    decode_coords: bool,
+    decode_coords: Option<&Bound<'_, PyAny>>,
     concat_characters: bool,
     lazy: bool,
 ) -> PyResult<Py<PyDataTree>> {
-    let opts = open_options(
+    let source = crate::native::open_source(path)?;
+    let mut opts = open_options(
         None,
         mask_and_scale,
         decode_times,
         decode_units,
-        decode_coords,
+        true,
         concat_characters,
         lazy,
     );
+    (opts.decode.decode_coords, opts.decode.decode_coords_all) =
+        crate::native::coords_option(decode_coords)?;
     let opened = py
-        .detach(|| open_datatree_with(&path, &opts))
+        .detach(|| match source {
+            crate::native::OpenSource::Path(p) => open_datatree_with(&p, &opts),
+            crate::native::OpenSource::Bytes(b) => annoray::io::open_datatree_from_bytes(b, &opts),
+        })
         .map_err(xr_error)?;
     warn_all(py, &opened.warnings)?;
     new_root(py, opened.tree, None)

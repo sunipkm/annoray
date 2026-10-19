@@ -992,6 +992,24 @@ impl crate::LazySource for ConvertSource {
 
 /// Unit conversion in one pass (on several threads for large arrays).
 #[allow(clippy::cast_possible_truncation)] // f32 data stays f32
+/// `v`'s values converted to `unit`, as an owned variable with `v`'s attributes and encoding
+/// (`f32` stays `f32`, other numbers become `f64`).
+///
+/// # Errors
+/// Unit errors for incompatible units; [`CoreError::UnsupportedDType`].
+pub(crate) fn variable_in_unit<R: crate::Repr>(
+    v: &crate::VariableBase<R>,
+    unit: &Unit,
+) -> Result<Variable> {
+    let from = v.unit().cloned().unwrap_or_else(Unit::one);
+    let conv = from.converter_to(unit)?;
+    let mut out = Variable::from_typed(v.dims().iter().cloned(), converted(&v.typed()?, &conv)?)?
+        .with_unit(unit.clone());
+    *out.attrs_mut() = v.attrs().clone();
+    *out.encoding_mut() = v.encoding().clone();
+    Ok(out)
+}
+
 fn converted(a: &TypedArray<View<'_>>, conv: &Converter) -> Result<TypedArray<crate::Owned>> {
     fn go<T: Copy + Send + Sync, O: Copy + Send + Sync>(
         x: &ArrayViewD<'_, T>,

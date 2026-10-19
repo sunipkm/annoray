@@ -12,6 +12,31 @@ use pyo3::types::PyDict;
 use crate::convert::OrPy;
 use crate::native::{PyDataset, dict_iter, xr_error};
 
+/// Encoding keys `to_zarr` understands (the compressor is chosen for the whole store).
+const ZARR_ENCODING_KEYS: &[&str] = &[
+    "chunks",
+    "dtype",
+    "_FillValue",
+    "missing_value",
+    "scale_factor",
+    "add_offset",
+    "units",
+    "calendar",
+    "_Unsigned",
+    // CF attributes naming other variables, moved to the encoding by
+    // `decode_coords="all"` (written back as attributes).
+    "bounds",
+    "grid_mapping",
+    "climatology",
+    "geometry",
+    "node_coordinates",
+    "node_count",
+    "part_node_count",
+    "interior_ring",
+    "cell_measures",
+    "formula_terms",
+];
+
 #[pymethods]
 impl PyDataset {
     /// Write a Zarr store. `mode` is `"w-"` (fail if it exists, xarray's default) or `"w"`
@@ -65,6 +90,7 @@ impl PyDataset {
         let mut ds = self.inner.view();
         for (k, v) in dict_iter(encoding.map(|e| e.as_any()))? {
             let given = v.cast::<PyDict>()?;
+            crate::raw::check_encoding(&k, given, ZARR_ENCODING_KEYS, None)?;
             // zarr's `chunks` is netCDF's `chunksizes`.
             let e = given.copy()?;
             if let Some(c) = e.get_item("chunks")? {

@@ -682,12 +682,33 @@ pub(crate) fn operand_like<'py>(
         && (is_weak_scalar(o)
             || o.is_instance_of::<crate::units::PyQuantity>()
             || quantity_parts(o)?.is_some_and(|(m, _)| is_weak_scalar(&m)));
+    // A plain Python int beside integer data takes the data's type too (NEP 50: `int32 * 2`
+    // stays int32); one that does not fit is an error, as in numpy.
+    let int_like = like.filter(|d| {
+        matches!(
+            d,
+            annoray::DType::I8
+                | annoray::DType::I16
+                | annoray::DType::I32
+                | annoray::DType::I64
+                | annoray::DType::U8
+                | annoray::DType::U16
+                | annoray::DType::U32
+                | annoray::DType::U64
+        )
+    });
+    let weak_int = int_like.is_some() && o.get_type().is(py.get_type::<pyo3::types::PyInt>());
     let out = operand_strong(py, o)?;
-    match out {
-        Some(Operand::Owned(a)) if weak && a.dtype() == annoray::DType::F64 => Ok(Some(
+    match (out, int_like) {
+        // A Python float, int (or quantity of one) beside f32 data is f32 (numpy rounds the
+        // same way).
+        (Some(Operand::Owned(a)), _) if weak && a.dtype() != annoray::DType::F32 => Ok(Some(
             Operand::Owned(Box::new(a.astype(annoray::DType::F32).py_err()?)),
         )),
-        other => Ok(other),
+        (Some(Operand::Owned(a)), Some(d)) if weak_int && a.dtype() != d => {
+            Ok(Some(Operand::Owned(Box::new(a.astype(d).py_err()?))))
+        }
+        (other, _) => Ok(other),
     }
 }
 
@@ -1957,7 +1978,11 @@ impl PyDataset {
     /// `calendar`); settings not given keep the variable's own.
     /// `mode="a"` adds or replaces variables in an existing file (rewritten through a
     /// temporary file, so a failed write leaves it as it was).
-    #[pyo3(signature = (path, format="NETCDF4", encoding=None, unlimited_dims=None, mode="w"))]
+    /// With `mode="a"`, `append_dim` appends along an unlimited dimension of the file and
+    /// `region` (dimension → start or slice) writes into part of it, in place (as xarray's
+    /// `to_zarr`): see `NetcdfWriter`.
+    #[pyo3(signature = (path, format="NETCDF4", encoding=None, unlimited_dims=None, mode="w", append_dim=None, region=None))]
+    #[allow(clippy::too_many_arguments)]
     fn to_netcdf(
         slf: &Bound<'_, Self>,
         path: PathBuf,
@@ -1965,8 +1990,38 @@ impl PyDataset {
         encoding: Option<&Bound<'_, PyDict>>,
         unlimited_dims: Option<Vec<String>>,
         mode: &str,
+        append_dim: Option<String>,
+        region: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<()> {
         let py = slf.py();
+        if append_dim.is_some() || region.is_some() {
+            if mode != "a" {
+                return Err(PyValueError::new_err(
+                    "append_dim and region write into an existing file: use mode=\"a\"",
+                ));
+            }
+            if encoding.is_some() || unlimited_dims.is_some() {
+                return Err(PyValueError::new_err(
+                    "append_dim and region use the file's encoding: encoding and \
+                     unlimited_dims cannot be given",
+                ));
+            }
+            let w = py
+                .import("annoray")?
+                .getattr("NetcdfWriter")?
+                .call1((path,))?;
+            let result = match (&append_dim, region) {
+                (Some(_), Some(_)) => {
+                    Err(PyValueError::new_err("give append_dim or region, not both"))
+                }
+                (Some(dim), None) => w.call_method1("append", (slf, dim)).map(|_| ()),
+                (None, Some(r)) => w.call_method1("write", (slf, r)).map(|_| ()),
+                (None, None) => Ok(()),
+            };
+            // Closed either way; a failure leaves what was flushed before (nothing here).
+            let closed = w.call_method0("close").map(|_| ());
+            return result.and(closed);
+        }
         match mode {
             "w" => {}
             "a" => {
@@ -1997,8 +2052,15 @@ impl PyDataset {
             ds.encoding_mut().unlimited_dims = u.into_iter().map(Into::into).collect();
         }
         for (k, v) in dict_iter(encoding.map(|e| e.as_any()))? {
+            let given = v.cast::<PyDict>()?;
+            crate::raw::check_encoding(
+                &k,
+                given,
+                crate::raw::NETCDF_ENCODING_KEYS,
+                Some(opts.format),
+            )?;
             let enc = ds.encoding_of_mut(&k).py_err()?;
-            crate::raw::update_encoding(enc, v.cast::<PyDict>()?)?;
+            crate::raw::update_encoding(enc, given)?;
         }
         py.detach(|| ds.to_netcdf_with(&path, &opts))
             .map_err(xr_error)
@@ -2525,33 +2587,100 @@ impl PyDt {
 /// and read on demand; CF conventions are decoded (times, packing, fill values, units).
 #[pyfunction]
 #[pyo3(signature = (path, *, group=None, mask_and_scale=true, decode_times=true,
-    decode_units=true, decode_coords=true, concat_characters=true, lazy=true))]
+    decode_units=true, decode_coords=None, concat_characters=true, lazy=true))]
 #[allow(clippy::too_many_arguments, clippy::fn_params_excessive_bools)]
 pub(crate) fn open_dataset(
     py: Python<'_>,
-    path: PathBuf,
+    path: &Bound<'_, PyAny>,
     group: Option<String>,
     mask_and_scale: bool,
     decode_times: bool,
     decode_units: bool,
-    decode_coords: bool,
+    decode_coords: Option<&Bound<'_, PyAny>>,
     concat_characters: bool,
     lazy: bool,
 ) -> PyResult<Py<PyDataset>> {
-    let opts = open_options(
+    let source = open_source(path)?;
+    let mut opts = open_options(
         group,
         mask_and_scale,
         decode_times,
         decode_units,
-        decode_coords,
+        true,
         concat_characters,
         lazy,
     );
+    (opts.decode.decode_coords, opts.decode.decode_coords_all) = coords_option(decode_coords)?;
     let opened = py
-        .detach(|| open_dataset_with(&path, &opts))
+        .detach(|| match source {
+            OpenSource::Path(p) => open_dataset_with(&p, &opts),
+            OpenSource::Bytes(b) => annoray::io::open_dataset_from_bytes(b, &opts),
+        })
         .map_err(xr_error)?;
     warn_all(py, &opened.warnings)?;
     new_ds(py, opened.dataset)
+}
+
+/// What to open: a path, or a file's bytes.
+pub(crate) enum OpenSource {
+    Path(PathBuf),
+    Bytes(Vec<u8>),
+}
+
+/// A path (`str` or `os.PathLike`), a bytes-like object holding a file, or a file-like
+/// object (read whole from the start, as xarray does).
+pub(crate) fn open_source(obj: &Bound<'_, PyAny>) -> PyResult<OpenSource> {
+    let py = obj.py();
+    let buffer = |o: &Bound<'_, PyAny>| -> PyResult<Vec<u8>> {
+        if let Ok(b) = o.cast::<pyo3::types::PyBytes>() {
+            return Ok(b.as_bytes().to_vec());
+        }
+        let b = py.import("builtins")?.getattr("bytes")?.call1((o,))?;
+        Ok(b.cast::<pyo3::types::PyBytes>()?.as_bytes().to_vec())
+    };
+    if obj.is_instance_of::<pyo3::types::PyBytes>()
+        || obj.is_instance_of::<pyo3::types::PyByteArray>()
+        || obj.is_instance_of::<pyo3::types::PyMemoryView>()
+    {
+        return Ok(OpenSource::Bytes(buffer(obj)?));
+    }
+    if obj.hasattr("read")? && !obj.is_instance_of::<PyString>() {
+        if obj.hasattr("seek")?
+            && obj
+                .call_method0("seekable")
+                .and_then(|s| s.extract::<bool>())
+                .unwrap_or(true)
+        {
+            obj.call_method1("seek", (0,))?;
+        }
+        let data = obj.call_method0("read")?;
+        if data.is_instance_of::<PyString>() {
+            return Err(value_error(
+                "a file-like object must be opened in binary mode ('rb')",
+            ));
+        }
+        return Ok(OpenSource::Bytes(buffer(&data)?));
+    }
+    Ok(OpenSource::Path(obj.extract()?))
+}
+
+/// `decode_coords`: a bool, `"coordinates"` (the same as `True`) or `"all"` (also the
+/// variables CF attributes such as `bounds` and `grid_mapping` name). `(decode_coords,
+/// decode_coords_all)`; unset is `True`.
+pub(crate) fn coords_option(v: Option<&Bound<'_, PyAny>>) -> PyResult<(bool, bool)> {
+    let Some(v) = v.filter(|v| !v.is_none()) else {
+        return Ok((true, false));
+    };
+    if let Ok(s) = v.extract::<String>() {
+        return match s.as_str() {
+            "all" => Ok((true, true)),
+            "coordinates" => Ok((true, false)),
+            other => Err(value_error(format!(
+                "decode_coords must be a bool, 'coordinates' or 'all', not {other:?}"
+            ))),
+        };
+    }
+    Ok((v.is_truthy()?, false))
 }
 
 #[allow(clippy::fn_params_excessive_bools)]
@@ -2593,7 +2722,7 @@ pub(crate) fn warn_all(py: Python<'_>, warnings: &[String]) -> PyResult<()> {
 /// packing, fill values, units and coordinates, by the same rules as `open_dataset`.
 #[pyfunction]
 #[pyo3(signature = (obj, *, mask_and_scale=true, decode_times=true, decode_units=true,
-    decode_coords=true, concat_characters=true))]
+    decode_coords=None, concat_characters=true))]
 #[allow(clippy::fn_params_excessive_bools)]
 pub(crate) fn decode_cf(
     py: Python<'_>,
@@ -2601,14 +2730,14 @@ pub(crate) fn decode_cf(
     mask_and_scale: bool,
     decode_times: bool,
     decode_units: bool,
-    decode_coords: bool,
+    decode_coords: Option<&Bound<'_, PyAny>>,
     concat_characters: bool,
 ) -> PyResult<Py<PyDataset>> {
     let mut d = DecodeOptions::default();
     d.mask_and_scale = mask_and_scale;
     d.decode_times = decode_times;
     d.decode_units = decode_units;
-    d.decode_coords = decode_coords;
+    (d.decode_coords, d.decode_coords_all) = coords_option(decode_coords)?;
     d.concat_characters = concat_characters;
     let ds = obj.borrow();
     let ds = &ds.inner;

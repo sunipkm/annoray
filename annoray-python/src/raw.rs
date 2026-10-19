@@ -354,8 +354,29 @@ pub(crate) fn encoding_to_py<'py>(
     enc: &annoray::Encoding,
 ) -> PyResult<Bound<'py, PyDict>> {
     let d = PyDict::new(py);
-    if let Some(t) = enc.dtype {
+    if enc.float16 {
+        d.set_item("dtype", "float16")?;
+    } else if let (Some(t), Some(e)) = (enc.dtype, &enc.enumeration) {
+        // An enumeration, as xarray keeps it: in the dtype's metadata.
+        let members = PyDict::new(py);
+        for (n, v) in &e.members {
+            members.set_item(n, v)?;
+        }
+        let meta = PyDict::new(py);
+        meta.set_item("enum", members)?;
+        meta.set_item("enum_name", e.name.as_deref())?;
+        let kw = PyDict::new(py);
+        kw.set_item("metadata", meta)?;
+        let dtype = py
+            .import("numpy")?
+            .getattr("dtype")?
+            .call((numpy_dtype(t, false),), Some(&kw))?;
+        d.set_item("dtype", dtype)?;
+    } else if let Some(t) = enc.dtype {
         d.set_item("dtype", numpy_dtype(t, enc.char_dim.is_some()))?;
+    }
+    for (key, value) in &enc.cf_related {
+        d.set_item(key, value)?;
     }
     for (key, slot) in [
         ("_FillValue", &enc.fill_value),
@@ -393,17 +414,168 @@ pub(crate) fn encoding_to_py<'py>(
         d.set_item("compression", compression_name(c))?;
         match c {
             Compression::Zstd { level } => d.set_item("complevel", level)?,
-            Compression::Blosc { level, .. } => d.set_item("complevel", level)?,
+            Compression::Blosc { level, shuffle, .. } => {
+                d.set_item("complevel", level)?;
+                d.set_item(
+                    "blosc_shuffle",
+                    match shuffle {
+                        BloscShuffle::None => 0,
+                        BloscShuffle::Bit => 2,
+                        _ => 1,
+                    },
+                )?;
+            }
             _ => {}
         }
     }
+    if enc.fletcher32 {
+        d.set_item("fletcher32", true)?;
+    }
+    if enc.contiguous {
+        d.set_item("contiguous", true)?;
+    }
+    if enc.big_endian {
+        d.set_item("endian", "big")?;
+    }
+    if enc.no_fill_value {
+        d.set_item("_FillValue", py.None())?;
+    }
+    if let Some(q) = enc.quantize {
+        d.set_item("significant_digits", q.nsd)?;
+        d.set_item("quantize_mode", quantize_mode_name(q.mode))?;
+    }
+    if let Some(l) = enc.least_significant_digit {
+        d.set_item("least_significant_digit", l)?;
+    }
+    if let Some(c) = &enc.ragged {
+        d.set_item("ragged_counts", c.as_str())?;
+    }
     Ok(d)
+}
+
+fn quantize_mode_name(m: annoray::cf::QuantizeMode) -> &'static str {
+    match m {
+        annoray::cf::QuantizeMode::GranularBitRound => "GranularBitRound",
+        annoray::cf::QuantizeMode::BitRound => "BitRound",
+        _ => "BitGroom",
+    }
+}
+
+/// Encoding keys (xarray's, netCDF4-python names) a netCDF write understands.
+pub(crate) const NETCDF_ENCODING_KEYS: &[&str] = &[
+    "dtype",
+    "_FillValue",
+    "missing_value",
+    "scale_factor",
+    "add_offset",
+    "units",
+    "calendar",
+    "_Unsigned",
+    "char_dim_name",
+    "chunksizes",
+    "contiguous",
+    "zlib",
+    "complevel",
+    "shuffle",
+    "fletcher32",
+    "compression",
+    "blosc_shuffle",
+    "szip_coding",
+    "szip_pixels_per_block",
+    "endian",
+    "least_significant_digit",
+    "significant_digits",
+    "quantize_mode",
+    // annoray: write this CF ragged array's values as a variable-length variable, with the
+    // lengths in the named count variable.
+    "ragged_counts",
+    // CF attributes naming other variables, moved to the encoding by
+    // `decode_coords="all"` (written back as attributes).
+    "bounds",
+    "grid_mapping",
+    "climatology",
+    "geometry",
+    "node_coordinates",
+    "node_count",
+    "part_node_count",
+    "interior_ring",
+    "cell_measures",
+    "formula_terms",
+];
+
+/// Refuse keys of an explicit `encoding=` that are unknown, or that `format` cannot honour
+/// (as xarray refuses unknown ones; netCDF4-python would silently drop the rest).
+pub(crate) fn check_encoding(
+    var: &str,
+    e: &Bound<'_, PyDict>,
+    valid: &[&str],
+    format: Option<Format>,
+) -> PyResult<()> {
+    let mut unknown: Vec<String> = Vec::new();
+    for k in e.keys() {
+        let k: String = k.extract()?;
+        if !valid.contains(&k.as_str()) {
+            unknown.push(k);
+        }
+    }
+    if !unknown.is_empty() {
+        return Err(value_error(format!(
+            "unexpected encoding parameters for variable {var:?}: {unknown:?}; valid ones are \
+             {valid:?}"
+        )));
+    }
+    let on = |k: &str| -> PyResult<bool> {
+        Ok(match e.get_item(k)? {
+            None => false,
+            Some(v) if v.is_none() => false,
+            Some(v) => v.is_truthy()?,
+        })
+    };
+    if on("contiguous")? {
+        for k in ["zlib", "shuffle", "fletcher32", "compression", "chunksizes"] {
+            if on(k)? {
+                return Err(value_error(format!(
+                    "variable {var:?}: contiguous storage cannot be combined with {k} \
+                     (compression, checksums and chunk shapes need chunked storage)"
+                )));
+            }
+        }
+    }
+    if format.is_some_and(Format::is_netcdf3) {
+        for k in [
+            "zlib",
+            "shuffle",
+            "fletcher32",
+            "compression",
+            "chunksizes",
+            "contiguous",
+            "szip_coding",
+        ] {
+            if on(k)? {
+                return Err(value_error(format!(
+                    "variable {var:?}: {k} needs a netCDF-4 file (netCDF-3 has no chunking, \
+                     compression or checksums)"
+                )));
+            }
+        }
+        if let Some(v) = e.get_item("endian")?
+            && v.extract::<String>().is_ok_and(|s| s == "little")
+        {
+            return Err(value_error(format!(
+                "variable {var:?}: netCDF-3 stores numbers big-endian"
+            )));
+        }
+    }
+    Ok(())
 }
 
 /// Reset the setting under xarray's encoding key `key` to its default.
 pub(crate) fn clear_encoding_key(enc: &mut annoray::Encoding, key: &str) -> PyResult<()> {
     match key {
-        "dtype" => enc.dtype = None,
+        "dtype" => {
+            enc.dtype = None;
+            enc.enumeration = None;
+        }
         "_FillValue" => enc.fill_value = None,
         "missing_value" => enc.missing_value = None,
         "scale_factor" => enc.scale_factor = None,
@@ -416,8 +588,15 @@ pub(crate) fn clear_encoding_key(enc: &mut annoray::Encoding, key: &str) -> PyRe
         "zlib" => enc.deflate = None,
         "shuffle" => enc.shuffle = false,
         "compression" => enc.compression = None,
-        // Read back with the codec it qualifies.
-        "complevel" => {}
+        "fletcher32" => enc.fletcher32 = false,
+        "contiguous" => enc.contiguous = false,
+        "endian" => enc.big_endian = false,
+        "significant_digits" | "quantize_mode" => enc.quantize = None,
+        "least_significant_digit" => enc.least_significant_digit = None,
+        "ragged_counts" => enc.ragged = None,
+        k if annoray::cf::CF_RELATED.contains(&k) => enc.cf_related.retain(|(a, _)| a != k),
+        // Read back with the codec they qualify.
+        "complevel" | "blosc_shuffle" | "szip_coding" | "szip_pixels_per_block" => {}
         other => {
             return Err(value_error(format!("unknown encoding key {other:?}")));
         }
@@ -434,11 +613,77 @@ pub(crate) fn encoding_from_py(e: &Bound<'_, PyDict>) -> PyResult<annoray::Encod
 
 /// Apply the settings in `e` (netCDF4-python names) to `enc`; settings not given are kept.
 pub(crate) fn update_encoding(enc: &mut annoray::Encoding, e: &Bound<'_, PyDict>) -> PyResult<()> {
+    for key in annoray::cf::CF_RELATED {
+        if let Some(v) = e.get_item(key)? {
+            enc.cf_related.retain(|(a, _)| a != key);
+            if !v.is_none() {
+                enc.cf_related.push((key.to_owned(), v.extract()?));
+            }
+        }
+    }
     if let Some(d) = e.get_item("dtype")? {
-        enc.dtype = dtype_from_name(&d.extract::<String>()?);
+        // A name, or a numpy dtype (with an enumeration in its metadata, as xarray has it).
+        let (name, enumeration) = match d.extract::<String>() {
+            Ok(name) => (name, None),
+            Err(_) => {
+                let name: String = d.getattr("name")?.extract()?;
+                let meta = d.getattr("metadata").ok().filter(|m| !m.is_none());
+                let members = meta
+                    .as_ref()
+                    .map(|m| m.get_item("enum"))
+                    .and_then(Result::ok)
+                    .filter(|m| !m.is_none());
+                let enumeration = match members {
+                    Some(m) => {
+                        let mut out = Vec::new();
+                        for item in m.call_method0("items")?.try_iter()? {
+                            let (n, v): (String, i128) = item?.extract()?;
+                            out.push((n, v));
+                        }
+                        let type_name = meta
+                            .as_ref()
+                            .map(|x| x.get_item("enum_name"))
+                            .and_then(Result::ok)
+                            .filter(|x| !x.is_none())
+                            .map(|x| x.extract::<String>())
+                            .transpose()?;
+                        Some(annoray::io::EnumType {
+                            name: type_name,
+                            members: out,
+                        })
+                    }
+                    None => None,
+                };
+                (name, enumeration)
+            }
+        };
+        if enumeration.is_some() && !name.contains("int") {
+            return Err(value_error(format!(
+                "an enumeration's dtype must be an integer type, not {name}"
+            )));
+        }
+        enc.enumeration = enumeration;
+        // No float16 in memory: the values stay f32/f64 and are stored as halves.
+        enc.float16 = name == "float16";
+        enc.dtype = if enc.float16 {
+            None
+        } else {
+            dtype_from_name(&name)
+        };
+    }
+    // `_FillValue: None` asks for no fill value at all (xarray's meaning).
+    match e.get_item("_FillValue")? {
+        Some(v) if v.is_none() => {
+            enc.fill_value = None;
+            enc.no_fill_value = true;
+        }
+        Some(v) => {
+            enc.fill_value = Some(attr_from_py(&v)?);
+            enc.no_fill_value = false;
+        }
+        None => {}
     }
     for (key, slot) in [
-        ("_FillValue", &mut enc.fill_value),
         ("missing_value", &mut enc.missing_value),
         ("scale_factor", &mut enc.scale_factor),
         ("add_offset", &mut enc.add_offset),
@@ -446,6 +691,76 @@ pub(crate) fn update_encoding(enc: &mut annoray::Encoding, e: &Bound<'_, PyDict>
         if let Some(v) = e.get_item(key)?.filter(|v| !v.is_none()) {
             *slot = Some(attr_from_py(&v)?);
         }
+    }
+    if let Some(f) = e.get_item("fletcher32")? {
+        enc.fletcher32 = f.is_truthy()?;
+    }
+    if let Some(c) = e.get_item("contiguous")? {
+        enc.contiguous = c.is_truthy()?;
+    } else {
+        // Asking for chunked storage (compression, checksums, a chunk shape) drops the
+        // contiguous layout a file was read with.
+        for k in ["zlib", "shuffle", "fletcher32", "compression", "chunksizes"] {
+            if e.get_item(k)?
+                .is_some_and(|v| !v.is_none() && v.is_truthy().unwrap_or(false))
+            {
+                enc.contiguous = false;
+            }
+        }
+    }
+    if let Some(x) = e.get_item("endian")?.filter(|v| !v.is_none()) {
+        enc.big_endian = match x.extract::<String>()?.as_str() {
+            "big" => true,
+            "little" => false,
+            "native" => cfg!(target_endian = "big"),
+            other => {
+                return Err(value_error(format!(
+                    "endian must be \"native\", \"little\" or \"big\", not {other:?}"
+                )));
+            }
+        };
+    }
+    if let Some(l) = e
+        .get_item("least_significant_digit")?
+        .filter(|v| !v.is_none())
+    {
+        enc.least_significant_digit = Some(l.extract()?);
+    }
+    if let Some(r) = e.get_item("ragged_counts")? {
+        enc.ragged = if r.is_none() {
+            None
+        } else {
+            Some(r.extract::<String>()?.into())
+        };
+    }
+    let nsd = e
+        .get_item("significant_digits")?
+        .filter(|v| !v.is_none())
+        .map(|v| v.extract::<u8>())
+        .transpose()?;
+    let mode = e.get_item("quantize_mode")?.filter(|v| !v.is_none());
+    if let Some(nsd) = nsd {
+        let mode = match mode.map(|m| m.extract::<String>()).transpose()?.as_deref() {
+            None | Some("BitGroom") => annoray::cf::QuantizeMode::BitGroom,
+            Some("GranularBitRound") => annoray::cf::QuantizeMode::GranularBitRound,
+            Some("BitRound") => annoray::cf::QuantizeMode::BitRound,
+            Some(other) => {
+                return Err(value_error(format!(
+                    "quantize_mode must be \"BitGroom\", \"GranularBitRound\" or \"BitRound\", \
+                     not {other:?}"
+                )));
+            }
+        };
+        let q = annoray::cf::Quantize { mode, nsd };
+        if !q.valid_for(52) {
+            return Err(value_error(format!(
+                "significant_digits={nsd} is out of range for {}",
+                quantize_mode_name(mode)
+            )));
+        }
+        enc.quantize = Some(q);
+    } else if mode.is_some() {
+        return Err(value_error("quantize_mode needs significant_digits"));
     }
     if let Some(u) = e.get_item("units")? {
         enc.time_units = Some(u.extract()?);
@@ -475,11 +790,26 @@ pub(crate) fn update_encoding(enc: &mut annoray::Encoding, e: &Bound<'_, PyDict>
     if let Some(s) = e.get_item("shuffle")? {
         enc.shuffle = s.is_truthy()?;
     }
+    let blosc_shuffle = match e
+        .get_item("blosc_shuffle")?
+        .filter(|v| !v.is_none())
+        .map(|v| v.extract::<u8>())
+        .transpose()?
+    {
+        None | Some(1) => BloscShuffle::Byte,
+        Some(0) => BloscShuffle::None,
+        Some(2) => BloscShuffle::Bit,
+        Some(other) => {
+            return Err(value_error(format!(
+                "blosc_shuffle must be 0 (none), 1 (byte) or 2 (bit), not {other}"
+            )));
+        }
+    };
     if let Some(c) = e.get_item("compression")?.filter(|v| !v.is_none()) {
         let blosc = |codec| Compression::Blosc {
             codec,
             level: level.min(9),
-            shuffle: BloscShuffle::Byte,
+            shuffle: blosc_shuffle,
         };
         match c.extract::<String>()?.as_str() {
             "zlib" => enc.deflate = Some(level),
@@ -515,6 +845,22 @@ pub(crate) fn format_from_name(name: &str) -> PyResult<Format> {
 }
 
 /// Write variables prepared by `annoray.to_netcdf` with annoray's CF encoder and writers.
+/// Validate the explicit `encoding` of variable `var` for a netCDF write in `format`.
+#[pyfunction]
+#[pyo3(name = "_check_encoding")]
+pub(crate) fn check_encoding_py(
+    var: &str,
+    encoding: &Bound<'_, PyDict>,
+    format: &str,
+) -> PyResult<()> {
+    check_encoding(
+        var,
+        encoding,
+        NETCDF_ENCODING_KEYS,
+        Some(format_from_name(format)?),
+    )
+}
+
 #[pyfunction]
 #[pyo3(signature = (path, format, attrs, variables, unlimited_dims))]
 pub(crate) fn write(

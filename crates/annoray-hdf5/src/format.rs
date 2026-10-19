@@ -17,6 +17,12 @@ pub(crate) struct Superblock {
     pub(crate) sizes: Sizes,
     pub(crate) base: u64,
     pub(crate) root: u64,
+    /// Where the end-of-file address is (a physical offset).
+    pub(crate) eof_at: usize,
+    /// Versions 2 and 3: the checksummed bytes (`start`, `len`; the checksum follows).
+    pub(crate) checksummed: Option<(usize, usize)>,
+    /// Half the entries of a chunk B-tree node (`K`; 32 unless version 1 says otherwise).
+    pub(crate) istore_k: u16,
 }
 
 /// Find and parse the superblock (at 0, 512, 1024, 2048, …).
@@ -53,12 +59,17 @@ pub(crate) fn superblock(buf: &[u8]) -> Result<Superblock, Error> {
             c.skip(1)?;
             c.skip(4)?; // group leaf/internal node K
             c.skip(4)?; // file consistency flags
-            if version == 1 {
-                c.skip(4)?; // indexed storage K + reserved
-            }
+            let istore_k = if version == 1 {
+                let k = c.u16()?;
+                c.skip(2)?;
+                k
+            } else {
+                32
+            };
             c.sizes = Sizes { offset, length };
             let base = c.addr()?.unwrap_or(0);
             c.addr()?; // free space info
+            let eof_at = c.pos();
             c.addr()?; // end of file
             c.addr()?; // driver info
             // Root group symbol table entry: link name offset, object header address, ….
@@ -69,6 +80,9 @@ pub(crate) fn superblock(buf: &[u8]) -> Result<Superblock, Error> {
                 sizes: c.sizes,
                 base,
                 root,
+                eof_at,
+                checksummed: None,
+                istore_k,
             }
         }
         2 | 3 => {
@@ -78,13 +92,18 @@ pub(crate) fn superblock(buf: &[u8]) -> Result<Superblock, Error> {
             c.sizes = Sizes { offset, length };
             let base = c.addr()?.unwrap_or(0);
             c.addr()?; // superblock extension
+            let eof_at = c.pos();
             c.addr()?; // end of file
             let root = c.addr()?.ok_or_else(|| bad("no root group"))?;
+            let checksummed = Some((start, c.pos().saturating_sub(start)));
             Superblock {
                 version,
                 sizes: c.sizes,
                 base,
                 root,
+                eof_at,
+                checksummed,
+                istore_k: 32,
             }
         }
         v => return Err(bad(format!("unsupported superblock version {v}"))),
@@ -103,6 +122,19 @@ pub(crate) struct Message {
     /// Creation order, when the object header tracks it (attribute order).
     pub(crate) order: Option<u16>,
     pub(crate) data: Vec<u8>,
+    /// Where the data is in the file.
+    pub(crate) at: u64,
+    /// For version-2 headers: the checksummed region the message is in (`start`, `len`: the
+    /// checksum follows it), to recompute after the message is changed in place.
+    pub(crate) checksummed: Option<(u64, u64)>,
+}
+
+/// Where a block of messages is: its file offset, and for version-2 headers the checksummed
+/// region around it.
+#[derive(Clone, Copy)]
+struct Place {
+    base: u64,
+    checksummed: Option<(u64, u64)>,
 }
 
 pub(crate) mod kind {
@@ -123,6 +155,8 @@ pub(crate) mod kind {
 /// All messages of the object header at `addr`, following continuation blocks.
 pub(crate) fn object_header(file: &File, addr: u64) -> Result<Vec<Message>, Error> {
     let mut c = file.cursor(addr)?;
+    // Positions are physical offsets in the file (the cursor's).
+    let start = c.pos() as u64;
     let mut out = Vec::new();
     let mut pending: Vec<(u64, usize)> = Vec::new();
     let first = c.rest().get(..4).unwrap_or_default();
@@ -143,8 +177,16 @@ pub(crate) fn object_header(file: &File, addr: u64) -> Result<Vec<Message>, Erro
         }
         let size = c.uvar(1usize << (flags & 3))?;
         let size = usize::try_from(size).map_err(|_| bad("object header too large"))?;
+        let base = c.pos() as u64;
         let block = c.bytes(size)?;
-        read_v2_messages(block, file.sizes, flags, &mut out, &mut pending)?;
+        let place = Place {
+            base,
+            checksummed: Some((
+                start,
+                base.saturating_sub(start).saturating_add(size as u64),
+            )),
+        };
+        read_v2_messages(block, place, file.sizes, flags, &mut out, &mut pending)?;
     } else {
         let version = c.u8()?;
         if version != 1 {
@@ -155,8 +197,12 @@ pub(crate) fn object_header(file: &File, addr: u64) -> Result<Vec<Message>, Erro
         c.skip(4)?; // reference count
         let size = usize::try_from(c.u32()?).map_err(|_| bad("object header too large"))?;
         c.skip(4)?; // pad to 8 (header prefix is 16 bytes)
+        let place = Place {
+            base: c.pos() as u64,
+            checksummed: None,
+        };
         let block = c.bytes(size)?;
-        read_v1_messages(block, file.sizes, &mut out, &mut pending)?;
+        read_v1_messages(block, place, file.sizes, &mut out, &mut pending)?;
     }
     // Continuation blocks (bounded, in case of cycles in corrupt files).
     let mut guard = 0u32;
@@ -166,26 +212,38 @@ pub(crate) fn object_header(file: &File, addr: u64) -> Result<Vec<Message>, Erro
             return Err(bad("too many object header continuation blocks"));
         }
         let mut c = file.cursor(addr)?;
+        let start = c.pos() as u64;
         if v2 {
             c.expect(b"OCHK")?;
             // The length covers the signature and the trailing checksum.
-            let body = c.bytes(
-                len.checked_sub(8)
-                    .ok_or_else(|| bad("bad continuation block"))?,
-            )?;
-            read_v2_messages(body, file.sizes, flags, &mut out, &mut pending)?;
+            let body_len = len
+                .checked_sub(8)
+                .ok_or_else(|| bad("bad continuation block"))?;
+            let body = c.bytes(body_len)?;
+            let place = Place {
+                base: start.saturating_add(4),
+                checksummed: Some((start, (body_len as u64).saturating_add(4))),
+            };
+            read_v2_messages(body, place, file.sizes, flags, &mut out, &mut pending)?;
         } else {
-            read_v1_messages(c.bytes(len)?, file.sizes, &mut out, &mut pending)?;
+            let place = Place {
+                base: start,
+                checksummed: None,
+            };
+            read_v1_messages(c.bytes(len)?, place, file.sizes, &mut out, &mut pending)?;
         }
     }
     Ok(out)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn push(
     kind: u16,
     flags: u8,
     order: Option<u16>,
     data: &[u8],
+    at: u64,
+    checksummed: Option<(u64, u64)>,
     out: &mut Vec<Message>,
     pending: &mut Vec<(u64, usize)>,
     sizes: Sizes,
@@ -203,6 +261,8 @@ fn push(
             flags,
             order,
             data: data.to_vec(),
+            at,
+            checksummed,
         });
     }
     Ok(())
@@ -210,6 +270,7 @@ fn push(
 
 fn read_v1_messages(
     block: &[u8],
+    place: Place,
     s: Sizes,
     out: &mut Vec<Message>,
     pending: &mut Vec<(u64, usize)>,
@@ -220,14 +281,16 @@ fn read_v1_messages(
         let size = usize::from(c.u16()?);
         let flags = c.u8()?;
         c.skip(3)?;
+        let at = place.base.saturating_add(c.pos() as u64);
         let data = c.bytes(size)?;
-        push(kind, flags, None, data, out, pending, s)?;
+        push(kind, flags, None, data, at, None, out, pending, s)?;
     }
     Ok(())
 }
 
 fn read_v2_messages(
     block: &[u8],
+    place: Place,
     s: Sizes,
     hflags: u8,
     out: &mut Vec<Message>,
@@ -244,8 +307,19 @@ fn read_v2_messages(
         } else {
             None
         };
+        let at = place.base.saturating_add(c.pos() as u64);
         let data = c.bytes(size)?;
-        push(kind, flags, order, data, out, pending, s)?;
+        push(
+            kind,
+            flags,
+            order,
+            data,
+            at,
+            place.checksummed,
+            out,
+            pending,
+            s,
+        )?;
     }
     Ok(())
 }
@@ -348,6 +422,11 @@ pub(crate) enum Layout {
         addr: Option<u64>,
         chunk: Vec<u64>,
         index: ChunkIndex,
+    },
+    /// A virtual dataset: its mappings are a global heap object.
+    Virtual {
+        heap: u64,
+        index: u32,
     },
 }
 
@@ -457,7 +536,12 @@ pub(crate) fn layout(data: &[u8], s: Sizes) -> Result<Layout, Error> {
                     index,
                 })
             }
-            3 => Err(bad("virtual datasets are not supported")),
+            3 => Ok(Layout::Virtual {
+                heap: c
+                    .addr()?
+                    .ok_or_else(|| bad("virtual dataset without mappings"))?,
+                index: c.u32()?,
+            }),
             k => Err(bad(format!("layout class {k}"))),
         },
         v => Err(bad(format!("layout version {v}"))),
@@ -547,12 +631,30 @@ pub(crate) fn attribute(file: &File, data: &[u8]) -> Result<AttributeMsg, Error>
     })
 }
 
+/// Where a link points.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum Target {
+    /// An object header address.
+    Hard(u64),
+    /// A path in the same file (absolute, or relative to the link's group).
+    Soft(String),
+    /// A path in another file (relative to the linking file's directory).
+    External {
+        /// The file.
+        file: String,
+        /// The object's path in it.
+        path: String,
+    },
+    /// A link type this reader does not know (user-defined links), or a hard link to an
+    /// undefined address.
+    Unknown(u8),
+}
+
 /// A link message.
 #[derive(Debug, Clone)]
 pub(crate) struct Link {
     pub(crate) name: String,
-    /// `None` for soft and external links (not followed).
-    pub(crate) target: Option<u64>,
+    pub(crate) target: Target,
     pub(crate) order: Option<u64>,
 }
 
@@ -575,7 +677,27 @@ pub(crate) fn link(data: &[u8], s: Sizes) -> Result<Link, Error> {
     let n =
         usize::try_from(c.uvar(1usize << (flags & 3))?).map_err(|_| bad("link name too long"))?;
     let name = String::from_utf8_lossy(c.bytes(n)?).into_owned();
-    let target = if ltype == 0 { c.addr()? } else { None };
+    let target = match ltype {
+        0 => c.addr()?.map_or(Target::Unknown(0), Target::Hard),
+        1 => {
+            let len = usize::from(c.u16()?);
+            Target::Soft(String::from_utf8_lossy(c.bytes(len)?).into_owned())
+        }
+        64 => {
+            let len = usize::from(c.u16()?);
+            let value = c.bytes(len)?;
+            // A version/flags byte, then the file name and the object path, NUL-terminated.
+            let mut parts = value
+                .get(1..)
+                .unwrap_or_default()
+                .split(|b| *b == 0)
+                .map(|p| String::from_utf8_lossy(p).into_owned());
+            let file = parts.next().unwrap_or_default();
+            let path = parts.next().unwrap_or_default();
+            Target::External { file, path }
+        }
+        other => Target::Unknown(other),
+    };
     Ok(Link {
         name,
         target,

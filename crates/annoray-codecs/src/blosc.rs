@@ -145,7 +145,7 @@ pub fn blosclz(input: &[u8], want: usize) -> Result<Vec<u8>, Error> {
 }
 
 /// One compressed stream of `want` bytes with the frame's codec.
-fn stream(codec: u8, src: &[u8], want: usize) -> Result<Vec<u8>, Error> {
+pub(crate) fn stream(codec: u8, src: &[u8], want: usize) -> Result<Vec<u8>, Error> {
     let out = match codec {
         0 => blosclz(src, want)?,
         #[cfg(feature = "lz4")]

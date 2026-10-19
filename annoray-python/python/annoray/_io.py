@@ -6,7 +6,7 @@ import os
 import tempfile
 from collections.abc import Callable, Sequence
 from pathlib import Path
-from typing import Any
+from typing import IO, Any, Literal
 
 from annoray._annoray import DataArray, Dataset
 from annoray._annoray import open_dataset as _open_dataset
@@ -39,7 +39,7 @@ def _use_cftime(ds: Dataset) -> Dataset:
 
 
 def open_dataset(
-    filename_or_obj: str | os.PathLike[str],
+    filename_or_obj: str | os.PathLike[str] | bytes | IO[bytes],
     *,
     engine: str | None = None,
     group: str | None = None,
@@ -49,7 +49,7 @@ def open_dataset(
     decode_timedelta: bool | None = None,
     use_cftime: bool | None = None,
     concat_characters: bool | None = None,
-    decode_coords: bool | str | None = None,
+    decode_coords: bool | Literal["coordinates", "all"] | None = None,
     drop_variables: str | Sequence[str] | None = None,
     decode_units: bool = True,
     lazy: bool = True,
@@ -74,7 +74,7 @@ def open_dataset(
         mask_and_scale=flag(mask_and_scale),
         decode_times=flag(decode_times),
         decode_units=decode_units and default,
-        decode_coords=flag(decode_coords),
+        decode_coords=decode_coords if isinstance(decode_coords, str) else flag(decode_coords),
         concat_characters=flag(concat_characters),
         lazy=lazy,
     )

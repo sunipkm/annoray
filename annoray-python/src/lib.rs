@@ -19,6 +19,7 @@ mod forward;
 mod math;
 mod mutate;
 mod native;
+mod nc_writer;
 mod raw;
 mod relations;
 mod reshape;
@@ -40,8 +41,10 @@ static ALLOCATOR: alloc::Allocator = alloc::Allocator;
 fn _annoray(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<raw::RawGroup>()?;
     m.add_function(wrap_pyfunction!(raw::write, m)?)?;
+    m.add_function(wrap_pyfunction!(raw::check_encoding_py, m)?)?;
     m.add_class::<native::PyDataArray>()?;
     m.add_class::<native::PyDataset>()?;
+    m.add_class::<nc_writer::PyNetcdfWriter>()?;
     m.add_class::<native::PyGroupBy>()?;
     m.add_class::<native::PyRolling>()?;
     m.add_class::<rolling_exp::PyRollingExp>()?;

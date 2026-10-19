@@ -2,7 +2,8 @@
 //!
 //! Decoding: deflate, shuffle, fletcher32, N-bit, scale-offset, LZF, bzip2, Blosc (BloscLZ,
 //! LZ4, zlib, Zstandard) and Bitshuffle; with the `zstd` and `lz4` features also Zstandard and
-//! LZ4 on their own and inside Blosc and Bitshuffle. Encoding: deflate, shuffle, fletcher32.
+//! LZ4 on their own and inside Blosc and Bitshuffle. Encoding (in the writer): deflate, shuffle,
+//! fletcher32, Zstandard, LZ4 and Blosc.
 
 use crate::Error;
 
@@ -12,10 +13,15 @@ use crate::format::Filter;
 pub(crate) const DEFLATE: u16 = 1;
 pub(crate) const SHUFFLE: u16 = 2;
 pub(crate) const FLETCHER32: u16 = 3;
+pub(crate) const SZIP: u16 = 4;
 pub(crate) const NBIT: u16 = 5;
 pub(crate) const SCALEOFFSET: u16 = 6;
 pub(crate) const BZIP2: u16 = 307;
 pub(crate) const BLOSC: u16 = 32001;
+pub(crate) const BLOSC2: u16 = 32026;
+pub(crate) const ZFP: u16 = 32013;
+pub(crate) const SZ3: u16 = 32024;
+pub(crate) const SZ: u16 = 32017;
 pub(crate) const BITSHUFFLE: u16 = 32008;
 pub(crate) const LZF: u16 = 32000;
 pub(crate) const LZ4: u16 = 32004;
@@ -65,13 +71,159 @@ pub(crate) fn decode(
             SCALEOFFSET => crate::codecs::scaleoffset::decompress(&data, &f.client, expected)?,
             BZIP2 => annoray_codecs::bzip2::decompress(&data, expected)?,
             BLOSC => annoray_codecs::blosc::decompress(&data, expected)?,
+            BLOSC2 => annoray_codecs::blosc2::decompress_frame(&data, expected)?.0,
+            ZFP => zfp(&data, &f.client, expected)?,
+            SZ3 => sz3(data, &f.client, expected)?,
+            SZ => sz2(&data, &f.client, expected)?,
             BITSHUFFLE => crate::codecs::bitshuffle::decompress(&data, &f.client, expected)?,
             ZSTD => annoray_codecs::zstd::decompress(&data, expected)?,
             LZ4 => lz4_decompress(&data, expected)?,
+            SZIP => crate::codecs::szip::decompress(&data, &f.client, expected)?,
             id => return Err(Error::Unsupported(format!("HDF5 filter {id}"))),
         };
     }
     Ok(data)
+}
+
+/// Apply a dataset's pipeline to one chunk (what [`decode`] undoes), every filter in order.
+/// `esize`: bytes per element.
+///
+/// # Errors
+/// [`Error::Unsupported`] for filters this crate cannot encode (BloscLZ, bzip2, LZF, n-bit,
+/// scale-offset, szip, Bitshuffle and unknown plugins).
+pub(crate) fn encode(
+    pipeline: &[Filter],
+    mut data: Vec<u8>,
+    esize: usize,
+) -> Result<Vec<u8>, Error> {
+    for f in pipeline {
+        let c = |i: usize| f.client.get(i).copied();
+        data = match f.id {
+            DEFLATE => {
+                let level = c(0).and_then(|v| u8::try_from(v).ok()).unwrap_or(6).min(9);
+                annoray_codecs::zlib::zlib_compress(&data, level)
+            }
+            SHUFFLE => shuffle(
+                &data,
+                c(0).and_then(|v| usize::try_from(v).ok()).unwrap_or(esize),
+            ),
+            FLETCHER32 => {
+                let sum = fletcher32(&data);
+                data.extend_from_slice(&sum.to_le_bytes());
+                data
+            }
+            LZ4 => lz4_compress(&data)?,
+            ZSTD if annoray_codecs::zstd::available() => annoray_codecs::zstd::compress(&data),
+            BLOSC => {
+                use crate::{BloscCodec, BloscShuffle};
+                let codec = match c(6) {
+                    Some(1) => BloscCodec::Lz4,
+                    Some(2) => BloscCodec::Lz4Hc,
+                    Some(4) => BloscCodec::Zlib,
+                    Some(5) => BloscCodec::Zstd,
+                    other => {
+                        return Err(Error::Unsupported(format!(
+                            "writing Blosc chunks with compressor {other:?}"
+                        )));
+                    }
+                };
+                let shuffle = match c(5) {
+                    Some(1) => BloscShuffle::Byte,
+                    Some(2) => BloscShuffle::Bit,
+                    _ => BloscShuffle::None,
+                };
+                let typesize = c(2).and_then(|v| usize::try_from(v).ok()).unwrap_or(esize);
+                let level = c(4).and_then(|v| u8::try_from(v).ok()).unwrap_or(5);
+                annoray_codecs::blosc::compress(&data, typesize, codec, level, shuffle)?
+            }
+            id => {
+                return Err(Error::Unsupported(format!(
+                    "writing chunks through HDF5 filter {id}"
+                )));
+            }
+        };
+    }
+    Ok(data)
+}
+
+/// H5Z-ZFP: the client data are a version word, then the ZFP header (field and mode) as
+/// 32-bit words; the chunk is the bare ZFP stream.
+fn zfp(data: &[u8], client: &[u32], limit: usize) -> Result<Vec<u8>, Error> {
+    let header: Vec<u8> = client
+        .get(1..)
+        .ok_or_else(|| bad("zfp: no header in the filter's parameters"))?
+        .iter()
+        .flat_map(|w| w.to_le_bytes())
+        .collect();
+    let h = annoray_codecs::zfp::read_header(&header)?;
+    Ok(annoray_codecs::zfp::decompress(data, &h, limit)?)
+}
+
+/// The HDF5 SZ3 filter: the client data are the rank, the SZ data type and the chunk's
+/// extents; chunks of fewer than 20 values are stored as they are.
+fn sz3(data: Vec<u8>, client: &[u32], limit: usize) -> Result<Vec<u8>, Error> {
+    let c = |i: usize| -> Result<u64, Error> {
+        client
+            .get(i)
+            .copied()
+            .map(u64::from)
+            .ok_or_else(|| bad("sz3: missing filter parameters"))
+    };
+    let rank = c(0)?;
+    let dtype = c(1)?;
+    let n = if rank == 1 {
+        (c(2)? << 32) | c(3)?
+    } else {
+        (2..2usize.saturating_add(usize::try_from(rank.min(5)).unwrap_or(5)))
+            .map(c)
+            .try_fold(1u64, |a, d| d.map(|d| a.saturating_mul(d)))?
+    };
+    if n < 20 {
+        return Ok(data);
+    }
+    Ok(match dtype {
+        0 => annoray_codecs::sz3::decompress::<f32>(&data, limit)?,
+        1 => annoray_codecs::sz3::decompress::<f64>(&data, limit)?,
+        t => {
+            return Err(Error::Unsupported(format!(
+                "SZ3 chunks of integer data (type {t})"
+            )));
+        }
+    })
+}
+
+/// The HDF5 SZ (SZ 2) filter: the client data are the rank, the SZ data type and the chunk's
+/// extents (fastest first; one dimension as two words).
+fn sz2(data: &[u8], client: &[u32], limit: usize) -> Result<Vec<u8>, Error> {
+    let c = |i: usize| -> Result<usize, Error> {
+        client
+            .get(i)
+            .copied()
+            .and_then(|v| usize::try_from(v).ok())
+            .ok_or_else(|| bad("sz: missing filter parameters"))
+    };
+    let rank = c(0)?;
+    let dtype = c(1)?;
+    let mut dims: Vec<usize> = if rank == 1 {
+        let hi = u64::try_from(c(2)?).unwrap_or(0);
+        let lo = u64::try_from(c(3)?).unwrap_or(0);
+        vec![usize::try_from((hi << 32) | lo).map_err(|_| bad("sz: extent"))?]
+    } else {
+        (0..rank.min(5))
+            .map(|k| c(k.saturating_add(2)))
+            .collect::<Result<_, _>>()?
+    };
+    // Fastest first in the parameters; slowest first for the decoder.
+    dims.reverse();
+    Ok(match dtype {
+        0 => annoray_codecs::sz2::decompress::<f32>(data, &dims, limit)?,
+        1 => annoray_codecs::sz2::decompress::<f64>(data, &dims, limit)?,
+        t => {
+            return Err(Error::Unsupported(format!(
+                "SZ chunks of integer data (type {t})"
+            )));
+        }
+    })
 }
 
 /// LZF (liblzf, as h5py writes it), producing at most `limit` bytes.

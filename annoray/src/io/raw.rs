@@ -112,7 +112,7 @@ pub struct RawDim {
 }
 
 /// How a variable's values are stored, beyond its element type.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 #[non_exhaustive]
 pub struct Storage {
     /// Chunk shape, if chunked.
@@ -123,6 +123,43 @@ pub struct Storage {
     pub shuffle: bool,
     /// A compression codec other than deflate.
     pub compression: Option<crate::Compression>,
+    /// Fletcher-32 checksums on chunks.
+    pub fletcher32: bool,
+    /// Numbers stored big-endian.
+    pub big_endian: bool,
+    /// Stored contiguously (when read); asked for contiguous storage (when written).
+    pub contiguous: bool,
+    /// Floats stored as IEEE half precision (`float16`, HDF5 only: netCDF has no such type).
+    pub float16: bool,
+    /// For the values of a ragged array read from (or to be written as) a variable-length
+    /// variable: the CF count variable that holds each element's length.
+    pub ragged: Option<Name>,
+    /// For one field of a compound (record) variable read from netCDF-4/HDF5: which variable
+    /// and member it was, and the record type, so the fields can be written back as one.
+    pub compound: Option<CompoundField>,
+    /// An enumeration type (netCDF-4/HDF5): names for the integer values.
+    pub enumeration: Option<EnumType>,
+}
+
+/// An enumeration type: an integer variable's values with names (netCDF-4's `NC_ENUM`). Its
+/// base type is the variable's on-disk integer type.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EnumType {
+    /// The type's name (netCDF-4 names every user-defined type; plain HDF5 may not).
+    pub name: Option<String>,
+    /// `(name, value)` pairs, in the type's order.
+    pub members: Vec<(String, i128)>,
+}
+
+/// One field of a compound variable (see [`Storage::compound`]).
+#[derive(Debug, Clone, PartialEq)]
+pub struct CompoundField {
+    /// The compound variable.
+    pub parent: Name,
+    /// The member's dotted path in the record (`u`, `wind.u`).
+    pub path: String,
+    /// The record type.
+    pub dtype: Arc<annoray_hdf5::Datatype>,
 }
 
 /// A variable's values: in memory (owned, or borrowed from the dataset being written), or a
