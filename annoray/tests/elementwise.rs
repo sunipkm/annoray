@@ -23,6 +23,22 @@ fn unit(s: &str) -> Unit {
     s.parse().unwrap()
 }
 
+/// `v` in `a`'s unit, as an `isin` label.
+fn label(a: &DataArray, v: f64) -> Label {
+    match a.unit() {
+        Some(u) => Label::Quantity(v, u.clone()),
+        None => Label::Float(v),
+    }
+}
+
+/// `v` in `a`'s unit, as a clip bound.
+fn bound(a: &DataArray, v: f64) -> Option<ClipBound> {
+    Some(match a.unit() {
+        Some(u) => ClipBound::Quantity(v, u.clone()),
+        None => v.into(),
+    })
+}
+
 fn da(v: ndarray::Array1<f64>) -> DataArray {
     DataArray::from_array(["x"], v.into_dyn()).unwrap()
 }
@@ -75,6 +91,13 @@ fn clip_scalars_types_and_units() {
         t.clip(Some(ClipBound::Quantity(1.0, unit("m"))), None)
             .is_err()
     );
+    // Bare numbers beside a unit: only NaN, or 0 for a ratio-scale unit.
+    assert!(t.clip(Some(5.0.into()), None).is_err());
+    assert!(t.clip(Some(0.0.into()), None).is_err()); // °C is not ratio-scale
+    close(&vals(&t.clip(Some(NAN.into()), None).unwrap()), &[NAN; 3]);
+    let m = da(array![-1.0, 2.0]).with_unit(unit("m"));
+    close(&vals(&m.clip(Some(0.0.into()), None).unwrap()), &[0.0, 2.0]);
+    assert!(m.clip(None, Some(1.0.into())).is_err());
 }
 
 #[test]
@@ -123,7 +146,7 @@ fn isin_compares_in_the_data_unit() {
     let a = da(array![1.0, 2.0, NAN, 3.0]).with_unit(unit("m"));
     let got = a
         .isin(&[
-            Label::Float(2.0),
+            Label::quantity(2.0, "m").unwrap(),
             Label::Float(NAN),
             Label::quantity(0.003, "km").unwrap(),
         ])
@@ -131,6 +154,12 @@ fn isin_compares_in_the_data_unit() {
     assert_eq!(got.variable().dtype(), DType::Bool);
     assert_eq!(got.unit(), None);
     close(&vals(&got), &[0.0, 1.0, 0.0, 1.0]);
+    // Bare numbers beside a unit: only NaN, or 0 for a ratio-scale unit.
+    assert!(a.isin(&[Label::Float(2.0)]).is_err());
+    assert!(a.isin(&[Label::Int(2)]).is_err());
+    close(&vals(&a.isin(&[Label::Float(0.0)]).unwrap()), &[0.0; 4]);
+    let c = da(array![0.0, 5.0]).with_unit(unit("degC"));
+    assert!(c.isin(&[Label::Float(0.0)]).is_err());
     assert!(
         da(array![1.0])
             .isin(&[Label::quantity(1.0, "m").unwrap()])
@@ -213,12 +242,12 @@ fn datasets_and_laziness() {
     for (l, e) in [
         (lazy.round(1).unwrap(), eager.round(1).unwrap()),
         (
-            lazy.clip(Some(0.0.into()), Some(10.0.into())).unwrap(),
-            eager.clip(Some(0.0.into()), Some(10.0.into())).unwrap(),
+            lazy.clip(bound(&lazy, 0.0), bound(&lazy, 10.0)).unwrap(),
+            eager.clip(bound(&eager, 0.0), bound(&eager, 10.0)).unwrap(),
         ),
         (
-            lazy.isin(&[Label::Float(0.0)]).unwrap(),
-            eager.isin(&[Label::Float(0.0)]).unwrap(),
+            lazy.isin(&[label(&lazy, 0.0)]).unwrap(),
+            eager.isin(&[label(&eager, 0.0)]).unwrap(),
         ),
     ] {
         assert!(l.variable().is_lazy());

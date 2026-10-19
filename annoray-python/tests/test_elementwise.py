@@ -54,9 +54,19 @@ def test_clip_types_units_arrays():
     got = t.clip(max=ar.Quantity(293.15, "K"))
     np.testing.assert_allclose(got.values, 20.0)
     assert got.unit == ar.Unit("degC")
-    assert t.clip(0.0, keep_attrs=False).attrs == {}
+    assert t.clip(ar.Quantity(0.0, "degC"), keep_attrs=False).attrs == {}
     with pytest.raises(ar.UnitError):
         t.clip(ar.Quantity(1.0, "m"))
+    # Bare numbers beside a unit: refused, except NaN and a ratio-scale 0.
+    with pytest.raises(ar.UnitError):
+        t.clip(5.0)
+    with pytest.raises(ar.UnitError):
+        t.clip(0.0)  # °C is an offset scale: 0 °C is not "zero"
+    k = ar.DataArray([-1.0, 2.0, 400.0], dims="x", units="m")
+    np.testing.assert_allclose(k.clip(0).values, [0.0, 2.0, 400.0])
+    with pytest.raises(ar.UnitError):
+        k.clip(None, 300)
+    np.testing.assert_allclose(k.clip(None, ar.Quantity(0.3, "km")).values, [-1.0, 2.0, 300.0])
 
 
 @pytest.mark.parametrize("decimals", [0, 1, 2, -1])
@@ -79,6 +89,20 @@ def test_isin():
     np.testing.assert_array_equal(a.isin({0.0, NAN}).values, a.isin([0.0, NAN]).values)
     m, _ = pair(v, units="m")
     np.testing.assert_array_equal(m.isin([ar.Quantity(0.002, "km")]).values, v == 2.0)
+    np.testing.assert_array_equal(
+        m.isin(ar.DataArray([0.002, 0.007], dims="y", units="km")).values,
+        (v == 2.0) | (v == 7.0),
+    )
+    # Bare numbers beside a unit: refused, except NaN and a ratio-scale 0.
+    with pytest.raises(ar.UnitError):
+        m.isin([2.0])
+    with pytest.raises(ar.UnitError):
+        m.isin(ar.DataArray([2.0], dims="y"))
+    np.testing.assert_array_equal(m.isin([0.0, NAN]).values, v == 0.0)
+    c = ar.DataArray([0.0, 5.0], dims="x", units="degC")
+    with pytest.raises(ar.UnitError):
+        c.isin([0.0])
+    np.testing.assert_array_equal(c.isin([ar.Quantity(278.15, "K")]).values, [False, True])
     s = ar.DataArray(np.array(["a", "b", "c"]), dims="x")
     xs = xr.DataArray(np.array(["a", "b", "c"]), dims="x")
     same(s.isin(["b", "c"]), xs.isin(["b", "c"]))

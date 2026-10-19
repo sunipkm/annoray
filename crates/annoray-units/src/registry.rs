@@ -3,11 +3,13 @@
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
+use crate::extra::{AMENDMENTS, EXTRA_UNITS};
 use crate::parse::{parse_number, parse_with};
 use crate::table::{PREFIXES, UNITS};
 use crate::{BaseDim, Scale, Unit, UnitError};
 
 /// How a table entry is defined.
+#[derive(Clone, Copy)]
 pub(crate) enum Def {
     /// A base unit.
     Base(BaseDim),
@@ -80,11 +82,11 @@ impl Registry {
         None
     }
 
-    fn insert(&mut self, entry: &UnitEntry, unit: &Unit) {
-        for s in entry.symbols {
+    fn insert(&mut self, entry: &Entry, unit: &Unit) {
+        for s in &entry.symbols {
             self.symbols.entry(s).or_insert_with(|| unit.clone());
         }
-        for n in entry.names {
+        for n in &entry.names {
             self.names
                 .entry(n.to_lowercase())
                 .or_insert_with(|| unit.clone());
@@ -111,7 +113,8 @@ impl Registry {
             .sort_by_key(|(p, _)| std::cmp::Reverse(p.len()));
 
         // Definitions refer to other units in any order: resolve in passes until no progress.
-        let mut pending: Vec<&UnitEntry> = UNITS.iter().collect();
+        let entries = entries();
+        let mut pending: Vec<&Entry> = entries.iter().collect();
         loop {
             let before = pending.len();
             let mut still = Vec::new();
@@ -146,6 +149,70 @@ impl Registry {
         }
         reg
     }
+}
+
+/// A unit as the registry builds it: a UDUNITS entry with its amendments, or an extra unit.
+pub(crate) struct Entry {
+    pub(crate) def: Def,
+    pub(crate) names: Vec<&'static str>,
+    pub(crate) symbols: Vec<&'static str>,
+}
+
+/// The UDUNITS units with [`AMENDMENTS`] applied, then [`EXTRA_UNITS`]. A symbol or name an
+/// amendment or extra unit gives is taken from whichever other unit had it.
+pub(crate) fn entries() -> Vec<Entry> {
+    let lower = |s: &str| s.to_lowercase();
+    let claimed_symbols: Vec<&str> = AMENDMENTS
+        .iter()
+        .flat_map(|a| a.symbols.iter())
+        .chain(EXTRA_UNITS.iter().flat_map(|e| e.symbols.iter()))
+        .copied()
+        .collect();
+    let claimed_names: Vec<String> = AMENDMENTS
+        .iter()
+        .flat_map(|a| a.names.iter())
+        .chain(EXTRA_UNITS.iter().flat_map(|e| e.names.iter()))
+        .map(|n| lower(n))
+        .collect();
+    let mut out: Vec<Entry> = UNITS
+        .iter()
+        .map(|u| {
+            let amendment = AMENDMENTS.iter().find(|a| {
+                u.names.iter().any(|n| lower(n) == lower(a.unit)) || u.symbols.contains(&a.unit)
+            });
+            let mut names: Vec<&'static str> = u
+                .names
+                .iter()
+                .copied()
+                .filter(|n| !claimed_names.contains(&lower(n)))
+                .collect();
+            let mut symbols: Vec<&'static str> = u
+                .symbols
+                .iter()
+                .copied()
+                .filter(|s| !claimed_symbols.contains(s))
+                .collect();
+            let mut def = u.def;
+            if let Some(a) = amendment {
+                names.extend(a.names);
+                symbols.extend(a.symbols);
+                if let Some(d) = a.def {
+                    def = Def::Expr(d);
+                }
+            }
+            Entry {
+                def,
+                names,
+                symbols,
+            }
+        })
+        .collect();
+    out.extend(EXTRA_UNITS.iter().map(|e| Entry {
+        def: e.def,
+        names: e.names.to_vec(),
+        symbols: e.symbols.to_vec(),
+    }));
+    out
 }
 
 /// The process-wide registry.

@@ -427,3 +427,144 @@ fn reciprocal_integer_scales_divide_exactly() {
     assert_eq!(u("km").converter_to(&u("m")).unwrap().apply(0.7), 700.0);
     assert_eq!(m_to_km.factor(), 0.001);
 }
+
+#[test]
+fn every_amendment_names_a_udunits_unit() {
+    for a in crate::extra::AMENDMENTS {
+        let hits = crate::table::UNITS
+            .iter()
+            .filter(|u| {
+                u.names.iter().any(|n| n.eq_ignore_ascii_case(a.unit))
+                    || u.symbols.contains(&a.unit)
+            })
+            .count();
+        assert_eq!(
+            hits, 1,
+            "amendment {:?} matches {hits} UDUNITS units",
+            a.unit
+        );
+    }
+}
+
+#[test]
+fn cgs_units_and_their_prefixes() {
+    // Symbols take SI prefixes.
+    for (a, b) in [
+        ("G", "1e-4 T"),
+        ("kG", "0.1 T"),
+        ("mG", "1e-7 T"),
+        ("uG", "1e-10 T"),
+        ("dyn", "1e-5 N"),
+        ("kdyn", "1e-2 N"),
+        ("erg", "1e-7 J"),
+        ("Mx", "1e-8 Wb"),
+        ("P", "0.1 Pa s"),
+        ("cP", "1e-3 Pa s"),
+        ("St", "1e-4 m2/s"),
+        ("cSt", "1e-6 m2/s"),
+        ("Ba", "0.1 Pa"),
+        ("Gal", "0.01 m/s2"),
+        ("mGal", "1e-5 m/s2"),
+        ("abA", "10 A"),
+        ("abC", "10 C"),
+        ("abV", "1e-8 V"),
+        ("Jy", "1e-26 W m-2 Hz-1"),
+        ("mJy", "1e-29 W m-2 Hz-1"),
+        ("g cm-3", "1000 kg m-3"),
+        ("erg s-1 cm-2", "1e-3 W m-2"),
+    ] {
+        assert_eq!(
+            u(a).converter_to(&u(b)).unwrap().exact_factor(),
+            Some(Rational::from_int(1)),
+            "{a} = {b}"
+        );
+    }
+    // Gaussian electrostatic units, exact through c.
+    let c: i128 = 299_792_458;
+    assert_eq!(
+        u("C").converter_to(&u("statC")).unwrap().exact_factor(),
+        Some(Rational::from_int(10 * c))
+    );
+    assert_eq!(u("Fr"), u("statC"));
+    assert_eq!(u("esu"), u("statC"));
+    assert_eq!(
+        u("statV").converter_to(&u("V")).unwrap().exact_factor(),
+        Some(Rational::new(c, 1_000_000).unwrap())
+    );
+    assert_eq!(u("statA"), u("statC/s"));
+    assert!(close(factor("statohm", "ohm"), 8.987_551_787_368_176e11));
+    assert!(close(factor("statF", "F"), 1.112_650_056_053_618_4e-12));
+    // Oersted: 1000/4π A/m.
+    assert!(close(
+        factor("Oe", "A/m"),
+        1000.0 / (4.0 * std::f64::consts::PI)
+    ));
+}
+
+#[test]
+fn us_customary_and_imperial_units_are_exact() {
+    let exact = |a: &str, b: &str| u(a).converter_to(&u(b)).unwrap().exact_factor();
+    let r = |n: i128, d: i128| Some(Rational::new(n, d).unwrap());
+    assert_eq!(exact("gallon", "in3"), r(231, 1));
+    assert_eq!(exact("US_gallon", "L"), r(3_785_411_784, 1_000_000_000));
+    assert_eq!(exact("qt", "gallon"), r(1, 4));
+    assert_eq!(exact("pt", "gallon"), r(1, 8));
+    assert_eq!(exact("fl_oz", "gallon"), r(1, 128));
+    assert_eq!(exact("UK_gallon", "L"), r(454_609, 100_000));
+    assert_eq!(exact("imperial_pint", "UK_gallon"), r(1, 8));
+    assert_eq!(exact("oz", "g"), r(28_349_523_125, 1_000_000_000));
+    assert_eq!(exact("ounce", "lb"), r(1, 16));
+    assert_eq!(exact("lbm", "kg"), r(45_359_237, 100_000_000));
+    assert_eq!(exact("ozt", "g"), r(311_034_768, 10_000_000));
+    assert_eq!(exact("stone", "lb"), r(14, 1));
+    assert_eq!(exact("long_hundredweight", "lb"), r(112, 1));
+    assert_eq!(exact("nmi", "m"), r(1852, 1));
+    assert_eq!(exact("mph", "km/h"), r(1_609_344, 1_000_000));
+    assert_eq!(exact("kph", "m/s"), r(5, 18));
+    assert_eq!(exact("fathom", "m"), r(18_288, 10_000));
+    assert_eq!(exact("furlong", "mile"), r(1, 8));
+    assert_eq!(exact("chain", "foot"), r(66, 1));
+    assert_eq!(exact("bushel", "in3"), r(215_042, 100));
+    assert!(close(factor("hp", "W"), 745.699_871_582_270_2));
+    assert!(close(factor("ozf", "N"), 0.278_013_850_953_781_2));
+    // The survey foot keeps its own name.
+    assert_eq!(exact("US_survey_foot", "m"), r(1200, 3937));
+}
+
+#[test]
+fn symbols_that_used_to_mean_something_else() {
+    // Not a nano-mile, a milli-phot, a kilo-phot, or (as in UDUNITS) a fluid ounce.
+    assert!(u("nmi").is_convertible(&u("m")), "nmi");
+    assert!(u("mph").is_convertible(&u("m/s")), "mph");
+    assert!(u("kph").is_convertible(&u("m/s")), "kph");
+    assert!(u("oz").is_convertible(&u("kg")), "oz");
+    assert!(u("floz").is_convertible(&u("m3")), "floz");
+    // Kept as UDUNITS (and CF data) have them: `gal` is the galileo, `pt` the US pint.
+    assert_eq!(u("gal"), u("Gal"));
+    assert_eq!(u("mgal"), u("mGal"));
+    assert_eq!(u("pt"), u("US_liquid_pint"));
+    // Unprefixed CGS symbols leave the prefix meanings intact.
+    assert_eq!(u("GHz"), u("1e9 Hz"));
+    assert_eq!(u("PW"), u("1e15 W"));
+    assert_eq!(u("Pa"), u("N/m2"));
+    assert_eq!(u("Gy"), u("J/kg"));
+    assert_eq!(u("Gs"), u("1e9 s"));
+}
+
+#[test]
+fn physical_constants_are_current() {
+    let exact = |a: &str, b: &str| u(a).converter_to(&u(b)).unwrap().exact_factor();
+    let r = |n: i128, d: i128| Some(Rational::new(n, d).unwrap());
+    // 2019 SI: exact.
+    assert_eq!(exact("eV", "1.602176634e-19 J"), r(1, 1));
+    assert_eq!(exact("e", "1.602176634e-19 C"), r(1, 1));
+    assert_eq!(exact("ly", "m"), r(9_460_730_472_580_800, 1));
+    assert_eq!(exact("au", "m"), r(149_597_870_700, 1));
+    assert!(close(factor("pc", "m"), 3.085_677_581_491_367e16));
+    assert!(close(factor("Da", "kg"), 1.660_539_068_92e-27));
+    assert_eq!(u("Da"), u("u"));
+    // The torr is 1/760 atm; the conventional mmHg is not.
+    assert_eq!(exact("760 Torr", "atm"), r(1, 1));
+    assert!(close(factor("mmHg", "Pa"), 133.322_387_415));
+    assert_eq!(exact("kWh", "MJ"), r(18, 5));
+}

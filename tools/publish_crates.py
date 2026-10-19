@@ -114,7 +114,7 @@ def publish(name: str) -> None:
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap = argparse.ArgumentParser(description=(__doc__ or "").split("\n", 1)[0])
     ap.add_argument(
         "--dry-run", action="store_true", help="only list what would be published"
     )

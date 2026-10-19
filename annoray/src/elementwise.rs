@@ -1,14 +1,17 @@
 //! Elementwise operations: `clip`, `round`, `isin`, and the tensor contraction `dot`.
 //!
 //! - `clip(min, max)` is numpy's `minimum(maximum(x, min), max)` (NaN data or bounds give
-//!   NaN; `min > max` gives `max`). Bounds are numbers in the data's unit, quantities in any
-//!   unit of the same kind (converted, absolute temperatures included), or data arrays
-//!   (broadcast and aligned like arithmetic, converted likewise). Scalar bounds keep the
-//!   data's type (`f32`, integers when the bound is whole); attributes and unit are kept.
+//!   NaN; `min > max` gives `max`). Bounds are quantities in any unit of the same kind
+//!   (converted, absolute temperatures included) or data arrays (broadcast and aligned like
+//!   arithmetic, converted likewise). A bare number is a bound only for data without a unit,
+//!   or as NaN, or as 0 beside a ratio-scale or logarithmic unit: the rule of comparisons and
+//!   `where`, so a bound cannot silently be in the wrong unit. Scalar bounds keep the data's
+//!   type (`f32`, integers when the bound is whole); attributes and unit are kept.
 //! - `round(decimals)` is numpy's: half to even, `decimals < 0` rounding to tens, hundreds…
 //!   (integers too, exactly); units and attributes kept.
-//! - `isin(labels)` is a boolean array: numbers compare in the data's unit (a quantity is
-//!   converted first; one against data without a unit is an error), strings, dates and
+//! - `isin(labels)` is a boolean array. Beside data with a unit, numbers are quantities
+//!   (converted into the data's unit first); a bare number only as NaN or a ratio-scale 0, as
+//!   for `clip`. A quantity against data without a unit is an error. Strings, dates and
 //!   durations compare exactly; labels of another kind match nothing. The result has no unit;
 //!   attributes are kept, as xarray.
 //! - `dot` multiplies (units multiply) and sums over the dimensions shared by more than one
@@ -21,13 +24,14 @@ use crate::{
     BinOp, CoreError, DType, DataArray, DataArrayBase, Dataset, DatasetBase, Label, NaT, Name,
     ReduceOptions, Reduction, Repr, Result, TypedArray, Variable, VariableBase,
 };
-use annoray_units::{Unit, UnitPolicy};
+use annoray_units::{Unit, UnitKind, UnitPolicy};
 
 /// A bound of [`clip`](DataArrayBase::clip).
 #[derive(Debug, Clone)]
 #[non_exhaustive]
 pub enum ClipBound {
-    /// A number in the data's unit.
+    /// A bare number: for data without a unit, or NaN, or 0 beside a ratio-scale or
+    /// logarithmic unit.
     Value(f64),
     /// A number in another unit of the same kind (converted).
     Quantity(f64, Unit),
@@ -81,7 +85,18 @@ fn bound_array<S: Repr>(da: &DataArrayBase<S>, b: &ClipBound) -> Result<DataArra
         Ok(DataArray::new(var))
     };
     match b {
-        ClipBound::Value(v) => scalar(*v, da.unit().cloned()),
+        ClipBound::Value(v) => match da.unit() {
+            Some(u)
+                if !(v.is_nan()
+                    || (*v == 0.0 && matches!(u.kind(), UnitKind::Linear | UnitKind::Log(_)))) =>
+            {
+                Err(CoreError::Unit(annoray_units::UnitError::Incompatible {
+                    lhs: u.to_string(),
+                    rhs: Unit::one().to_string(),
+                }))
+            }
+            u => scalar(*v, u.cloned()),
+        },
         ClipBound::Quantity(v, u) => {
             // Converted here so that the bound can keep the data's type.
             match da.unit() {
@@ -164,11 +179,26 @@ struct Wanted {
 
 fn wanted(labels: &[Label], unit: Option<&Unit>) -> Result<Wanted> {
     let mut w = Wanted::default();
+    // A bare number beside a unit: only NaN, or 0 for a ratio-scale or logarithmic unit.
+    let bare = |v: f64| -> Result<f64> {
+        match unit {
+            Some(u)
+                if !(v.is_nan()
+                    || (v == 0.0 && matches!(u.kind(), UnitKind::Linear | UnitKind::Log(_)))) =>
+            {
+                Err(CoreError::Unit(annoray_units::UnitError::Incompatible {
+                    lhs: u.to_string(),
+                    rhs: Unit::one().to_string(),
+                }))
+            }
+            _ => Ok(v),
+        }
+    };
     for l in labels {
         #[allow(clippy::cast_precision_loss)]
         match l {
-            Label::Int(v) => w.numbers.push(*v as f64),
-            Label::Float(v) => w.numbers.push(*v),
+            Label::Int(v) => w.numbers.push(bare(*v as f64)?),
+            Label::Float(v) => w.numbers.push(bare(*v)?),
             Label::Quantity(v, u) => {
                 let to = unit.ok_or_else(|| {
                     CoreError::InvalidReduction(format!(
@@ -256,8 +286,8 @@ impl<S: Repr> DataArrayBase<S> {
     /// neither bound the data is returned unchanged.
     ///
     /// # Errors
-    /// Unit errors (a bound of another kind, a bare-number array bound against data with a
-    /// unit); alignment errors for array bounds; [`CoreError::UnsupportedDType`] for
+    /// Unit errors (a bound of another kind; a bare number, or bare-number array, against data
+    /// with a unit, unless NaN or a ratio-scale 0); alignment errors for array bounds; [`CoreError::UnsupportedDType`] for
     /// non-numeric data.
     pub fn clip(&self, min: Option<ClipBound>, max: Option<ClipBound>) -> Result<DataArray> {
         let mut out = self.to_owned();

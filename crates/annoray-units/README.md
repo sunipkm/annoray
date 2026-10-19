@@ -7,6 +7,11 @@ Runtime and compile-time physical units with exact scales; the units layer of
   prefixes and minute/hour/day/degree factors are exact and unit equality is tolerance-free.
 - **Grammar:** UDUNITS-2/CF syntax backed by the complete UDUNITS-2 database, plus UCUM-style
   `kg.m2/s2`.
+- **Unit systems:** SI, CGS (`dyn`, `erg`, `G`, `Mx`, `P`, `St`, `Gal`, `statC`, …; symbols take
+  SI prefixes: `kG`, `cP`, `mGal`) and US customary/imperial (`ft`, `lb`, `oz`, `gallon`,
+  `UK_gallon`, `psi`, `mph`, `nmi`, …). Customary units and physical constants use their legal
+  or 2019-SI definitions (a US gallon is 231 in³, the electronvolt 1.602176634e-19 J) where the
+  UDUNITS database rounds or predates them.
 - **Non-multiplicative units:** affine (°C), epoch (`days since 1970-01-01`) and logarithmic
   (dB) units.
 - **Calendars:** all CF calendars (`noleap`, `360_day`, …) via `CfDate`, interconvertible with

@@ -52,6 +52,13 @@ xarray-differences
 
 ```{toctree}
 :hidden:
+:caption: User guide
+
+user-guide/index
+```
+
+```{toctree}
+:hidden:
 :caption: Reference
 
 api/index

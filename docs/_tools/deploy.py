@@ -87,7 +87,7 @@ def redirect(target: str) -> str:
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap = argparse.ArgumentParser(description=(__doc__ or "").split("\n", 1)[0])
     ap.add_argument(
         "--site", type=Path, required=True, help="checkout of the gh-pages branch"
     )

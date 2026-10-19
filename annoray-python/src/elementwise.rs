@@ -31,6 +31,24 @@ fn bound(v: Option<&Bound<'_, PyAny>>) -> PyResult<Option<ClipBound>> {
 
 /// Test elements: one label, any iterable of them, or a `DataArray`/array of them.
 fn element_labels(v: &Bound<'_, PyAny>) -> PyResult<Vec<Label>> {
+    // A data array's elements are quantities in its unit.
+    if let Ok(da) = v.cast::<PyDataArray>()
+        && let Some(u) = da.borrow().inner.unit().cloned()
+    {
+        let values: Vec<f64> = da
+            .borrow()
+            .inner
+            .variable()
+            .to_f64()
+            .py_err()?
+            .iter()
+            .copied()
+            .collect();
+        return Ok(values
+            .into_iter()
+            .map(|x| Label::Quantity(x, u.clone()))
+            .collect());
+    }
     let v = match v.cast::<PyDataArray>() {
         Ok(_) => v.getattr("values")?,
         Err(_) => v.clone(),
@@ -92,8 +110,10 @@ fn run_dot(
 
 #[pymethods]
 impl PyDataArray {
-    /// Limit the values to `[min, max]`: numbers in the data's unit, quantities (converted,
-    /// °C ↔ K included) or DataArrays (broadcast and aligned). NaN stays NaN.
+    /// Limit the values to `[min, max]`: quantities (converted, °C ↔ K included) or
+    /// DataArrays (broadcast and aligned). A bare number bounds data without a unit; beside a
+    /// unit it may only be NaN, or 0 for a ratio-scale unit (`da.clip(0)` on metres), as in
+    /// comparisons. NaN stays NaN.
     #[pyo3(signature = (min=None, max=None, keep_attrs=None))]
     fn clip(
         &self,
@@ -121,8 +141,10 @@ impl PyDataArray {
         self.round(py, ndigits.unwrap_or(0))
     }
 
-    /// Whether each value is one of `test_elements` (numbers in the data's unit or
-    /// quantities, strings, dates, durations).
+    /// Whether each value is one of `test_elements`: quantities (converted into the data's
+    /// unit), a DataArray (its values in its own unit), strings, dates or durations. Beside
+    /// data with a unit, a bare number may only be NaN, or 0 for a ratio-scale unit, as for
+    /// comparisons and `clip`.
     fn isin(&self, py: Python<'_>, test_elements: &Bound<'_, PyAny>) -> PyResult<Py<PyDataArray>> {
         let labels = element_labels(test_elements)?;
         new_da(py, py.detach(|| self.inner.isin(&labels)).py_err()?)

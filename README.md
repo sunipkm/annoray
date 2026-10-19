@@ -18,8 +18,9 @@ no C dependencies.
   (`ds["v"] = ...`, coordinates, `attrs`, `encoding`) are assignable, validated before
   anything changes.
 - **Units in the type system of the data:** binary operations check dimensional consistency
-  and propagate units; conversions use exact prime-factorised scales; affine (°C) and epoch
-  units are handled; CF `units` attributes are decoded into units on open.
+  and propagate units; conversions use exact prime-factorised scales; SI, CGS and US
+  customary/imperial units; affine (°C) and epoch units are handled; CF `units` attributes are
+  decoded into units on open.
 - **Out-of-core evaluation:** lazy, memory-mapped open; elementwise operations compose into
   lazy sources and reductions stream chunk-aligned slabs (single-pass moments) within a
   configurable memory budget, including disk-to-disk pipelines.

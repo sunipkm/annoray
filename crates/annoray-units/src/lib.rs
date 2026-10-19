@@ -41,6 +41,7 @@ mod ck;
 mod dimension;
 pub mod dims;
 mod error;
+mod extra;
 mod parse;
 mod quantity;
 mod registry;

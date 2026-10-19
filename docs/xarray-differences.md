@@ -62,7 +62,7 @@ attribute is decoded into it when a file is opened.
 - **Bare numbers next to unitful data.**
   - A bare number is accepted only as `0` (for ratio-scale and logarithmic units) or NaN.
   - Any other value must be given as a `Quantity`. This applies to comparisons, `where`,
-    `fillna`, `put` and `query`. For example, `da > 280` on kelvin data raises `UnitError`;
+    `fillna`, `clip`, `isin`, `put` and `query`. For example, `da > 280` on kelvin data raises `UnitError`;
     `da > ar.Quantity(280, "K")` works.
   - *xarray:* compares the stored numbers, whatever the unit.
 - **Affine and logarithmic units.**
