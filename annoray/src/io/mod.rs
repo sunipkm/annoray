@@ -22,6 +22,7 @@ pub mod netcdf4;
 #[cfg(feature = "netcdf-c")]
 pub mod netcdf_c;
 mod raw;
+mod replace;
 pub mod zarr;
 
 pub use raw::{

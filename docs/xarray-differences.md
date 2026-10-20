@@ -207,6 +207,11 @@ attribute is decoded into it when a file is opened.
 
 ## I/O and encoding
 
+- **Writing over an open file replaces it.** The new file is written beside the old one and
+  renamed over it, so datasets still open on the old file keep reading it, and a dataset can
+  be written back to the file it was opened from.
+  - *xarray:* writing over a file that a dataset still has open fails (HDF5 will not truncate
+    an open file); the dataset has to be loaded and closed first.
 - **Pure-Rust backends:** netCDF-3 (CDF-1/2/5), netCDF-4/HDF5 and Zarr v2/v3 are read and
   written without the C libraries. `engine` accepts only these formats, and unknown keywords
   are errors.

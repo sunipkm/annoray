@@ -63,6 +63,22 @@ opened = ar.open_dataset(tmp / "cf.nc", decode_coords="all")
 print(sorted(opened.coords), opened["v"].encoding["grid_mapping"])
 ```
 
+### Writing over an open file
+
+Files are opened by mapping them into memory, so a dataset reads from its file for as long as
+it is open. Writing to a path that already holds a file (with `to_netcdf`, or
+`NetcdfWriter.create`) therefore never truncates it: the new file is written beside it and
+renamed over it once complete. Datasets opened from the old file keep reading the old data,
+a dataset can be written back to the file it was opened from, and a failed write leaves the
+old file as it was. A file reached through a symbolic link is replaced where the link points,
+and keeps its permissions.
+
+```{code-cell} python
+ds = ar.open_dataset(tmp / "small.nc")
+ds.assign(t2=ds["t"] * 2.0).to_netcdf(tmp / "small.nc")  # back over its own file
+print(list(ds.data_vars), list(ar.open_dataset(tmp / "small.nc").data_vars))
+```
+
 ## What is read from netCDF-4 and HDF5
 
 | In the file | In annoray |

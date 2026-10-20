@@ -233,12 +233,11 @@ impl Backend for Netcdf3 {
 
     /// Writes straight to the file, reading lazy variables a slab at a time.
     fn write(&self, ds: &RawDataset, path: &Path, opts: &WriteOptions) -> Result<()> {
-        let err = |e: std::io::Error| bad(format!("{}: {e}", path.display()));
-        let file = std::fs::File::create(path).map_err(err)?;
-        let mut out = std::io::BufWriter::new(file);
-        write::write_to(ds, opts.format, &mut out)?;
-        // Flushed to the operating system, not synced to disk: as netCDF-C's `nc_close`.
-        out.into_inner().map_err(|e| err(e.into_error()))?;
-        Ok(())
+        // A new file beside the old one, renamed over it: datasets still reading the old one
+        // (this one, written back to its own file, included) keep it.
+        crate::io::replace::write_replacing(path, NAME, |out| {
+            write::write_to(ds, opts.format, out)?;
+            Ok(())
+        })
     }
 }

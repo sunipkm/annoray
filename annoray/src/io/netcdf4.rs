@@ -1573,11 +1573,10 @@ pub(crate) fn write_deferred(
             w.skip_data = true;
         }
     }
-    let file = std::fs::File::create(path).map_err(|e| bad(format!("{}: {e}", path.display())))?;
-    let mut out = std::io::BufWriter::new(file);
-    annoray_hdf5::write_to(&root, &mut out)?;
-    std::io::Write::flush(&mut out).map_err(|e| bad(format!("{}: {e}", path.display())))?;
-    Ok(())
+    super::replace::write_replacing(path, NAME, |out| {
+        annoray_hdf5::write_to(&root, out)?;
+        Ok(())
+    })
 }
 
 /// `ds` with its loaded, non-empty numeric arrays behind in-memory sources (recursively).
@@ -1625,13 +1624,11 @@ impl Backend for Netcdf4 {
     /// Writes straight to the file, reading lazy variables slice by slice.
     fn write(&self, ds: &RawDataset, path: &Path, opts: &WriteOptions) -> Result<()> {
         let root = build_root(ds, opts)?;
-        let file =
-            std::fs::File::create(path).map_err(|e| bad(format!("{}: {e}", path.display())))?;
-        let mut out = std::io::BufWriter::new(file);
-        annoray_hdf5::write_to(&root, &mut out)?;
-        // Flushed to the operating system, not synced to disk: as netCDF-C's `nc_close`.
-        out.into_inner()
-            .map_err(|e| bad(format!("{}: {e}", path.display())))?;
-        Ok(())
+        // A new file beside the old one, renamed over it: datasets still reading the old one
+        // (this one, written back to its own file, included) keep it.
+        super::replace::write_replacing(path, NAME, |out| {
+            annoray_hdf5::write_to(&root, out)?;
+            Ok(())
+        })
     }
 }
