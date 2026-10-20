@@ -33,5 +33,9 @@ sphinx-build -b html -W --keep-going -d docs/_build/doctrees docs docs/_build/ht
   reference pages) are executed at build time: their output is real, and an example that
   raises fails the build. Each API section opens with an example of its core operations;
   a new section gets one too.
+- Versions are never written into the pages by hand: `@RUST_VERSION@`, `@PYTHON_VERSION@` and
+  `@CRATE_VERSION@` are filled in when the pages are read (see `conf.py`), from `Cargo.toml`,
+  `annoray-python/pyproject.toml` and the release being built (`DOCS_VERSION`, or the newest
+  release tag for `dev`).
 - `_tools/deploy.py`: places a build in a checkout of `gh-pages` and rebuilds the version
   switcher (`switcher.json`).

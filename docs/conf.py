@@ -7,14 +7,23 @@ Build locally (after ``maturin develop`` in ``annoray-python``)::
 
 ``DOCS_VERSION`` names the version being built (``dev`` or ``X.Y``); the deploy workflow
 sets it so the version switcher marks the current page's version.
+
+Versions on the pages are filled in when they are read, so they never go stale: ``@RUST_VERSION@``
+(``rust-version`` in the workspace ``Cargo.toml``), ``@PYTHON_VERSION@`` (``requires-python`` in
+``annoray-python/pyproject.toml``) and ``@CRATE_VERSION@`` (the requirement that installs the
+release being documented: ``X.Y`` for ``X.Y.Z``, the exact version for a pre-release, and for
+``dev`` the newest release tag). They are replaced everywhere, code blocks included.
 """
 
 from __future__ import annotations
 
 import json
 import os
+import re
+import subprocess
 import sys
 import tempfile
+import tomllib
 from pathlib import Path
 
 import annoray
@@ -25,7 +34,57 @@ project = "annoray"
 author = "Sunip K. Mukherjee"
 copyright = "2026, Sunip K. Mukherjee"
 release = annoray.__version__
-version = os.environ.get("DOCS_VERSION", "dev")
+version = os.environ.get("DOCS_VERSION") or "dev"
+
+# ----- versions on the pages -----
+
+_ROOT = Path(__file__).resolve().parent.parent
+
+
+def _crate_requirement(v: str) -> str:
+    """What a `Cargo.toml` asks for to get release `v`: `X.Y` for `X.Y.Z`, the exact version
+    for `X.Y.Z-preN` (Cargo skips pre-releases otherwise)."""
+    m = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)(-pre\d+)?", v)
+    if m is None:
+        raise ValueError(f"not a release version: {v!r}")
+    return v if m.group(4) else f"{m.group(1)}.{m.group(2)}"
+
+
+def _newest_release() -> str:
+    """The newest release tag reachable from HEAD, without its `v`."""
+    try:
+        tag = subprocess.run(
+            ["git", "describe", "--tags", "--abbrev=0", "--match", "v[0-9]*"],
+            cwd=_ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+    except (OSError, subprocess.CalledProcessError) as e:
+        raise RuntimeError(
+            "the dev documentation names the newest release, but no release tag is reachable "
+            "(fetch them with `git fetch --tags`, or set DOCS_VERSION=X.Y.Z)"
+        ) from e
+    return tag.removeprefix("v")
+
+
+_workspace = tomllib.loads((_ROOT / "Cargo.toml").read_text())["workspace"]["package"]
+_pyproject = tomllib.loads((_ROOT / "annoray-python" / "pyproject.toml").read_text())
+PAGE_VERSIONS = {
+    "@RUST_VERSION@": _workspace["rust-version"],
+    "@PYTHON_VERSION@": _pyproject["project"]["requires-python"].removeprefix(">="),
+    "@CRATE_VERSION@": _crate_requirement(version if version != "dev" else _newest_release()),
+}
+
+
+def _fill_versions(app, docname, source):
+    for marker, value in PAGE_VERSIONS.items():
+        source[0] = source[0].replace(marker, value)
+
+
+def setup(app):
+    app.connect("source-read", _fill_versions)
+
 
 extensions = [
     "myst_nb",

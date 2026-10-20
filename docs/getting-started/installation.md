@@ -6,7 +6,7 @@
 pip install annoray
 ```
 
-Wheels use CPython's stable ABI: one per platform covers CPython 3.11 and later on Linux,
+Wheels use CPython's stable ABI: one per platform covers CPython @PYTHON_VERSION@ and later on Linux,
 macOS and Windows. The dependencies are NumPy and matplotlib (imported only for plotting).
 `import annoray` loads neither xarray nor pandas.
 
@@ -19,7 +19,7 @@ Optional extras:
 | `annoray[cftime]` | Dates in non-standard CF calendars (`noleap`, `360_day`, …) as cftime objects. |
 | `annoray[whenever]` | `.dt.to_whenever()`, giving date-times as whenever objects. whenever's date-times are accepted as input without it. |
 
-Building from source needs a Rust toolchain (1.97 or later) and
+Building from source needs a Rust toolchain (@RUST_VERSION@ or later) and
 [maturin](https://www.maturin.rs):
 
 ```sh
@@ -33,7 +33,7 @@ maturin develop --release
 
 ```toml
 [dependencies]
-annoray = "0.1"
+annoray = "@CRATE_VERSION@"
 ```
 
 | Feature | Default | Adds |
