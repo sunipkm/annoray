@@ -6,7 +6,9 @@ name: Release
 # /stable/). The version comes
 # from the tag (tools/version.py). The full CI (ci.yml) and the documentation build (docs.yml)
 # run first; every release job waits for both, so nothing is built or published unless both
-# pass.
+# pass. Nothing is published until everything is built and tested: every wheel (and its tests
+# on the oldest and newest Pythons) and the sdist. Only then do the crates go to crates.io, then
+# the package to PyPI, so a failure anywhere before leaves both registries untouched.
 #
 # Needs: a CARGO_REGISTRY_TOKEN secret, and this workflow registered as a trusted publisher
 # for the `annoray` project on PyPI (environment `pypi`).
@@ -27,8 +29,9 @@ jobs:
     with:
       tag: ${{ github.ref_name }}
 
+  # Only once every distribution is built and tested (see the top).
   crates:
-    needs: [ci, docs]
+    needs: [ci, docs, wheels, test-wheels, sdist]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
