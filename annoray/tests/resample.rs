@@ -1,17 +1,17 @@
 //! resample against Python xarray (`fixtures/resample.txt`, from `fixtures/gen_resample.py`).
 #![allow(clippy::unwrap_used, clippy::indexing_slicing, clippy::panic)]
 
+use annoray::Instant;
 use annoray::units::{Calendar, CfDate};
-use annoray::{DataArray, Dataset, NaT, TypedArray, Variable, View};
-use chrono::NaiveDateTime;
+use annoray::{DataArray, Dataset, TypedArray, Variable, View};
 use ndarray::{Array1, ArrayD, IxDyn, array};
 
-fn dt(s: &str) -> NaiveDateTime {
+fn dt(s: &str) -> Instant {
     s.parse().unwrap()
 }
 
 fn std_series() -> DataArray {
-    let t: Array1<NaiveDateTime> = [
+    let t: Array1<Instant> = [
         "2000-01-01T06:00:00",
         "2000-01-15T00:00:00",
         "2000-01-31T00:00:00",
@@ -74,7 +74,18 @@ fn text(t: &TypedArray<View<'_>>) -> String {
         TypedArray::I64(a) => a.iter().map(|v| format!("{:?}", *v as f64)).collect(),
         TypedArray::DateTime(a) => a
             .iter()
-            .map(|d| d.format("%Y-%m-%dT%H:%M:%S").to_string())
+            .map(|d| {
+                let d = d.to_utc().unwrap();
+                format!(
+                    "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}",
+                    d.year(),
+                    d.month(),
+                    d.day(),
+                    d.hour(),
+                    d.minute(),
+                    d.second()
+                )
+            })
             .collect(),
         TypedArray::CfDate(a) => a
             .iter()
@@ -148,9 +159,9 @@ fn matches_xarray() {
 #[test]
 fn nat_unsorted_and_datasets() {
     // NaT is in no bin; times need not be sorted (xarray requires a monotonic index).
-    let t: Array1<NaiveDateTime> = vec![
+    let t: Array1<Instant> = vec![
         dt("2000-01-03T00:00:00"),
-        NaiveDateTime::NAT,
+        Instant::NAT,
         dt("2000-01-01T12:00:00"),
         dt("2000-01-03T06:00:00"),
     ]
@@ -180,7 +191,7 @@ fn nat_unsorted_and_datasets() {
                 std_series()
                     .coord("time")
                     .unwrap()
-                    .data::<NaiveDateTime>()
+                    .data::<Instant>()
                     .unwrap()
                     .to_owned(),
             )

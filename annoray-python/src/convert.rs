@@ -4,10 +4,10 @@
 use annoray::ndarray::{ArrayD, IxDyn};
 use annoray::units::Calendar;
 use annoray::{
-    AttrValue, CfDate, CoreError, DType, Indexer, Label, LabelIndexer, Method, NaT, Owned,
+    AttrValue, CfDate, CoreError, DType, Indexer, Label, LabelIndexer, Method, Owned,
     PySlice as PySliceIx, TypedArray, Unit,
 };
-use chrono::{NaiveDateTime, TimeDelta};
+use annoray::{Duration, Instant, TimeZone};
 use numpy::{PyArrayDyn, PyArrayMethods};
 use pyo3::exceptions::{PyIndexError, PyKeyError, PyOSError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
@@ -220,27 +220,14 @@ fn ns_array(arr: &Bound<'_, PyAny>, unit: &str) -> PyResult<ArrayD<i64>> {
         .to_owned())
 }
 
-fn datetimes(ns: &ArrayD<i64>) -> ArrayD<NaiveDateTime> {
-    let epoch = chrono::DateTime::UNIX_EPOCH.naive_utc();
-    ns.mapv(|n| {
-        if n == i64::MIN {
-            NaiveDateTime::NAT
-        } else {
-            epoch
-                .checked_add_signed(TimeDelta::nanoseconds(n))
-                .unwrap_or(NaiveDateTime::NAT)
-        }
-    })
+/// numpy's `datetime64[ns]` values (`i64::MIN` is NaT, as in an [`Instant`]).
+fn datetimes(ns: &ArrayD<i64>) -> ArrayD<Instant> {
+    ns.mapv(Instant::from_unix_nanos)
 }
 
-fn timedeltas(ns: &ArrayD<i64>) -> ArrayD<TimeDelta> {
-    ns.mapv(|n| {
-        if n == i64::MIN {
-            TimeDelta::NAT
-        } else {
-            TimeDelta::nanoseconds(n)
-        }
-    })
+/// numpy's `timedelta64[ns]` values (`i64::MIN` is NaT, as in a [`Duration`]).
+fn timedeltas(ns: &ArrayD<i64>) -> ArrayD<Duration> {
+    ns.mapv(Duration::from_nanos)
 }
 
 /// A cftime date (anything with `calendar`, `year`, …, `microsecond`).
@@ -304,8 +291,34 @@ fn objects_from(arr: &Bound<'_, PyAny>) -> PyResult<TypedArray<Owned>> {
 
 /// Any array-like (numpy array, list, scalar) as typed values.
 pub(crate) fn typed_from_py(obj: &Bound<'_, PyAny>) -> PyResult<TypedArray<Owned>> {
+    Ok(typed_zone_from_py(obj)?.0)
+}
+
+/// Any array-like as typed values, with the time zone that times with one share (whenever's
+/// date-times, timezone-aware `datetime`s and pandas times; see `annoray._time`).
+pub(crate) fn typed_zone_from_py(
+    obj: &Bound<'_, PyAny>,
+) -> PyResult<(TypedArray<Owned>, Option<TimeZone>)> {
     let np = numpy(obj.py())?;
-    let mut arr = np.call_method1("asarray", (obj,))?;
+    let plain = obj.is_instance(&np.getattr("ndarray")?)? && dtype_attr(obj, "kind")? != "O";
+    let (arr, zone) = if plain {
+        (obj.clone(), None)
+    } else {
+        let (arr, zone): (Bound<'_, PyAny>, Option<String>) = obj
+            .py()
+            .import("annoray._time")?
+            .getattr("coerce")?
+            .call1((obj,))?
+            .extract()?;
+        let zone = zone.map(|z| z.parse::<TimeZone>()).transpose().py_err()?;
+        (arr, zone)
+    };
+    Ok((typed_of_array(&np, arr)?, zone))
+}
+
+/// The typed values of a numpy array (or anything `numpy.asarray` accepts).
+fn typed_of_array(np: &Bound<'_, PyModule>, obj: Bound<'_, PyAny>) -> PyResult<TypedArray<Owned>> {
+    let mut arr = np.call_method1("asarray", (&obj,))?;
     let kind = dtype_attr(&arr, "kind")?;
     match kind.as_str() {
         "f" | "i" | "u" | "b" => {
@@ -315,7 +328,7 @@ pub(crate) fn typed_from_py(obj: &Bound<'_, PyAny>) -> PyResult<TypedArray<Owned
             }
             let native = arr.getattr("dtype")?.call_method1("newbyteorder", ("=",))?;
             // (Not `ascontiguousarray`: it turns scalars into 1-element arrays.)
-            let kw = PyDict::new(obj.py());
+            let kw = PyDict::new(arr.py());
             kw.set_item("dtype", native)?;
             kw.set_item("order", "C")?;
             arr = np.getattr("asarray")?.call((arr,), Some(&kw))?;
@@ -422,42 +435,8 @@ pub(crate) fn typed_to_py(py: Python<'_>, t: TypedArray<Owned>) -> PyResult<Boun
         TypedArray::U64(a) => np!(a),
         TypedArray::Bool(a) => np!(a),
         TypedArray::Str(a) => text_to_py(py, &a.view()),
-        TypedArray::DateTime(a) => {
-            let mut bad = false;
-            let ns = a.mapv(|d| {
-                if d.is_nat() {
-                    i64::MIN
-                } else {
-                    d.and_utc().timestamp_nanos_opt().unwrap_or_else(|| {
-                        bad = true;
-                        i64::MIN
-                    })
-                }
-            });
-            if bad {
-                return Err(PyValueError::new_err(
-                    "dates outside datetime64[ns] (years 1678–2261); use cftime dates",
-                ));
-            }
-            ns_to_numpy(py, ns, "datetime64[ns]")
-        }
-        TypedArray::TimeDelta(a) => {
-            let mut bad = false;
-            let ns = a.mapv(|d| {
-                if d.is_nat() {
-                    i64::MIN
-                } else {
-                    d.num_nanoseconds().unwrap_or_else(|| {
-                        bad = true;
-                        i64::MIN
-                    })
-                }
-            });
-            if bad {
-                return Err(PyValueError::new_err("durations outside timedelta64[ns]"));
-            }
-            ns_to_numpy(py, ns, "timedelta64[ns]")
-        }
+        TypedArray::DateTime(a) => ns_to_numpy(py, a.mapv(Instant::unix_nanos), "datetime64[ns]"),
+        TypedArray::TimeDelta(a) => ns_to_numpy(py, a.mapv(Duration::nanos), "timedelta64[ns]"),
         TypedArray::CfDate(a) => {
             let mut objs = Vec::with_capacity(a.len());
             for d in &a {
@@ -510,7 +489,13 @@ pub(crate) fn label_from_py(v: &Bound<'_, PyAny>) -> PyResult<Label> {
         return Ok(Label::CfDate(cfdate_from_py(v)?));
     }
     let np = numpy(v.py())?;
-    let arr = np.call_method1("asarray", (v,))?;
+    // Times with a zone (whenever, aware `datetime`s) as UTC `datetime64[ns]`.
+    let (arr, _zone): (Bound<'_, PyAny>, Option<String>) = v
+        .py()
+        .import("annoray._time")?
+        .getattr("coerce")?
+        .call1((v,))?
+        .extract()?;
     if arr.getattr("ndim")?.extract::<usize>()? != 0 {
         return Err(PyTypeError::new_err("expected a single label"));
     }
@@ -524,7 +509,7 @@ pub(crate) fn label_from_py(v: &Bound<'_, PyAny>) -> PyResult<Label> {
                     .iter()
                     .next()
                     .copied()
-                    .unwrap_or(NaiveDateTime::NAT),
+                    .unwrap_or(Instant::NAT),
             ))
         }
         "m" => {
@@ -534,7 +519,7 @@ pub(crate) fn label_from_py(v: &Bound<'_, PyAny>) -> PyResult<Label> {
                     .iter()
                     .next()
                     .copied()
-                    .unwrap_or(TimeDelta::NAT),
+                    .unwrap_or(Duration::NAT),
             ))
         }
         "O" => {
@@ -546,7 +531,7 @@ pub(crate) fn label_from_py(v: &Bound<'_, PyAny>) -> PyResult<Label> {
                     .iter()
                     .next()
                     .copied()
-                    .unwrap_or(NaiveDateTime::NAT),
+                    .unwrap_or(Instant::NAT),
             ))
         }
         k => Err(PyTypeError::new_err(format!(

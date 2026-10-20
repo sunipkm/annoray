@@ -16,6 +16,8 @@ Optional extras:
 |---|---|
 | `annoray[xarray]` | `to_xarray()` / `from_xarray()`, and an xarray backend (`xr.open_dataset(path, engine="annoray")`). |
 | `annoray[astropy]` | `to_astropy()` / `from_astropy()` on units, quantities and arrays; astropy units accepted wherever units are. |
+| `annoray[cftime]` | Dates in non-standard CF calendars (`noleap`, `360_day`, …) as cftime objects. |
+| `annoray[whenever]` | `.dt.to_whenever()`, giving date-times as whenever objects. whenever's date-times are accepted as input without it. |
 
 Building from source needs a Rust toolchain (1.97 or later) and
 [maturin](https://www.maturin.rs):

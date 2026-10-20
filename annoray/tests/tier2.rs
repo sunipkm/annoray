@@ -144,13 +144,12 @@ fn lazy_data_stays_lazy_and_streams() {
 fn calendar_conversion() {
     use annoray::units::Calendar;
     use annoray::{AlignOn, CalendarOptions, CoreError};
-    let days: Vec<chrono::NaiveDateTime> = (0..366)
+    let days: Vec<annoray::Instant> = (0..366)
         .map(|d| {
-            chrono::NaiveDate::from_ymd_opt(2000, 1, 1)
+            annoray::Instant::from_ymd_hms_nano((2000, 1, 1), (6, 0, 0), 0)
                 .unwrap()
-                .and_hms_opt(6, 0, 0)
+                .checked_add(annoray::Duration::from_days(d).unwrap())
                 .unwrap()
-                + chrono::TimeDelta::days(d)
         })
         .collect();
     let n = days.len();

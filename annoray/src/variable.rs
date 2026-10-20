@@ -6,7 +6,7 @@ use std::fmt;
 use ndarray::{ArrayD, ArrayViewD, ArrayViewMutD, IxDyn};
 use std::sync::Arc;
 
-use annoray_units::Unit;
+use annoray_units::{TimeZone, Unit};
 
 use crate::indexer::{SliceIndices, normalize_index};
 use crate::lazy::{LazyArray, LazyOp};
@@ -23,6 +23,8 @@ pub struct VariableBase<S: Repr> {
     dims: Dims,
     /// Physical unit, if known. Views carry a copy; it is read-only through a `ViewMut`.
     unit: Option<Unit>,
+    /// For date-times, the zone their wall-clock times are in (UTC when `None`).
+    time_zone: Option<TimeZone>,
     /// How the variable is (or will be) stored on disk. Shared cheaply by views.
     encoding: Arc<Encoding>,
     attrs: S::Attrs,
@@ -161,6 +163,7 @@ impl Variable {
             data: Data::Loaded(data),
             dims,
             unit: None,
+            time_zone: None,
             encoding: Arc::default(),
             attrs: Attrs::new(),
         })
@@ -188,6 +191,39 @@ impl Variable {
     /// Replace the unit, returning the old one.
     pub fn set_unit(&mut self, unit: Option<Unit>) -> Option<Unit> {
         std::mem::replace(&mut self.unit, unit)
+    }
+
+    /// Set the time zone of date-time data: the zone its wall-clock times (components,
+    /// resampling bins, display) are in. The instants are unchanged.
+    ///
+    /// # Errors
+    /// [`CoreError::UnsupportedDType`] for data that are not date-times
+    /// ([`DType::DateTime`]).
+    pub fn with_time_zone(mut self, tz: TimeZone) -> Result<Self> {
+        self.set_time_zone(Some(tz))?;
+        Ok(self)
+    }
+
+    /// Replace the time zone of date-time data (`None` is UTC), returning the old one.
+    ///
+    /// # Errors
+    /// [`CoreError::UnsupportedDType`] when setting a zone on data that are not date-times.
+    pub fn set_time_zone(&mut self, tz: Option<TimeZone>) -> Result<Option<TimeZone>> {
+        if tz.is_some() && self.dtype() != DType::DateTime {
+            return Err(CoreError::UnsupportedDType {
+                op: "time zone",
+                dtype: self.dtype(),
+            });
+        }
+        Ok(std::mem::replace(&mut self.time_zone, tz))
+    }
+
+    /// Take `src`'s time zone when both hold date-times: a result computed from date-times
+    /// keeps their zone.
+    pub(crate) fn take_zone_from<S2: Repr>(&mut self, src: &VariableBase<S2>) {
+        if src.dtype() == DType::DateTime && self.dtype() == DType::DateTime {
+            self.time_zone.clone_from(&src.time_zone);
+        }
     }
 
     /// Mutable access to the attributes.
@@ -218,6 +254,7 @@ impl Variable {
             data: Data::Lazy(data),
             dims,
             unit: None,
+            time_zone: None,
             encoding: Arc::default(),
             attrs: Attrs::new(),
         })
@@ -326,6 +363,13 @@ impl<S: Repr> VariableBase<S> {
         self.unit.as_ref()
     }
 
+    /// The time zone of date-time data, if one is set (otherwise their wall-clock times are in
+    /// UTC).
+    #[must_use]
+    pub fn time_zone(&self) -> Option<&TimeZone> {
+        self.time_zone.as_ref()
+    }
+
     /// How the variable is stored on disk (fill values, packing, time units, chunking, …).
     #[must_use]
     pub fn encoding(&self) -> &Encoding {
@@ -397,6 +441,7 @@ impl<S: Repr> VariableBase<S> {
             },
             dims: self.dims.clone(),
             unit: self.unit.clone(),
+            time_zone: self.time_zone.clone(),
             encoding: self.encoding.clone(),
             attrs: self.attrs.borrow(),
         }
@@ -412,6 +457,7 @@ impl<S: Repr> VariableBase<S> {
             },
             dims: self.dims.clone(),
             unit: self.unit.clone(),
+            time_zone: self.time_zone.clone(),
             encoding: self.encoding.clone(),
             attrs: self.attrs().clone(),
         }
@@ -511,6 +557,7 @@ impl<S: Repr> VariableBase<S> {
             data,
             dims,
             unit,
+            time_zone,
             encoding,
             attrs,
         } = self;
@@ -552,6 +599,7 @@ impl<S: Repr> VariableBase<S> {
             data,
             dims,
             unit,
+            time_zone,
             encoding,
             attrs,
         })
@@ -583,6 +631,7 @@ impl<S: Repr> VariableBase<S> {
                 data: Data::Lazy(LazyArray::new(std::sync::Arc::new(src))),
                 dims: self.dims.clone(),
                 unit: self.unit.clone(),
+                time_zone: self.time_zone.clone(),
                 encoding: self.encoding.clone(),
                 attrs: self.attrs().clone(),
             });
@@ -591,6 +640,7 @@ impl<S: Repr> VariableBase<S> {
             data: Data::Loaded(self.typed()?.select_axis(axis, &idx)),
             dims: self.dims.clone(),
             unit: self.unit.clone(),
+            time_zone: self.time_zone.clone(),
             encoding: self.encoding.clone(),
             attrs: self.attrs().clone(),
         })
@@ -608,6 +658,7 @@ impl<S: ReprMut> VariableBase<S> {
             },
             dims: self.dims.clone(),
             unit: self.unit.clone(),
+            time_zone: self.time_zone.clone(),
             encoding: self.encoding.clone(),
             attrs: self.attrs.borrow(),
         }
@@ -663,6 +714,7 @@ impl Clone for Variable {
             data: self.data.clone(),
             dims: self.dims.clone(),
             unit: self.unit.clone(),
+            time_zone: self.time_zone.clone(),
             encoding: self.encoding.clone(),
             attrs: self.attrs.clone(),
         }
@@ -675,6 +727,7 @@ impl Clone for VariableView<'_> {
             data: self.data.clone(),
             dims: self.dims.clone(),
             unit: self.unit.clone(),
+            time_zone: self.time_zone.clone(),
             encoding: self.encoding.clone(),
             attrs: self.attrs,
         }
@@ -687,6 +740,7 @@ impl<S: Repr> fmt::Debug for VariableBase<S> {
             .field("dims", &self.dims)
             .field("data", &self.data)
             .field("unit", &self.unit)
+            .field("time_zone", &self.time_zone)
             .field("attrs", self.attrs())
             .finish()
     }
@@ -812,6 +866,7 @@ impl<S: Repr> VariableBase<S> {
             data: Data::Loaded(data),
             dims: dims.into(),
             unit: self.unit.clone(),
+            time_zone: self.time_zone.clone(),
             encoding: self.encoding.clone(),
             attrs: self.attrs().clone(),
         })

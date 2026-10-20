@@ -126,12 +126,8 @@ fn calculus_carries_units() {
 
 #[test]
 fn time_coordinates_step_in_seconds() {
-    let times = ["2000-01-01", "2000-01-02", "2000-01-04"].map(|s| {
-        chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d")
-            .unwrap()
-            .and_hms_opt(0, 0, 0)
-            .unwrap()
-    });
+    let times =
+        ["2000-01-01", "2000-01-02", "2000-01-04"].map(|s| s.parse::<annoray::Instant>().unwrap());
     let t = DataArray::from_array(["t"], array![0.0, 1.0, 4.0].into_dyn())
         .unwrap()
         .with_dim_coord("t", ndarray::Array1::from(times.to_vec()))

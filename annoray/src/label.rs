@@ -3,8 +3,7 @@
 use std::fmt;
 use std::ops::{RangeFrom, RangeFull, RangeInclusive, RangeToInclusive};
 
-use annoray_units::{CfDate, Unit, UnitError};
-use chrono::{NaiveDate, NaiveDateTime, TimeDelta};
+use annoray_units::{CfDate, Duration, Instant, Unit, UnitError};
 
 use crate::CoreError;
 
@@ -20,11 +19,11 @@ pub enum Label {
     /// (`"2020-01"` selects all of January 2020).
     Str(String),
     /// A real-world date and time.
-    DateTime(NaiveDateTime),
+    DateTime(Instant),
     /// A date in a CF calendar.
     CfDate(CfDate),
     /// A duration.
-    TimeDelta(TimeDelta),
+    TimeDelta(Duration),
     /// A number with an explicit unit; converted into the coordinate's unit before lookup.
     Quantity(f64, Unit),
 }
@@ -75,10 +74,9 @@ label_from!(
     f64 => |v| Self::Float(v),
     &str => |v| Self::Str(v.to_owned()),
     String => |v| Self::Str(v),
-    NaiveDateTime => |v| Self::DateTime(v),
-    NaiveDate => |v| Self::DateTime(v.and_time(chrono::NaiveTime::MIN)),
+    Instant => |v| Self::DateTime(v),
     CfDate => |v| Self::CfDate(v),
-    TimeDelta => |v| Self::TimeDelta(v),
+    Duration => |v| Self::TimeDelta(v),
 );
 
 impl<K: annoray_units::Kind> From<annoray_units::Quantity<K>> for Label {
@@ -231,21 +229,7 @@ macro_rules! into_label_indexer {
 }
 
 into_label_indexer!(
-    i8,
-    i16,
-    i32,
-    i64,
-    u8,
-    u16,
-    u32,
-    f32,
-    f64,
-    &str,
-    String,
-    NaiveDateTime,
-    NaiveDate,
-    CfDate,
-    TimeDelta
+    i8, i16, i32, i64, u8, u16, u32, f32, f64, &str, String, Instant, CfDate, Duration
 );
 
 /// How precisely a (possibly partial) date string was written.

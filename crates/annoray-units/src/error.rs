@@ -75,9 +75,29 @@ pub enum UnitError {
     /// A floating-point time offset was NaN or infinite.
     #[error("time offset {0} is not finite")]
     NonFiniteTime(String),
-    /// A date cannot be represented by chrono.
-    #[error("{0} cannot be represented as a chrono date")]
-    ChronoRange(String),
+    /// A date is outside the range of an [`Instant`](crate::Instant) (1677-09-21 to
+    /// 2262-04-11), or is missing.
+    #[error("{0} is outside the range of datetime64[ns] (1677-09-21 to 2262-04-11)")]
+    InstantRange(String),
+    /// A time zone name is neither `UTC`, an offset such as `+05:30`, nor an IANA zone known
+    /// to the time zone database.
+    #[error(
+        "unknown time zone {0:?}: expected UTC, an offset such as +05:30, or an IANA name such as America/New_York"
+    )]
+    UnknownTimeZone(String),
+    /// A wall-clock time is ambiguous (it occurs twice, as clocks go back) or does not exist
+    /// (it is skipped, as clocks go forward) in a time zone.
+    #[error(
+        "{time} is {reason} in {zone}; choose how to resolve it (compatible, earlier or later)"
+    )]
+    LocalTime {
+        /// The wall-clock time.
+        time: String,
+        /// The zone.
+        zone: String,
+        /// `"ambiguous"` or `"skipped"`.
+        reason: &'static str,
+    },
     /// An encoded date is not a whole number of time steps from the reference.
     #[error("{date} is not a whole number of {step} from the reference date")]
     NotWholeSteps {

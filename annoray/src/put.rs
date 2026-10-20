@@ -382,6 +382,7 @@ impl<S: Repr> DataArrayBase<S> {
         if let Some(u) = var.unit() {
             out = out.with_unit(u.clone());
         }
+        out.take_zone_from(var);
         *out.attrs_mut() = var.attrs().clone();
         let coords = self
             .coords()

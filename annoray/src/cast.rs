@@ -285,6 +285,7 @@ impl<S: Repr> VariableBase<S> {
             let mut v =
                 Variable::from_typed(self.dims().iter().cloned(), cast(&self.typed()?, dtype)?)?;
             v.set_unit(self.unit().cloned());
+            v.take_zone_from(self);
             v.attrs_mut()
                 .extend(self.attrs().iter().map(|(k, a)| (k.clone(), a.clone())));
             v
@@ -387,6 +388,7 @@ impl<S: Repr> VariableBase<S> {
         )?;
         if dtype != DType::Bool {
             v.set_unit(self.unit().cloned());
+            v.take_zone_from(self);
         }
         v.attrs_mut()
             .extend(self.attrs().iter().map(|(k, a)| (k.clone(), a.clone())));

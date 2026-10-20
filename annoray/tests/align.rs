@@ -1,10 +1,10 @@
 //! Alignment against Python xarray (`fixtures/align.txt`, from `fixtures/gen_align.py`).
 #![allow(clippy::unwrap_used, clippy::indexing_slicing, clippy::panic)]
 
+use annoray::Instant;
 use annoray::{
     CoreError, DataArray, Dataset, Join, TypedArray, Variable, View, align, align_datasets,
 };
-use chrono::NaiveDateTime;
 use ndarray::{Array1, ArrayD, IxDyn, array};
 
 fn da<T: annoray::Element, C: annoray::Element>(
@@ -21,7 +21,7 @@ fn da<T: annoray::Element, C: annoray::Element>(
     .unwrap()
 }
 
-fn dates(days: &[u32]) -> Array1<NaiveDateTime> {
+fn dates(days: &[u32]) -> Array1<Instant> {
     days.iter()
         .map(|d| format!("2020-01-{d:02}T00:00:00").parse().unwrap())
         .collect()
@@ -99,7 +99,18 @@ fn strings(t: &TypedArray<View<'_>>) -> Vec<String> {
         TypedArray::Str(a) => a.iter().cloned().collect(),
         TypedArray::DateTime(a) => a
             .iter()
-            .map(|v| v.format("%Y-%m-%dT%H:%M:%S").to_string())
+            .map(|v| {
+                let d = v.to_utc().unwrap();
+                format!(
+                    "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}",
+                    d.year(),
+                    d.month(),
+                    d.day(),
+                    d.hour(),
+                    d.minute(),
+                    d.second()
+                )
+            })
             .collect(),
         _ => panic!("unexpected type"),
     }

@@ -146,6 +146,8 @@ fn choose<C: Repr, X: Repr, Y: Repr>(
         )?
     };
     var.set_unit(unit);
+    var.take_zone_from(y.variable());
+    var.take_zone_from(x.variable());
     var.attrs_mut()
         .extend(x.attrs().iter().map(|(k, a)| (k.clone(), a.clone())));
     let mut coords: indexmap::IndexMap<Name, Variable> = indexmap::IndexMap::new();

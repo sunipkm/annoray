@@ -43,10 +43,8 @@ fn opens_and_round_trips_netcdf3_without_c() {
             ds.data_vars().keys().collect::<Vec<_>>()
         );
         assert_eq!(
-            back.coords()["time"]
-                .data::<chrono::NaiveDateTime>()
-                .unwrap(),
-            ds.coords()["time"].data::<chrono::NaiveDateTime>().unwrap()
+            back.coords()["time"].data::<annoray::Instant>().unwrap(),
+            ds.coords()["time"].data::<annoray::Instant>().unwrap()
         );
     }
 }

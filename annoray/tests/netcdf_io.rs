@@ -10,10 +10,10 @@
 
 use std::path::PathBuf;
 
+use annoray::Instant;
 use annoray::io::{Format, OpenOptions, ToNetcdf, WriteOptions, open_dataset, open_dataset_with};
 use annoray::units::time::Calendar;
 use annoray::{AttrValue, CfDate, DType, Dataset, TypedArray, Variable, VariableBase};
-use chrono::NaiveDateTime;
 
 fn fixture(name: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -95,8 +95,8 @@ const PRECIP: [f64; 24] = [
     3.0,
 ];
 
-fn date(s: &str) -> NaiveDateTime {
-    NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M").unwrap()
+fn date(s: &str) -> Instant {
+    s.parse().unwrap()
 }
 
 /// What xarray decodes from both golden files (flag only exists in the netCDF-4 one).
@@ -160,8 +160,8 @@ fn check_golden(ds: &Dataset, has_flag: bool) {
         .collect();
     assert_eq!(mt.iter().copied().collect::<Vec<_>>(), expected);
 
-    let time = ds.coords()["time"].data::<NaiveDateTime>().unwrap();
-    let expected: Vec<NaiveDateTime> = [
+    let time = ds.coords()["time"].data::<Instant>().unwrap();
+    let expected: Vec<Instant> = [
         "2000-01-01 00:00",
         "2000-01-01 06:00",
         "2000-01-01 12:00",
@@ -315,7 +315,12 @@ fn writes_fresh_datasets_with_xarray_defaults() {
             "time",
             Variable::new(
                 ["time"],
-                array![t0, t0 + chrono::TimeDelta::days(1)].into_dyn(),
+                array![
+                    t0,
+                    t0.checked_add(annoray::Duration::from_days(1).unwrap())
+                        .unwrap()
+                ]
+                .into_dyn(),
             )
             .unwrap(),
         )

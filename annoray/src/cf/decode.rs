@@ -9,7 +9,7 @@ use crate::{
     Variable,
 };
 use annoray_units::{Calendar, CfDate, Unit, UnitKind};
-use chrono::{NaiveDateTime, TimeDelta};
+use annoray_units::{Duration, Instant, TimeZone};
 use ndarray::{ArrayD, Axis, IxDyn};
 
 use crate::cf::num::{
@@ -182,6 +182,9 @@ enum TimeStep {
         unit: Unit,
         calendar: Calendar,
         masks: Vec<i128>,
+        /// CF dates even in a real-world calendar: lazy data whose first or last value is
+        /// outside the range of an [`Instant`] (decided when opened, as xarray does).
+        as_cf: bool,
     },
     /// Durations (xarray marks them `dtype = "timedelta64[…]"`), `step_ns` nanoseconds per unit.
     Durations { step_ns: i128, masks: Vec<i128> },
@@ -191,7 +194,9 @@ impl TimeStep {
     /// The element type the step produces (fixed, as lazy data needs).
     fn dtype(&self) -> DType {
         match self {
-            Self::Dates { calendar, .. } if calendar.is_real_world() => DType::DateTime,
+            Self::Dates {
+                calendar, as_cf, ..
+            } if calendar.is_real_world() && !as_cf => DType::DateTime,
             Self::Dates { .. } => DType::CfDate,
             Self::Durations { .. } => DType::TimeDelta,
         }
@@ -248,10 +253,11 @@ fn int_masks(attrs: &[&AttrValue]) -> Vec<i128> {
     out
 }
 
-fn td_from_ns(ns: i128) -> Option<TimeDelta> {
-    let secs = i64::try_from(ns.div_euclid(1_000_000_000)).ok()?;
-    let nanos = u32::try_from(ns.rem_euclid(1_000_000_000)).ok()?;
-    TimeDelta::new(secs, nanos).filter(|t| !t.is_nat())
+fn td_from_ns(ns: i128) -> Option<Duration> {
+    i64::try_from(ns)
+        .ok()
+        .map(Duration::from_nanos)
+        .filter(|t| !t.is_nat())
 }
 
 /// Nanoseconds per `unit`, for a time unit that is a whole number of nanoseconds.
@@ -266,8 +272,33 @@ fn duration_step_ns(unit: &Unit) -> Option<i128> {
     ((r - f).abs() <= 1e-9 * f.abs() && (1.0..1e30).contains(&r)).then_some(r as i128)
 }
 
+/// Whether lazy dates in a real-world calendar should be CF dates: xarray's rule, which
+/// decodes the first and last stored values only and gives CF dates if either is outside the
+/// range of an [`Instant`]. Values in between that are outside it are an error when read.
+fn out_of_range_ends(src: &dyn LazySource, steps: &[Step], step: &TimeStep, name: &str) -> bool {
+    let TimeStep::Dates { calendar, .. } = step else {
+        return false;
+    };
+    let shape = src.shape();
+    if !calendar.is_real_world() || shape.contains(&0) {
+        return false;
+    }
+    let ones = vec![1; shape.len()];
+    let first = vec![0; shape.len()];
+    let last: Vec<usize> = shape.iter().map(|n| n.saturating_sub(1)).collect();
+    [first, last].iter().any(|start| {
+        // A value that cannot be read or decoded here is reported when the data are read.
+        src.read_slice(start, &ones)
+            .ok()
+            .and_then(|raw| apply(steps, raw, name).ok())
+            .and_then(|v| decode_times(&v, step, false, name).ok())
+            .is_some_and(|t| t.dtype() == DType::CfDate)
+    })
+}
+
 /// Decode times. With `strict` (lazy data, whose type is fixed in advance), dates of a
-/// real-world calendar outside chrono's range are an error rather than `CfDate`s.
+/// real-world calendar outside the range of an [`Instant`] (1678–2262) are an error rather
+/// than `CfDate`s.
 fn decode_times(
     data: &TypedArray<Owned>,
     step: &TimeStep,
@@ -280,6 +311,7 @@ fn decode_times(
             unit,
             calendar,
             masks,
+            as_cf,
         } => {
             let codec = unit.epoch_codec(*calendar)?;
             let dates = time_values(data, masks, var)?
@@ -292,24 +324,21 @@ fn decode_times(
                     Some(Num::F(f)) => codec.decode_float(f),
                 })
                 .collect::<std::result::Result<Vec<CfDate>, _>>()?;
-            if calendar.is_real_world() {
-                let chrono: Option<Vec<NaiveDateTime>> = dates
-                    .iter()
-                    .map(|d| {
-                        if d.is_nat() {
-                            Some(NaiveDateTime::NAT)
-                        } else {
-                            NaiveDateTime::try_from(*d).ok()
-                        }
-                    })
-                    .collect();
-                match chrono {
+            if calendar.is_real_world() && !as_cf {
+                let instants: Option<Vec<Instant>> =
+                    dates.iter().map(|d| Instant::try_from(*d).ok()).collect();
+                match instants {
                     Some(c) => {
                         return Ok(TypedArray::DateTime(
                             ArrayD::from_shape_vec(shape, c).map_err(shape_err(var))?,
                         ));
                     }
-                    None if strict => return Err(invalid(var, "dates outside chrono's range")),
+                    None if strict => {
+                        return Err(invalid(
+                            var,
+                            "dates outside 1678–2262, the range of datetime64[ns]",
+                        ));
+                    }
                     None => {}
                 }
             }
@@ -322,7 +351,7 @@ fn decode_times(
             let deltas = time_values(data, masks, var)?
                 .into_iter()
                 .map(|v| match v {
-                    None => Ok(TimeDelta::NAT),
+                    None => Ok(Duration::NAT),
                     Some(Num::I(i)) => i
                         .checked_mul(*step_ns)
                         .and_then(td_from_ns)
@@ -337,7 +366,7 @@ fn decode_times(
                         }
                     }
                 })
-                .collect::<Result<Vec<TimeDelta>>>()?;
+                .collect::<Result<Vec<Duration>>>()?;
             Ok(TypedArray::TimeDelta(
                 ArrayD::from_shape_vec(shape, deltas).map_err(shape_err(var))?,
             ))
@@ -501,6 +530,7 @@ fn plan(name: &str, raw: &RawVariable, opts: &DecodeOptions, warnings: &mut Vec<
                             unit: u.clone(),
                             calendar,
                             masks: Vec::new(),
+                            as_cf: false,
                         });
                     }
                     Err(e) => warnings.push(format!("{name}: times left undecoded: {e}")),
@@ -728,7 +758,11 @@ fn decode_var(
         (RawData::Lazy(src), true) => {
             let mut times = None;
             let mut dtype = p.dtype;
-            if let Some((step, units, cal_name)) = p.times.take() {
+            if let Some((mut step, units, cal_name)) = p.times.take() {
+                let cf = out_of_range_ends(src.as_ref(), &p.steps, &step, name);
+                if let TimeStep::Dates { as_cf, .. } = &mut step {
+                    *as_cf = cf;
+                }
                 dtype = step.dtype();
                 times = Some(step);
                 times_decoded(&mut p, units, cal_name);
@@ -765,6 +799,18 @@ fn decode_var(
     let mut var = var.with_encoding(p.enc);
     if let Some(u) = p.unit {
         var = var.with_unit(u);
+    }
+    // annoray's `time_zone` attribute: the zone of decoded date-times.
+    if var.dtype() == DType::DateTime
+        && let Some(z) = str_attr(p.attrs.get("time_zone"))
+    {
+        match z.parse::<TimeZone>() {
+            Ok(tz) => {
+                var.set_time_zone(Some(tz))?;
+                p.attrs.shift_remove("time_zone");
+            }
+            Err(e) => warnings.push(format!("{name}: time_zone attribute ignored: {e}")),
+        }
     }
     var.attrs_mut().extend(p.attrs);
     Ok(var)

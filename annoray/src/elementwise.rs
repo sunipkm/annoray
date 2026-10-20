@@ -21,7 +21,7 @@
 use ndarray::ArrayD;
 
 use crate::{
-    BinOp, CoreError, DType, DataArray, DataArrayBase, Dataset, DatasetBase, Label, NaT, Name,
+    BinOp, CoreError, DType, DataArray, DataArrayBase, Dataset, DatasetBase, Label, Name,
     ReduceOptions, Reduction, Repr, Result, TypedArray, Variable, VariableBase,
 };
 use annoray_units::{Unit, UnitKind, UnitPolicy};
@@ -172,9 +172,9 @@ fn rounded(t: &TypedArray<crate::Owned>, decimals: i32) -> Result<TypedArray<cra
 struct Wanted {
     numbers: Vec<f64>,
     strings: Vec<String>,
-    times: Vec<chrono::NaiveDateTime>,
+    times: Vec<annoray_units::Instant>,
     cf: Vec<annoray_units::CfDate>,
-    deltas: Vec<chrono::TimeDelta>,
+    deltas: Vec<annoray_units::Duration>,
 }
 
 fn wanted(labels: &[Label], unit: Option<&Unit>) -> Result<Wanted> {
@@ -254,6 +254,7 @@ impl<S: Repr> VariableBase<S> {
             rounded(&self.typed()?.to_owned(), decimals)?,
         )?;
         out.set_unit(self.unit().cloned());
+        out.take_zone_from(self);
         out.attrs_mut()
             .extend(self.attrs().iter().map(|(k, a)| (k.clone(), a.clone())));
         Ok(out)

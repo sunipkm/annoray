@@ -17,7 +17,7 @@
 use std::ops::{Add, Div, Mul, Sub};
 
 use annoray_units::{CfDate, Converter, Unit, UnitPolicy};
-use chrono::{NaiveDateTime, TimeDelta};
+use annoray_units::{Duration, Instant};
 use indexmap::IndexMap;
 use ndarray::{ArrayD, ArrayViewD, Axis, IxDyn};
 
@@ -70,6 +70,7 @@ pub fn variables_equal<S: Repr, R: Repr>(a: &VariableBase<S>, b: &VariableBase<R
     }
     a.dims() == b.dims()
         && a.unit() == b.unit()
+        && a.time_zone() == b.time_zone()
         && match (a.typed(), b.typed()) {
             (Ok(x), Ok(y)) => typed_dispatch!(&x, v => same(v, &y)),
             _ => false,
@@ -203,16 +204,18 @@ pub(crate) fn out_dims(
     Ok(sizes.into_iter().unzip())
 }
 
-pub(crate) fn td_from_ns(ns: i128) -> Option<TimeDelta> {
-    let secs = i64::try_from(ns.div_euclid(1_000_000_000)).ok()?;
-    let nanos = u32::try_from(ns.rem_euclid(1_000_000_000)).ok()?;
-    TimeDelta::new(secs, nanos)
+/// A duration of `ns` nanoseconds, or `None` if out of range.
+pub(crate) fn td_from_ns(ns: i128) -> Option<Duration> {
+    i64::try_from(ns)
+        .ok()
+        .map(Duration::from_nanos)
+        .filter(|d| !d.is_nat())
 }
 
-pub(crate) fn td_ns(td: &TimeDelta) -> Option<i128> {
-    i128::from(td.num_seconds())
-        .checked_mul(1_000_000_000)?
-        .checked_add(i128::from(td.subsec_nanos()))
+/// A duration in nanoseconds (`None` for NaT).
+#[allow(clippy::unnecessary_wraps)]
+pub(crate) fn td_ns(td: &Duration) -> Option<i128> {
+    (!td.is_nat()).then(|| i128::from(td.nanos()))
 }
 
 macro_rules! int_op {
@@ -453,53 +456,48 @@ fn time_op(
             TypedArray::TimeDelta(go!(
                 x,
                 y,
-                nat!(TimeDelta, |p: &NaiveDateTime, q: &NaiveDateTime| Some(
-                    p.signed_duration_since(*q)
-                ))
+                nat!(Duration, |p: &Instant, q: &Instant| p.duration_since(*q))
             ))
         }
         (TypedArray::DateTime(x), TypedArray::TimeDelta(y), BinOp::Add) => {
             TypedArray::DateTime(go!(
                 x,
                 y,
-                nat!(NaiveDateTime, |p: &NaiveDateTime, q: &TimeDelta| p
-                    .checked_add_signed(*q))
+                nat!(Instant, |p: &Instant, q: &Duration| p.checked_add(*q))
             ))
         }
         (TypedArray::DateTime(x), TypedArray::TimeDelta(y), BinOp::Sub) => {
             TypedArray::DateTime(go!(
                 x,
                 y,
-                nat!(NaiveDateTime, |p: &NaiveDateTime, q: &TimeDelta| p
-                    .checked_sub_signed(*q))
+                nat!(Instant, |p: &Instant, q: &Duration| p.checked_sub(*q))
             ))
         }
         (TypedArray::TimeDelta(x), TypedArray::DateTime(y), BinOp::Add) => {
             TypedArray::DateTime(go!(
                 x,
                 y,
-                nat!(NaiveDateTime, |p: &TimeDelta, q: &NaiveDateTime| q
-                    .checked_add_signed(*p))
+                nat!(Instant, |p: &Duration, q: &Instant| q.checked_add(*p))
             ))
         }
         (TypedArray::TimeDelta(x), TypedArray::TimeDelta(y), BinOp::Add) => {
             TypedArray::TimeDelta(go!(
                 x,
                 y,
-                nat!(TimeDelta, |p: &TimeDelta, q: &TimeDelta| p.checked_add(q))
+                nat!(Duration, |p: &Duration, q: &Duration| p.checked_add(*q))
             ))
         }
         (TypedArray::TimeDelta(x), TypedArray::TimeDelta(y), BinOp::Sub) => {
             TypedArray::TimeDelta(go!(
                 x,
                 y,
-                nat!(TimeDelta, |p: &TimeDelta, q: &TimeDelta| p.checked_sub(q))
+                nat!(Duration, |p: &Duration, q: &Duration| p.checked_sub(*q))
             ))
         }
         (TypedArray::CfDate(x), TypedArray::CfDate(y), BinOp::Sub) => TypedArray::TimeDelta(go!(
             x,
             y,
-            nat!(TimeDelta, |p: &CfDate, q: &CfDate| p
+            nat!(Duration, |p: &CfDate, q: &CfDate| p
                 .nanos_since(q)
                 .ok()
                 .and_then(td_from_ns))
@@ -509,7 +507,7 @@ fn time_op(
             TypedArray::CfDate(go!(
                 x,
                 y,
-                nat!(CfDate, |p: &CfDate, q: &TimeDelta| {
+                nat!(CfDate, |p: &CfDate, q: &Duration| {
                     let ns = td_ns(q)?;
                     p.checked_add_nanos(if sub { ns.checked_neg()? } else { ns })
                         .ok()
@@ -583,7 +581,10 @@ impl<S: Repr> DataArrayBase<S> {
                 od.clone(),
                 shape,
             )?;
-            let var = Variable::from_lazy(od, crate::LazyArray::new(std::sync::Arc::new(src)))?;
+            let mut var = Variable::from_lazy(od, crate::LazyArray::new(std::sync::Arc::new(src)))?;
+            // A date-time shifted by a duration keeps its zone.
+            var.take_zone_from(rhs.variable());
+            var.take_zone_from(self.variable());
             return Ok(self.assemble(
                 var,
                 unit,
@@ -599,7 +600,9 @@ impl<S: Repr> DataArrayBase<S> {
             &od,
             &shape,
         )?;
-        let var = Variable::from_typed(od, data)?;
+        let mut var = Variable::from_typed(od, data)?;
+        var.take_zone_from(rhs.variable());
+        var.take_zone_from(self.variable());
         Ok(self.assemble(
             var,
             unit,

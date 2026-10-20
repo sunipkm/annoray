@@ -1,15 +1,12 @@
 //! Small conveniences: `date_range`, `to_f64` and `DataArray::scalar`.
 #![allow(clippy::unwrap_used, clippy::indexing_slicing)]
 
+use annoray::Instant;
 use annoray::{CoreError, DataArray, Variable, date_range};
-use chrono::{NaiveDate, NaiveDateTime};
 use ndarray::array;
 
-fn at(y: i32, m: u32, d: u32, h: u32) -> NaiveDateTime {
-    NaiveDate::from_ymd_opt(y, m, d)
-        .unwrap()
-        .and_hms_opt(h, 0, 0)
-        .unwrap()
+fn at(y: i64, m: u8, d: u8, h: u8) -> Instant {
+    Instant::from_ymd_hms_nano((y, m, d), (h, 0, 0), 0).unwrap()
 }
 
 #[test]

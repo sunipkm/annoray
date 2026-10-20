@@ -6,8 +6,9 @@
 
 use std::cmp::Ordering;
 
-use annoray_units::{Calendar, CfDate, Unit, UnitKind};
-use chrono::{Datelike, NaiveDateTime, TimeDelta, Timelike};
+use annoray_units::{
+    Calendar, CfDate, Disambiguation, Duration, Instant, TimeZone, Unit, UnitKind,
+};
 
 use crate::label::{PartialDate, Resolution, parse_partial_date};
 use crate::{
@@ -49,6 +50,8 @@ enum Order {
 struct Ctx<'a> {
     dim: &'a Name,
     unit: Option<&'a Unit>,
+    /// The zone whose wall-clock times date strings are in (UTC when `None`).
+    zone: Option<&'a TimeZone>,
 }
 
 impl Ctx<'_> {
@@ -71,21 +74,15 @@ impl Ctx<'_> {
 
 // ----- time conversions -----
 
-fn datetime_ns(dt: &NaiveDateTime) -> Option<i128> {
-    let days = i128::from(dt.date().num_days_from_ce());
-    let tod = i128::from(dt.time().num_seconds_from_midnight())
-        .checked_mul(NS_PER_SEC)?
-        .checked_add(i128::from(dt.time().nanosecond()))?;
-    days.checked_mul(NS_PER_DAY)?.checked_add(tod)
+fn datetime_ns(dt: &Instant) -> Option<i128> {
+    (!dt.is_nat()).then(|| i128::from(dt.unix_nanos()))
 }
 
 /// 1970-01-01 on the nanosecond scale of `kind`'s keys (time deltas: zero).
+#[allow(clippy::unnecessary_wraps)]
 pub(crate) fn unix_origin_ns(kind: &TimeKind) -> Option<i128> {
     match kind {
-        TimeKind::DateTime => {
-            datetime_ns(&chrono::NaiveDate::from_ymd_opt(1970, 1, 1)?.and_hms_opt(0, 0, 0)?)
-        }
-        TimeKind::Cf(_) | TimeKind::Delta => Some(0),
+        TimeKind::DateTime | TimeKind::Cf(_) | TimeKind::Delta => Some(0),
     }
 }
 
@@ -97,40 +94,28 @@ fn cf_ns(d: &CfDate, cal: Calendar) -> Option<i128> {
     d.nanos_since(&cf_epoch(cal)?).ok()
 }
 
-fn delta_ns(td: &TimeDelta) -> Option<i128> {
-    i128::from(td.num_seconds())
-        .checked_mul(NS_PER_SEC)?
-        .checked_add(i128::from(td.subsec_nanos()))
+fn delta_ns(td: &Duration) -> Option<i128> {
+    (!td.is_nat()).then(|| i128::from(td.nanos()))
 }
 
-/// A date (and its period end, for partial strings) from `PartialDate` fields.
-fn partial_to_chrono(p: &PartialDate) -> Option<Q<i128>> {
-    let y = i32::try_from(p.year).ok()?;
-    let start = chrono::NaiveDate::from_ymd_opt(y, u32::from(p.month), u32::from(p.day))?
-        .and_hms_nano_opt(
-            u32::from(p.hour),
-            u32::from(p.minute),
-            u32::from(p.second),
-            p.nanosecond,
-        )?;
-    let end = match p.resolution {
-        Resolution::Second => return Some(Q::Point(datetime_ns(&start)?)),
-        Resolution::Year => {
-            chrono::NaiveDate::from_ymd_opt(y.checked_add(1)?, 1, 1)?.and_hms_opt(0, 0, 0)?
-        }
-        Resolution::Month => {
-            let (ny, nm) = if p.month == 12 {
-                (y.checked_add(1)?, 1)
-            } else {
-                (y, u32::from(p.month).checked_add(1)?)
-            };
-            chrono::NaiveDate::from_ymd_opt(ny, nm, 1)?.and_hms_opt(0, 0, 0)?
-        }
-        Resolution::Day => start.checked_add_signed(TimeDelta::days(1))?,
-        Resolution::Hour => start.checked_add_signed(TimeDelta::hours(1))?,
-        Resolution::Minute => start.checked_add_signed(TimeDelta::minutes(1))?,
+/// A date (and its period end, for partial strings) from `PartialDate` fields, as
+/// nanoseconds since 1970-01-01 UTC: wall-clock times in `zone` (UTC when `None`). A period
+/// runs from the first instant of its first wall-clock time to the first instant of the next
+/// period's, so a day across a daylight-saving change is 23 or 25 hours long.
+fn partial_to_instant(p: &PartialDate, zone: Option<&TimeZone>) -> Option<Q<i128>> {
+    let wall = partial_to_cf(p, Calendar::ProlepticGregorian)?;
+    let Some(z) = zone else {
+        return Some(wall);
     };
-    Some(Q::Range(datetime_ns(&start)?, datetime_ns(&end)?))
+    let at = |ns: i128| -> Option<i128> {
+        let local = CfDate::from_unix_nanos(Calendar::ProlepticGregorian, ns).ok()?;
+        let t = z.instant_of(&local, Disambiguation::Compatible).ok()?;
+        Some(i128::from(t.unix_nanos()))
+    };
+    Some(match wall {
+        Q::Point(t) => Q::Point(at(t)?),
+        Q::Range(a, b) => Q::Range(at(a)?, at(b)?),
+    })
 }
 
 fn partial_to_cf(p: &PartialDate, cal: Calendar) -> Option<Q<i128>> {
@@ -239,6 +224,7 @@ pub(crate) fn index_keys<S: Repr>(coord: &VariableBase<S>, dim: &Name) -> Result
         &Ctx {
             dim,
             unit: coord.unit(),
+            zone: coord.time_zone(),
         },
     )
 }
@@ -271,9 +257,9 @@ fn time_key(l: &Label, kind: TimeKind, ctx: &Ctx<'_>) -> Result<Q<i128>> {
     let point = |v: Option<i128>| v.map(Q::Point).ok_or_else(ovf);
     match (kind, l) {
         (TimeKind::DateTime, Label::DateTime(dt)) => point(datetime_ns(dt)),
-        (TimeKind::DateTime, Label::CfDate(d)) => point(datetime_ns(&NaiveDateTime::try_from(*d)?)),
+        (TimeKind::DateTime, Label::CfDate(d)) => point(datetime_ns(&Instant::try_from(*d)?)),
         (TimeKind::DateTime, Label::Str(s)) => parse_partial_date(s)
-            .and_then(|p| partial_to_chrono(&p))
+            .and_then(|p| partial_to_instant(&p, ctx.zone))
             .ok_or_else(|| ctx.invalid(format!("cannot parse date {s:?}"))),
         (TimeKind::Cf(cal), Label::CfDate(d)) => {
             if d.calendar() != cal {
@@ -284,9 +270,7 @@ fn time_key(l: &Label, kind: TimeKind, ctx: &Ctx<'_>) -> Result<Q<i128>> {
             }
             point(cf_ns(d, cal))
         }
-        (TimeKind::Cf(cal), Label::DateTime(dt)) => {
-            point(cf_ns(&CfDate::from_chrono(*dt, cal)?, cal))
-        }
+        (TimeKind::Cf(cal), Label::DateTime(dt)) => point(cf_ns(&dt.in_calendar(cal)?, cal)),
         (TimeKind::Cf(cal), Label::Str(s)) => parse_partial_date(s)
             .and_then(|p| partial_to_cf(&p, cal))
             .ok_or_else(|| ctx.invalid(format!("cannot parse {s:?} as a {cal} date"))),
@@ -543,6 +527,7 @@ pub(crate) fn resolve<S: Repr>(
     let ctx = Ctx {
         dim,
         unit: coord.unit(),
+        zone: coord.time_zone(),
     };
     #[allow(clippy::cast_precision_loss)]
     let ns_dist = |a: &i128, b: &i128| a.abs_diff(*b) as f64;

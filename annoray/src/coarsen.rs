@@ -139,6 +139,7 @@ fn split<S: Repr>(v: &VariableBase<S>, dim: &Name, w: usize, window: &Name) -> R
     ));
     let mut out = Variable::from_typed(dims, data)?;
     out.set_unit(v.unit().cloned());
+    out.take_zone_from(v);
     out.attrs_mut()
         .extend(v.attrs().iter().map(|(k, a)| (k.clone(), a.clone())));
     Ok(out)

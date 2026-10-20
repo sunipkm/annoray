@@ -311,6 +311,20 @@ class _Reductions:
 
 class DatetimeAccessor:
     """Date and time components: `da.dt.year`, `da.dt.dayofyear`, …"""
+    @property
+    def tz(self) -> str | None:
+        """The time zone (`None`: UTC): `"UTC"`, an offset such as `"+05:30"`, or an IANA
+        name."""
+    def tz_convert(self, tz: Any) -> DataArray:
+        """The same instants with their wall-clock times in `tz` (`None`: UTC)."""
+    def tz_localize(
+        self,
+        tz: Any,
+        disambiguate: Literal["compatible", "earlier", "later", "raise"] = "compatible",
+    ) -> DataArray:
+        """The instants at which clocks in `tz` show the wall-clock times these show now."""
+    def to_whenever(self) -> Any:
+        """The date-times as whenever objects (a numpy object array)."""
     def __getattr__(self, name: str) -> Any: ...
 
 class DataArray(_Reductions, Generic[_D]):

@@ -70,6 +70,7 @@ fn to_isize(v: &[usize]) -> Result<Vec<isize>> {
 fn renamed(v: &Variable, dim: &Name) -> Result<Variable> {
     let mut out = Variable::from_typed([dim.clone()], v.typed()?.to_owned())?;
     out.set_unit(v.unit().cloned());
+    out.take_zone_from(v);
     out.attrs_mut()
         .extend(v.attrs().iter().map(|(k, a)| (k.clone(), a.clone())));
     Ok(out)
@@ -362,6 +363,7 @@ impl GroupOut for DataArray {
             .collect();
         let mut var = Variable::from_typed(dims, data)?;
         var.set_unit(first.unit().cloned());
+        var.take_zone_from(first.variable());
         var.attrs_mut()
             .extend(first.attrs().iter().map(|(k, a)| (k.clone(), a.clone())));
         let coords = first

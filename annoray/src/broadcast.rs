@@ -129,6 +129,7 @@ fn spread_lazily(
     };
     let mut var = Variable::from_lazy(od.clone(), crate::LazyArray::new(std::sync::Arc::new(src)))?;
     var.set_unit(a.unit().cloned());
+    var.take_zone_from(a.variable());
     var.attrs_mut()
         .extend(a.attrs().iter().map(|(k, v)| (k.clone(), v.clone())));
     let (name, _, own_coords) = a.into_parts();

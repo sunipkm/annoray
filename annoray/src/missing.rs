@@ -41,6 +41,7 @@ fn null_mask(t: &TypedArray<View<'_>>) -> ArrayD<bool> {
 fn like<S: Repr>(v: &VariableBase<S>, data: TypedArray<Owned>) -> Result<Variable> {
     let mut out = Variable::from_typed(v.dims().iter().cloned(), data)?;
     out.set_unit(v.unit().cloned());
+    out.take_zone_from(v);
     out.attrs_mut()
         .extend(v.attrs().iter().map(|(k, a)| (k.clone(), a.clone())));
     Ok(out)
@@ -134,6 +135,7 @@ impl<S: Repr> VariableBase<S> {
             crate::LazyArray::new(std::sync::Arc::new(src)),
         )?;
         out.set_unit(self.unit().cloned());
+        out.take_zone_from(self);
         out.attrs_mut()
             .extend(self.attrs().iter().map(|(k, a)| (k.clone(), a.clone())));
         Ok(out)
@@ -359,6 +361,7 @@ impl<S: Repr> DataArrayBase<S> {
                 crate::LazyArray::new(std::sync::Arc::new(TypedWhere(src, dtype))),
             )?;
             v.set_unit(data.unit().cloned());
+            v.take_zone_from(data.variable());
             v.attrs_mut()
                 .extend(data.attrs().iter().map(|(k, a)| (k.clone(), a.clone())));
             return data.with_data(v);
@@ -418,6 +421,7 @@ fn target<R: Repr>(dim: &str, labels: &VariableBase<R>) -> Result<DataArray> {
     let dim = Name::from(dim);
     let mut coord = Variable::from_typed([dim.clone()], labels.typed()?.to_owned())?;
     coord.set_unit(labels.unit().cloned());
+    coord.take_zone_from(labels);
     let data = Variable::new([dim.clone()], ArrayD::from_elem(IxDyn(&[n]), 0.0))?;
     DataArray::new(data).with_coord(dim, coord)
 }

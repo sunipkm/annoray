@@ -4,9 +4,9 @@
 
 use std::path::PathBuf;
 
+use annoray::Instant;
 use annoray::io::{MfOptions, glob, open_dataset, open_mfdataset};
 use annoray::{Dataset, Variable, VariableBase};
-use chrono::NaiveDateTime;
 
 fn dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../fixtures/nc/mf")
@@ -22,9 +22,9 @@ fn same(a: &Dataset, b: &Dataset) {
         assert_eq!(floats(&a.data_vars()[k.as_str()]), floats(v), "{k}");
         assert_eq!(a.data_vars()[k.as_str()].unit(), v.unit(), "{k}");
     }
-    let t = |d: &Dataset| -> Vec<NaiveDateTime> {
+    let t = |d: &Dataset| -> Vec<Instant> {
         d.coords()["time"]
-            .data::<NaiveDateTime>()
+            .data::<Instant>()
             .unwrap()
             .iter()
             .copied()

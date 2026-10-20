@@ -182,18 +182,13 @@ fn max_gap_in_units_and_times() {
         "2000-01-06",
         "2000-01-07",
     ]
-    .map(|s| {
-        chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d")
-            .unwrap()
-            .and_hms_opt(0, 0, 0)
-            .unwrap()
-    });
+    .map(|s| s.parse::<annoray::Instant>().unwrap());
     let t = DataArray::from_array(["t"], array![0.0, NAN, 2.0, NAN, NAN, 5.0, 6.0].into_dyn())
         .unwrap()
         .with_dim_coord("t", ndarray::Array1::from(days.to_vec()))
         .unwrap();
     for gap in [
-        Label::TimeDelta(chrono::TimeDelta::hours(48)),
+        Label::TimeDelta(annoray::Duration::from_hours(48).unwrap()),
         Label::Str("2 d".into()),
         Label::quantity(48.0, "h").unwrap(),
     ] {
@@ -296,23 +291,15 @@ fn forward_and_backward_fill() {
     assert!(a.ffill("x", Some(0)).is_err());
     assert!(a.ffill("z", None).is_err());
     // Times fill NaT.
-    let d = |s: &str| {
-        chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d")
-            .unwrap()
-            .and_hms_opt(0, 0, 0)
-            .unwrap()
-    };
-    let nat = <chrono::NaiveDateTime as annoray::NaT>::NAT;
+    let d = |s: &str| s.parse::<annoray::Instant>().unwrap();
+    let nat = annoray::Instant::NAT;
     let t = DataArray::from_array(
         ["x"],
         array![d("2000-01-01"), nat, d("2000-01-03")].into_dyn(),
     )
     .unwrap();
     let tf = t.ffill("x", None).unwrap();
-    assert_eq!(
-        tf.data::<chrono::NaiveDateTime>().unwrap()[[1]],
-        d("2000-01-01")
-    );
+    assert_eq!(tf.data::<annoray::Instant>().unwrap()[[1]], d("2000-01-01"));
     assert!(t.interpolate_na("x", &InterpNaOptions::default()).is_err());
 }
 

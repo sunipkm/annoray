@@ -6,9 +6,9 @@
     clippy::arithmetic_side_effects
 )]
 
+use annoray::Instant;
 use annoray::units::{Calendar, CfDate};
-use annoray::{BinOptions, CoreError, DataArray, Dataset, NaT, Name, TypedArray, Variable, View};
-use chrono::{NaiveDate, NaiveDateTime};
+use annoray::{BinOptions, CoreError, DataArray, Dataset, Name, TypedArray, Variable, View};
 use ndarray::{Array1, ArrayD, IxDyn, array};
 
 const NAN: f64 = f64::NAN;
@@ -36,13 +36,15 @@ fn num() -> DataArray {
         .unwrap()
 }
 
-fn months(n: u32) -> Array1<NaiveDateTime> {
+fn months(n: u32) -> Array1<Instant> {
     (0..n)
         .map(|i| {
-            NaiveDate::from_ymd_opt(2000 + i32::try_from(i / 12).unwrap(), i % 12 + 1, 1)
-                .unwrap()
-                .and_hms_opt(0, 0, 0)
-                .unwrap()
+            Instant::from_ymd(
+                2000 + i64::from(i / 12),
+                u8::try_from(i % 12 + 1).unwrap(),
+                1,
+            )
+            .unwrap()
         })
         .collect()
 }
@@ -200,7 +202,7 @@ fn matches_xarray() {
 fn nat_labels_and_datasets() {
     // NaT belongs to no group.
     let mut t = months(4);
-    t[1] = NaiveDateTime::NAT;
+    t[1] = Instant::NAT;
     let da = DataArray::from_array(["time"], array![1.0, 2.0, 3.0, 4.0].into_dyn())
         .unwrap()
         .with_coord("t", Variable::new(["time"], t.into_dyn()).unwrap())
@@ -289,7 +291,7 @@ fn nat_labels_and_datasets() {
 #[test]
 fn dt_accessor() {
     let mut t = months(3);
-    t[2] = NaiveDateTime::NAT;
+    t[2] = Instant::NAT;
     let v = Variable::new(["time"], t.into_dyn()).unwrap();
     let m = v.dt("month").unwrap();
     let m: Vec<f64> = m.data::<f64>().unwrap().iter().copied().collect();

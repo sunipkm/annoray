@@ -14,6 +14,10 @@ physical units and pure-Rust netCDF-3 (CDF-1/2/5), netCDF-4, HDF5 and Zarr (v2/v
   unit and element type.
 - **Units:** binary operations check dimensional consistency and propagate units; exact
   conversion; CF `units` attributes decode into units.
+- **Date-times and time zones:** `Instant` and `Duration` are 64-bit nanosecond counts, the
+  layout of numpy's `datetime64[ns]`/`timedelta64[ns]`; a date-time variable carries a
+  `TimeZone` (UTC, a fixed offset or an IANA zone) that sets its wall-clock components,
+  resampling bins and display (`tz_convert`, `tz_localize`, `date_range_tz`).
 - **Out-of-core evaluation:** lazy memory-mapped sources, lazy elementwise composition and
   chunk-aligned streaming reductions within a configurable memory budget. Writing borrows
   values that encoding leaves unchanged, so a dataset is written without a second copy.
@@ -64,6 +68,7 @@ benchmarks in [performance](https://github.com/sunipkm/annoray/blob/main/docs/pe
 | `uom` | no | Arrays and `sel` labels of uom SI quantities: `to_typed`, `from_typed` (values rescaled into coherent SI). |
 | `whippyunits` | no | Arrays and `sel` labels of whippyunits quantities; `view_typed` reinterprets data in exactly the quantity's unit without copying. |
 | `netcdf-c` | no | netCDF-C/HDF5 C libraries as an alternative backend (static build; requires cmake). |
+| `tzdb-bundle` | no | The IANA time zone database built in, for systems without one (always on Windows); otherwise time zones come from the system's database. |
 
 [`annoray-units`](https://docs.rs/annoray-units) and [`annoray-hdf5`](https://docs.rs/annoray-hdf5)
 are standalone crates, re-exported as `annoray::units` and `annoray::hdf5`;

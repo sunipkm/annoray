@@ -14,13 +14,15 @@ keywords = ["units", "udunits", "dimensional-analysis", "cf-conventions", "calen
 categories = ["science", "date-and-time", "mathematics"]
 
 [dependencies]
-chrono = { workspace = true }
+jiff.workspace = true
 thiserror.workspace = true
 typenum.workspace = true
 uom = { workspace = true, optional = true }
 whippyunits = { workspace = true, optional = true }
 
 [features]
+# Build the IANA time zone database into the program, for systems without one.
+tzdb-bundle = ["jiff/tzdb-bundle-always"]
 # Conversions to and from uom's SI quantities (`StaticUnit`).
 uom = ["dep:uom"]
 # Conversions to and from whippyunits quantities (`StaticUnit`, zero-copy array views).

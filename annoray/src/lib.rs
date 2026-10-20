@@ -89,7 +89,7 @@ mod rename;
 mod repr;
 pub mod resample;
 mod reshape;
-pub use resample::{date_range, date_range_in};
+pub use resample::{date_range, date_range_in, date_range_tz};
 mod rolling;
 mod rolling_exp;
 mod select;
@@ -103,6 +103,7 @@ mod vindex;
 
 pub use align::{Join, align, align_datasets};
 pub use annoray_hdf5::{BloscCodec, BloscShuffle, Compression};
+pub use annoray_units::{Disambiguation, Duration, Instant, TimeZone};
 pub use array::{Arr, DType, Element, TypedArray};
 pub use attrs::{AttrValue, Attrs};
 pub use broadcast::broadcast;

@@ -22,7 +22,7 @@ use pyo3::types::{PyDict, PyList, PyString, PyTuple};
 use crate::convert::{
     LabelSel, OrPy, PosSel, attr_from_py, attrs_to_py, label_from_py, label_sel_from_py,
     method_from_py, numpy_dtype_name, parse_unit, pos_from_py, quantity_parts, typed_from_py,
-    typed_to_py, value_error,
+    typed_to_py, typed_zone_from_py, value_error,
 };
 use crate::mutate::{Lending, Source, live_dict};
 
@@ -61,9 +61,12 @@ pub(crate) fn variable_from_py(
         Some((m, u)) => (m, Some(u)),
         None => (data.clone(), None),
     };
-    let typed = typed_from_py(&data)?;
+    let (typed, zone) = typed_zone_from_py(&data)?;
     let dims = dims_from_py(dims, typed.ndim())?;
     let mut var = Variable::from_typed(dims, typed).py_err()?;
+    if zone.is_some() {
+        var.set_time_zone(zone).py_err()?;
+    }
     let mut unit = match units.map(str::to_owned).or(q_units) {
         Some(u) => Some(parse_unit(&u)?),
         None => None,
@@ -71,6 +74,18 @@ pub(crate) fn variable_from_py(
     if let Some(attrs) = attrs {
         for (k, v) in attrs.iter() {
             let key: String = k.extract()?;
+            // The zone of date-times, as files hold it.
+            if key == "time_zone"
+                && var.dtype() == annoray::DType::DateTime
+                && v.is_instance_of::<PyString>()
+            {
+                let tz = v
+                    .extract::<String>()?
+                    .parse::<annoray::TimeZone>()
+                    .py_err()?;
+                var.set_time_zone(Some(tz)).py_err()?;
+                continue;
+            }
             if key == "units" && v.is_instance_of::<PyString>() {
                 let text: String = v.extract()?;
                 if unit.is_none() {
@@ -155,7 +170,8 @@ pub(crate) fn set_attrs(attrs: &mut annoray::Attrs, d: Option<&Bound<'_, PyAny>>
 // ----- values to Python -----
 
 /// A variable's values as numpy: a read-only view of the data when it is in memory and
-/// numeric (no copy), otherwise converted (dates, strings) or read (lazy data).
+/// numeric or a date-time or duration (no copy), otherwise converted (CF dates, strings) or
+/// read (lazy data).
 fn values_of<'py>(owner: Bound<'py, PyAny>, var: &Variable) -> PyResult<Bound<'py, PyAny>> {
     let py = owner.py();
     if var.is_lazy() {
@@ -189,7 +205,34 @@ fn values_of<'py>(owner: Bound<'py, PyAny>, var: &Variable) -> PyResult<Bound<'p
         TypedArray::U32(a) => view!(a),
         TypedArray::U64(a) => view!(a),
         TypedArray::Bool(a) => view!(a),
+        TypedArray::DateTime(a) => {
+            let ns = nanos_view(a);
+            let arr: PyResult<Bound<'_, PyAny>> = view!(ns);
+            arr?.call_method1("view", ("datetime64[ns]",))
+        }
+        TypedArray::TimeDelta(a) => {
+            let ns = nanos_view(a);
+            let arr: PyResult<Bound<'_, PyAny>> = view!(ns);
+            arr?.call_method1("view", ("timedelta64[ns]",))
+        }
         _ => typed_to_py(py, typed.to_owned()),
+    }
+}
+
+/// Element types laid out as one `i64`: [`Instant`](annoray::Instant) and
+/// [`Duration`](annoray::Duration), both `#[repr(transparent)]` over their nanosecond count.
+trait Nanos {}
+impl Nanos for annoray::Instant {}
+impl Nanos for annoray::Duration {}
+
+/// An array of instants or durations seen as their nanosecond counts, without a copy.
+fn nanos_view<'a, T: Nanos>(a: &'a ndarray::ArrayViewD<'_, T>) -> ndarray::ArrayViewD<'a, i64> {
+    // SAFETY: `T` is `#[repr(transparent)]` over `i64`, a layout its documentation
+    // guarantees, so the raw view (same pointer, shape and strides) addresses valid,
+    // initialised `i64`s, borrowed for no longer than `a`.
+    #[allow(unsafe_code)]
+    unsafe {
+        a.raw_view().cast::<i64>().deref_into_view()
     }
 }
 
@@ -2112,6 +2155,10 @@ fn xr_variable<'py>(
     if let Some(u) = unit_str(v) {
         attrs.set_item("units", u)?;
     }
+    // xarray has no zones: the attribute files hold it in, read back by `from_xarray`.
+    if let Some(z) = v.time_zone() {
+        attrs.set_item("time_zone", z.name())?;
+    }
     let dims = PyTuple::new(py, v.dims().iter().map(Name::as_str))?;
     xr.getattr("Variable")?
         .call1((dims, values_of(owner, v)?, attrs))
@@ -2555,8 +2602,82 @@ pub(crate) struct PyDt {
     parent: Py<PyDataArray>,
 }
 
+/// A zone given from Python (`None`, a name, a `zoneinfo.ZoneInfo`, a `datetime.timezone`, …).
+fn zone_from_py(tz: Option<&Bound<'_, PyAny>>) -> PyResult<Option<annoray::TimeZone>> {
+    let Some(tz) = tz else { return Ok(None) };
+    let name: Option<String> = tz
+        .py()
+        .import("annoray._time")?
+        .getattr("zone_name")?
+        .call1((tz,))?
+        .extract()?;
+    name.map(|n| n.parse::<annoray::TimeZone>())
+        .transpose()
+        .py_err()
+}
+
 #[pymethods]
 impl PyDt {
+    /// The time zone of the date-times (`None`: UTC), as a name: `"UTC"`, an offset such as
+    /// `"+05:30"`, or an IANA name such as `"America/New_York"`.
+    #[getter]
+    fn tz(&self, py: Python<'_>) -> Option<String> {
+        self.parent
+            .borrow(py)
+            .inner
+            .time_zone()
+            .map(|z| z.name().to_owned())
+    }
+
+    /// The same instants with their wall-clock times in `tz` (`None`: UTC), as pandas'
+    /// `tz_convert`: only how they read changes (components, resampling bins, display).
+    fn tz_convert(
+        &self,
+        py: Python<'_>,
+        tz: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<Py<PyDataArray>> {
+        let tz = zone_from_py(tz)?;
+        let out = self.parent.borrow(py).inner.tz_convert(tz).py_err()?;
+        new_da(py, out)
+    }
+
+    /// The instants at which clocks in `tz` (`None`: UTC) show the wall-clock times these show
+    /// now, as pandas' `tz_localize`. A time `tz` skips or repeats is resolved by
+    /// `disambiguate`: `"compatible"` (as whenever), `"earlier"`, `"later"` or `"raise"`.
+    #[pyo3(signature = (tz, disambiguate = "compatible"))]
+    fn tz_localize(
+        &self,
+        py: Python<'_>,
+        tz: Option<&Bound<'_, PyAny>>,
+        disambiguate: &str,
+    ) -> PyResult<Py<PyDataArray>> {
+        let tz = zone_from_py(tz)?;
+        let how = disambiguate.parse::<annoray::Disambiguation>().py_err()?;
+        let out = self.parent.borrow(py).inner.tz_localize(tz, how).py_err()?;
+        new_da(py, out)
+    }
+
+    /// The date-times as whenever objects (a numpy object array): `ZonedDateTime` in an IANA
+    /// zone, `OffsetDateTime` at a fixed offset, `Instant` in UTC; `None` for NaT.
+    fn to_whenever(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        let da = &self.parent.borrow(py).inner;
+        if da.dtype() != annoray::DType::DateTime {
+            return Err(PyTypeError::new_err(
+                "to_whenever needs date-times (datetime64)",
+            ));
+        }
+        let zone = da.time_zone().map(|z| z.name().to_owned());
+        let typed = py
+            .detach(|| da.variable().to_owned().into_typed())
+            .py_err()?;
+        let values = typed_to_py(py, typed)?;
+        Ok(py
+            .import("annoray._time")?
+            .getattr("to_whenever")?
+            .call1((values, zone))?
+            .unbind())
+    }
+
     fn __getattr__(&self, py: Python<'_>, name: &str) -> PyResult<Py<PyAny>> {
         let da = &self.parent.borrow(py).inner;
         let var = match da.variable().dt(name) {

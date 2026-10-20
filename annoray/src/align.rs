@@ -249,19 +249,25 @@ pub(crate) fn plan(objs: &[Obj<'_>], join: Join) -> Result<Plan> {
             .filter_map(|(i, o)| o.indexes.get(&dim).map(|c| (i, c)))
             .collect();
         let mut keyed: Vec<(usize, Vec<Key>)> = Vec::with_capacity(holders.len());
-        let mut kind: Option<(String, DType, Option<annoray_units::Unit>)> = None;
+        let mut kind: Option<(
+            String,
+            DType,
+            Option<annoray_units::Unit>,
+            Option<annoray_units::TimeZone>,
+        )> = None;
         for (i, c) in &holders {
             let (k, kd) = labels(c, &dim)?;
-            let this = (kd, c.dtype(), c.unit().cloned());
+            let this = (kd, c.dtype(), c.unit().cloned(), c.time_zone().cloned());
             match &kind {
                 None => kind = Some(this),
                 Some(first) if *first != this => {
                     return Err(cannot(
                         &dim,
                         format!(
-                            "coordinates differ in type or unit ({} {:?} vs {} {:?}); \
-                             convert one explicitly (no implicit casts between label types)",
-                            first.1, first.2, this.1, this.2
+                            "coordinates differ in type, unit or time zone ({} {:?} {:?} vs \
+                             {} {:?} {:?}); convert one explicitly (no implicit casts between \
+                             label types)",
+                            first.1, first.2, first.3, this.1, this.2, this.3
                         ),
                     ));
                 }
@@ -353,6 +359,7 @@ pub(crate) fn plan(objs: &[Obj<'_>], join: Join) -> Result<Plan> {
         let mut coord = Variable::from_typed([dim.clone()], data)?;
         if let Some((_, first)) = holders.first() {
             coord.set_unit(first.unit().cloned());
+            coord.take_zone_from(first);
             coord
                 .attrs_mut()
                 .extend(first.attrs().iter().map(|(k, v)| (k.clone(), v.clone())));
@@ -425,6 +432,7 @@ fn reindex<S: Repr>(v: &VariableBase<S>, dim: &str, pos: &[Option<usize>]) -> Re
     };
     let mut out = Variable::from_typed(v.dims().iter().cloned(), data)?;
     out.set_unit(v.unit().cloned());
+    out.take_zone_from(v);
     out.attrs_mut()
         .extend(v.attrs().iter().map(|(k, a)| (k.clone(), a.clone())));
     Ok(out)

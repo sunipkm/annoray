@@ -183,7 +183,11 @@ fn is_numeric(d: DType) -> bool {
 
 /// xarray's `equals`: same dimensions, unit and values, with NaN equal to NaN.
 fn equivalent<A: Repr, B: Repr>(a: &VariableBase<A>, b: &VariableBase<B>) -> Result<bool> {
-    if a.dims() != b.dims() || a.shape() != b.shape() || a.unit() != b.unit() {
+    if a.dims() != b.dims()
+        || a.shape() != b.shape()
+        || a.unit() != b.unit()
+        || a.time_zone() != b.time_zone()
+    {
         return Ok(false);
     }
     if is_numeric(a.dtype()) && is_numeric(b.dtype()) {
@@ -247,6 +251,7 @@ fn fill_from(a: &Variable, b: &Variable, name: &Name) -> Result<Variable> {
         .map_err(|_| cannot(name, "shape mismatch"))?;
     let mut v = Variable::from_typed(a.dims().iter().cloned(), TypedArray::F64(data))?;
     v.set_unit(a.unit().cloned());
+    v.take_zone_from(a);
     v.attrs_mut()
         .extend(a.attrs().iter().map(|(k, x)| (k.clone(), x.clone())));
     Ok(v)
@@ -311,6 +316,15 @@ fn concat_vars(parts: &[&Variable], dim: &Name, lens: &[usize], name: &Name) -> 
         .position(|d| d == dim)
         .ok_or_else(|| bad("internal: no axis"))?;
     let unit = template.unit();
+    // Date-times keep one zone; joining zones would change how some of them read.
+    if parts
+        .iter()
+        .any(|v| v.dtype() == DType::DateTime && v.time_zone() != template.time_zone())
+    {
+        return Err(bad(
+            "date-times in different time zones; convert them to one zone first (tz_convert)",
+        ));
+    }
 
     // Lazy parts stay lazy when nothing needs converting or moving: same type and unit, and
     // either all share the target's dimensions or all gain the new dimension in front.
@@ -330,6 +344,7 @@ fn concat_vars(parts: &[&Variable], dim: &Name, lens: &[usize], name: &Name) -> 
         let mut out =
             Variable::from_lazy(target, crate::LazyArray::new(std::sync::Arc::new(joined)))?;
         out.set_unit(unit.cloned());
+        out.take_zone_from(template);
         out.attrs_mut()
             .extend(template.attrs().iter().map(|(k, a)| (k.clone(), a.clone())));
         *out.encoding_mut() = template.encoding().clone();
@@ -387,6 +402,7 @@ fn concat_vars(parts: &[&Variable], dim: &Name, lens: &[usize], name: &Name) -> 
 
     let mut out = Variable::from_typed(target, data)?;
     out.set_unit(unit.cloned());
+    out.take_zone_from(template);
     out.attrs_mut()
         .extend(template.attrs().iter().map(|(k, a)| (k.clone(), a.clone())));
     *out.encoding_mut() = template.encoding().clone();

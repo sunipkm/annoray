@@ -2,7 +2,7 @@
 #![allow(clippy::unwrap_used, clippy::indexing_slicing, clippy::float_cmp)]
 
 use annoray::units::{Calendar, CfDate, Unit};
-use annoray::{CmpOp, DType, DataArray, LogicOp, NaT};
+use annoray::{CmpOp, DType, DataArray, LogicOp};
 use ndarray::{arr0, array};
 
 fn bools(d: &DataArray) -> Vec<bool> {
@@ -119,13 +119,8 @@ fn text_dates_and_durations() {
     assert_eq!(bools(&s.compare(CmpOp::Lt, &b).unwrap()), [true, false]);
     assert!(s.compare(CmpOp::Eq, &scalar(1.0)).is_err());
 
-    let d = |y| {
-        chrono::NaiveDate::from_ymd_opt(y, 1, 1)
-            .unwrap()
-            .and_hms_opt(0, 0, 0)
-            .unwrap()
-    };
-    let nat = <chrono::NaiveDateTime as NaT>::NAT;
+    let d = |y| annoray::Instant::from_ymd(y, 1, 1).unwrap();
+    let nat = annoray::Instant::NAT;
     let t = DataArray::from_array(["t"], array![d(2000), nat, d(2002)].into_dyn()).unwrap();
     let mid = DataArray::from_array(Vec::<&str>::new(), arr0(d(2001)).into_dyn()).unwrap();
     assert_eq!(

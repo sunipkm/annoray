@@ -13,7 +13,7 @@ use annoray::{
     AttrValue, CoreError, DType, DataArray, Dataset, Name, ReduceOptions, Reduction, TypedArray,
     Variable,
 };
-use chrono::{NaiveDateTime, TimeDelta};
+use annoray::{Duration, Instant};
 use ndarray::{ArrayD, IxDyn};
 
 /// Cases where annoray deliberately differs: medians of dates are supported; `any`/`all`
@@ -54,11 +54,11 @@ fn input(case: &str) -> Variable {
                 "1999-12-31T23:59:59.5",
                 "2020-01-02T00:00:00",
             ];
-            let t: Vec<NaiveDateTime> = t.iter().map(|s| s.parse().unwrap()).collect();
+            let t: Vec<Instant> = t.iter().map(|s| s.parse().unwrap()).collect();
             Variable::new(["t"], ArrayD::from_shape_vec(IxDyn(&[4]), t).unwrap()).unwrap()
         }
         "delta" => {
-            let d = [1_000_000_000i64, -5, 3_600_000_000_000, 7].map(TimeDelta::nanoseconds);
+            let d = [1_000_000_000i64, -5, 3_600_000_000_000, 7].map(Duration::from_nanos);
             Variable::new(
                 ["t"],
                 ArrayD::from_shape_vec(IxDyn(&[4]), d.to_vec()).unwrap(),
@@ -116,12 +116,21 @@ fn values(t: &TypedArray<annoray::View<'_>>) -> Vec<String> {
         TypedArray::Bool(a) => a.iter().map(bool::to_string).collect(),
         TypedArray::DateTime(a) => a
             .iter()
-            .map(|v| v.format("%Y-%m-%dT%H:%M:%S%.9f").to_string())
+            .map(|v| {
+                let d = v.to_utc().unwrap();
+                format!(
+                    "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}.{:09}",
+                    d.year(),
+                    d.month(),
+                    d.day(),
+                    d.hour(),
+                    d.minute(),
+                    d.second(),
+                    d.nanosecond()
+                )
+            })
             .collect(),
-        TypedArray::TimeDelta(a) => a
-            .iter()
-            .map(|v| v.num_nanoseconds().unwrap().to_string())
-            .collect(),
+        TypedArray::TimeDelta(a) => a.iter().map(|v| v.nanos().to_string()).collect(),
         _ => panic!("unexpected result type"),
     }
 }

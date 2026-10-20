@@ -1,8 +1,7 @@
 //! Converting a time coordinate to another CF calendar (xarray's `convert_calendar`); the
 //! rules are on [`CalendarOptions`].
 
-use annoray_units::{Calendar, CfDate};
-use chrono::{Datelike, NaiveDateTime, Timelike};
+use annoray_units::{Calendar, CfDate, Instant};
 
 use crate::{
     CoreError, DType, DataArray, DataArrayBase, Dataset, DatasetBase, Name, Repr, Result,
@@ -97,17 +96,8 @@ fn bad(msg: impl Into<String>) -> CoreError {
     CoreError::InvalidReduction(msg.into())
 }
 
-fn chrono_fields(t: &NaiveDateTime) -> Result<Fields> {
-    let to8 = |v: u32| u8::try_from(v).map_err(|_| CoreError::ArithmeticOverflow("date"));
-    Ok(Fields {
-        year: i64::from(t.year()),
-        month: to8(t.month())?,
-        day: to8(t.day())?,
-        hour: to8(t.hour())?,
-        minute: to8(t.minute())?,
-        second: to8(t.second())?,
-        nano: t.nanosecond(),
-    })
+fn instant_fields(t: Instant) -> Result<Fields> {
+    Ok(cf_fields(&t.to_utc()?))
 }
 
 fn cf_fields(t: &CfDate) -> Fields {
@@ -131,7 +121,7 @@ fn source_times<S: Repr>(coord: &VariableBase<S>) -> Result<(Vec<Option<Fields>>
                     if crate::NaT::is_nat(t) {
                         Ok(None)
                     } else {
-                        chrono_fields(t).map(Some)
+                        instant_fields(*t).map(Some)
                     }
                 })
                 .collect::<Result<_>>()?,
@@ -255,8 +245,8 @@ fn time_variable(dim: &Name, dates: Vec<CfDate>, opts: &CalendarOptions) -> Resu
         )));
     }
     if standard && opts.use_cftime != Some(true) {
-        let plain: std::result::Result<Vec<NaiveDateTime>, _> =
-            dates.iter().map(|d| NaiveDateTime::try_from(*d)).collect();
+        let plain: std::result::Result<Vec<Instant>, _> =
+            dates.iter().map(|d| Instant::try_from(*d)).collect();
         match plain {
             Ok(p) => {
                 return Variable::from_typed(

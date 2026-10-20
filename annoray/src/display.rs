@@ -17,9 +17,9 @@ fn dtype_size(d: DType) -> usize {
         DType::I32 | DType::U32 | DType::F32 => 4,
         DType::I64 | DType::U64 | DType::F64 => 8,
         DType::Str => size_of::<String>(),
-        DType::DateTime => size_of::<chrono::NaiveDateTime>(),
+        DType::DateTime => size_of::<annoray_units::Instant>(),
         DType::CfDate => size_of::<annoray_units::CfDate>(),
-        DType::TimeDelta => size_of::<chrono::TimeDelta>(),
+        DType::TimeDelta => size_of::<annoray_units::Duration>(),
     }
 }
 
@@ -30,6 +30,31 @@ fn nbytes<S: Repr>(v: &VariableBase<S>) -> usize {
 
 /// The values, or xarray's placeholder for data not read yet.
 fn body<S: Repr>(v: &VariableBase<S>) -> String {
+    match v.typed() {
+        Ok(t) if !v.is_lazy() => match (&t, v.time_zone()) {
+            (TypedArray::DateTime(x), Some(z)) => format!("{}", x.map(|t| local_text(*t, z))),
+            (t, _) => body_of(t),
+        },
+        _ => format!("[{} values with dtype={}]", v.len(), v.dtype()),
+    }
+}
+
+/// An instant as a wall-clock time in `zone` with its offset: `2024-05-11 03:00:00-04:00`.
+fn local_text(t: annoray_units::Instant, zone: &annoray_units::TimeZone) -> String {
+    if t.is_nat() {
+        return "NaT".to_owned();
+    }
+    let offset = zone.offset_at(t);
+    let Ok(local) = t.to_local(offset) else {
+        return "NaT".to_owned();
+    };
+    let a = offset.unsigned_abs();
+    let sign = if offset < 0 { '-' } else { '+' };
+    format!("{local}{sign}{:02}:{:02}", a / 3600, a / 60 % 60)
+}
+
+/// The values of in-memory data, with NaT spelled out.
+fn body_of<S: Repr>(t: &TypedArray<S>) -> String {
     /// Times as text, with NaT spelled out.
     fn times<T: NaT + Display, D: ndarray::Data<Elem = T>>(
         x: &ndarray::ArrayBase<D, ndarray::IxDyn>,
@@ -43,14 +68,11 @@ fn body<S: Repr>(v: &VariableBase<S>) -> String {
         });
         format!("{text}")
     }
-    match v.typed() {
-        Ok(t) if !v.is_lazy() => match &t {
-            TypedArray::DateTime(x) => times(x),
-            TypedArray::TimeDelta(x) => times(x),
-            TypedArray::CfDate(x) => times(x),
-            _ => typed_dispatch!(&t, x => format!("{x}")),
-        },
-        _ => format!("[{} values with dtype={}]", v.len(), v.dtype()),
+    match t {
+        TypedArray::DateTime(x) => times(x),
+        TypedArray::TimeDelta(x) => times(x),
+        TypedArray::CfDate(x) => times(x),
+        _ => typed_dispatch!(t, x => format!("{x}")),
     }
 }
 
@@ -150,15 +172,23 @@ fn var_line<S: Repr>(
         dims_tuple(v.dims()),
         v.dtype()
     )?;
+    if let Some(z) = v.time_zone() {
+        write!(f, "[{z}]")?;
+    }
     if let Some(u) = v.unit() {
         write!(f, " [{u}]")?;
     }
     if v.is_lazy() {
         return writeln!(f, " ...");
     }
-    match v.typed() {
-        Ok(t) => writeln!(f, " {}", preview(&t)),
-        Err(e) => writeln!(f, " <{e}>"),
+    match (v.typed(), v.time_zone()) {
+        (Ok(TypedArray::DateTime(x)), Some(z)) => {
+            let shown: Vec<String> = x.iter().take(PREVIEW).map(|t| local_text(*t, z)).collect();
+            let more = if x.len() > PREVIEW { " ..." } else { "" };
+            writeln!(f, " {}{more}", shown.join(" "))
+        }
+        (Ok(t), _) => writeln!(f, " {}", preview(&t)),
+        (Err(e), _) => writeln!(f, " <{e}>"),
     }
 }
 
@@ -196,6 +226,9 @@ impl<S: Repr> Display for VariableBase<S> {
         if let Some(u) = self.unit() {
             writeln!(f, "Units: {u}")?;
         }
+        if let Some(z) = self.time_zone() {
+            writeln!(f, "Time zone: {z}")?;
+        }
         attrs_block(f, self.attrs())
     }
 }
@@ -215,6 +248,9 @@ impl<S: Repr> Display for DataArrayBase<S> {
         writeln!(f, "{}", body(self.variable()))?;
         if let Some(u) = self.unit() {
             writeln!(f, "Units: {u}")?;
+        }
+        if let Some(z) = self.time_zone() {
+            writeln!(f, "Time zone: {z}")?;
         }
         if !self.coords().is_empty() {
             writeln!(f, "Coordinates:")?;

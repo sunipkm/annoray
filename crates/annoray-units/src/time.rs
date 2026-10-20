@@ -1,7 +1,7 @@
 //! CF calendars, calendar-aware dates, and decoding/encoding of `<unit> since <date>` values.
 //!
-//! chrono only knows the proleptic Gregorian calendar. [`CfDate`] covers every CF calendar and
-//! converts to and from [`chrono::NaiveDateTime`] where that is meaningful. Semantics follow
+//! [`Instant`](crate::Instant) only knows the proleptic Gregorian calendar. [`CfDate`] covers
+//! every CF calendar and converts to and from instants where that is meaningful. Semantics follow
 //! cftime: `standard`/`julian` have no year zero; floating-point offsets round to the nearest
 //! microsecond (ties to even).
 
@@ -9,15 +9,11 @@ use std::fmt;
 use std::iter::Peekable;
 use std::str::{Chars, FromStr};
 
-use chrono::{Datelike, NaiveDate, NaiveDateTime, Timelike};
-
 use crate::UnitError;
 use crate::ck::Ck;
 
 const NS_PER_SEC: i128 = 1_000_000_000;
 const NS_PER_DAY: i128 = 86_400 * NS_PER_SEC;
-/// `NaiveDate::num_days_from_ce` of 1970-01-01.
-const CE_TO_UNIX_DAYS: i128 = 719_163;
 
 /// A CF calendar (CF conventions §4.4.1).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -51,8 +47,8 @@ impl Calendar {
         }
     }
 
-    /// Whether dates in this calendar correspond to real instants (and so convert to chrono
-    /// preserving the instant rather than the fields).
+    /// Whether dates in this calendar correspond to real instants (and so convert to an
+    /// [`Instant`](crate::Instant) preserving the instant rather than the fields).
     #[must_use]
     pub const fn is_real_world(self) -> bool {
         matches!(
@@ -467,83 +463,50 @@ impl CfDate {
         }
     }
 
-    /// Convert a chrono datetime into `calendar`.
-    ///
-    /// Real-world calendars keep the instant (so a `julian` date may differ in its fields);
-    /// idealized calendars keep the fields and fail if the date does not exist (e.g. Feb 29
-    /// in `noleap`).
+    /// Nanoseconds since 1970-01-01T00:00:00Z of a date in a real-world calendar.
     ///
     /// # Errors
-    /// [`UnitError::InvalidDate`] or [`UnitError::Overflow`].
-    pub fn from_chrono(dt: NaiveDateTime, calendar: Calendar) -> Result<Self, UnitError> {
-        let (h, mi, s) = (dt.hour(), dt.minute(), dt.second());
-        let ns = dt.nanosecond();
-        let to8 = |v: u32| u8::try_from(v).map_err(|_| UnitError::Overflow);
-        if calendar.is_real_world() {
-            let days = Ck::new(dt.date().num_days_from_ce()) - CE_TO_UNIX_DAYS;
-            let tod = ((Ck::new(h) * 60 + mi) * 60 + s) * NS_PER_SEC + ns;
-            Self::from_total_ns(calendar, (days * NS_PER_DAY + tod).get()?)
-        } else {
-            Self::from_ymd(
-                calendar,
-                i64::from(dt.year()),
-                to8(dt.month())?,
-                to8(dt.day())?,
-            )?
-            .and_hms_nano(to8(h)?, to8(mi)?, to8(s)?, ns)
+    /// [`UnitError::InvalidDate`] for an idealized calendar; [`UnitError::Overflow`].
+    pub fn unix_nanos(&self) -> Result<i128, UnitError> {
+        if !self.calendar.is_real_world() {
+            return Err(self.invalid_in(Calendar::ProlepticGregorian));
         }
+        // Real-world day numbers count from 1970-01-01.
+        self.total_ns()
     }
 
-    /// Convert to chrono, clamping days that do not exist in the Gregorian calendar to the
-    /// end of the month (e.g. 360_day Feb 30 → Feb 28/29). Real-world calendars are exact.
+    /// The date `ns` nanoseconds after 1970-01-01T00:00:00Z in a real-world calendar.
     ///
     /// # Errors
-    /// [`UnitError::ChronoRange`] if the year is outside chrono's range.
-    pub fn to_chrono_clamped(&self) -> Result<NaiveDateTime, UnitError> {
-        if self.calendar.is_real_world() {
-            return NaiveDateTime::try_from(*self);
+    /// [`UnitError::InvalidDate`] for an idealized calendar; [`UnitError::Overflow`].
+    pub fn from_unix_nanos(calendar: Calendar, ns: i128) -> Result<Self, UnitError> {
+        if !calendar.is_real_world() {
+            return Err(UnitError::InvalidDate {
+                date: format!("{ns} ns since 1970-01-01"),
+                calendar: calendar.name(),
+            });
+        }
+        Self::from_total_ns(calendar, ns)
+    }
+
+    /// Convert to an [`Instant`](crate::Instant), clamping days that do not exist in the
+    /// Gregorian calendar to the end of the month (e.g. `360_day` Feb 30 → Feb 28/29).
+    /// Real-world calendars are exact.
+    ///
+    /// # Errors
+    /// [`UnitError::InstantRange`] if the date is outside the range of an instant.
+    pub fn to_instant_clamped(&self) -> Result<crate::Instant, UnitError> {
+        if self.calendar.is_real_world() || self.is_nat() {
+            return crate::Instant::try_from(*self);
         }
         let last = Calendar::ProlepticGregorian
             .days_in_month(self.year, self.month)
-            .ok_or_else(|| self.chrono_range())?;
-        let clamped = Self {
+            .ok_or_else(|| UnitError::InstantRange(self.to_string()))?;
+        crate::Instant::try_from(Self {
             calendar: Calendar::ProlepticGregorian,
             day: self.day.min(last),
             ..*self
-        };
-        NaiveDateTime::try_from(clamped)
-    }
-
-    fn chrono_range(&self) -> UnitError {
-        UnitError::ChronoRange(self.to_string())
-    }
-}
-
-impl TryFrom<CfDate> for NaiveDateTime {
-    type Error = UnitError;
-
-    /// Real-world calendars convert exactly (same instant). Idealized calendars convert
-    /// field by field and fail for dates chrono's calendar lacks (360_day Feb 30).
-    fn try_from(d: CfDate) -> Result<Self, UnitError> {
-        let date = if d.calendar.is_real_world() {
-            let ce = (Ck::new(d.day_number()?) + CE_TO_UNIX_DAYS)
-                .to::<i32>()
-                .map_err(|_| d.chrono_range())?;
-            NaiveDate::from_num_days_from_ce_opt(ce)
-        } else {
-            i32::try_from(d.year)
-                .ok()
-                .and_then(|y| NaiveDate::from_ymd_opt(y, u32::from(d.month), u32::from(d.day)))
-        };
-        date.and_then(|date| {
-            date.and_hms_nano_opt(
-                u32::from(d.hour),
-                u32::from(d.minute),
-                u32::from(d.second),
-                d.nanosecond,
-            )
         })
-        .ok_or_else(|| d.chrono_range())
     }
 }
 
@@ -946,40 +909,6 @@ mod tests {
         assert!(p("2000-13-01").is_err());
         assert!(p("273.15").is_err());
         assert!(p("2000-01-01 junk").is_err());
-    }
-
-    #[test]
-    fn chrono_round_trip() {
-        let dt = NaiveDate::from_ymd_opt(1600, 3, 1)
-            .unwrap()
-            .and_hms_nano_opt(1, 2, 3, 4)
-            .unwrap();
-        for cal in [
-            Calendar::Standard,
-            Calendar::ProlepticGregorian,
-            Calendar::Julian,
-        ] {
-            let cf = CfDate::from_chrono(dt, cal).unwrap();
-            assert_eq!(NaiveDateTime::try_from(cf).unwrap(), dt, "{cal}");
-        }
-        // Same instant, different fields: Gregorian 1600-03-01 is Julian 1600-02-20.
-        let j = CfDate::from_chrono(dt, Calendar::Julian).unwrap();
-        assert_eq!((j.month(), j.day()), (2, 20));
-
-        let feb30 = CfDate::from_ymd(Calendar::Day360, 2001, 2, 30).unwrap();
-        assert!(matches!(
-            NaiveDateTime::try_from(feb30),
-            Err(UnitError::ChronoRange(_))
-        ));
-        assert_eq!(
-            feb30.to_chrono_clamped().unwrap().date(),
-            NaiveDate::from_ymd_opt(2001, 2, 28).unwrap()
-        );
-        let noleap = CfDate::from_ymd(Calendar::NoLeap, 2001, 3, 1).unwrap();
-        assert_eq!(
-            NaiveDateTime::try_from(noleap).unwrap().date(),
-            NaiveDate::from_ymd_opt(2001, 3, 1).unwrap()
-        );
     }
 
     fn step_ns(step: &str) -> i128 {

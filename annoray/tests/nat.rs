@@ -6,7 +6,7 @@ use std::path::PathBuf;
 
 use annoray::io::{Format, OpenOptions, ToNetcdf, WriteOptions, open_dataset_with};
 use annoray::{Calendar, CfDate, DataArray, Dataset, Join, NaT, align};
-use chrono::{NaiveDateTime, TimeDelta};
+use annoray::{Duration, Instant};
 
 fn fixture() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../fixtures/nc/nat.nc")
@@ -18,13 +18,13 @@ fn tmp(name: &str) -> PathBuf {
     dir.join(name)
 }
 
-fn dt(s: &str) -> NaiveDateTime {
+fn dt(s: &str) -> Instant {
     s.parse().unwrap()
 }
 
-fn dates(ds: &Dataset, name: &str) -> Vec<NaiveDateTime> {
+fn dates(ds: &Dataset, name: &str) -> Vec<Instant> {
     ds.data_vars()[name]
-        .data::<NaiveDateTime>()
+        .data::<Instant>()
         .unwrap()
         .iter()
         .copied()
@@ -33,7 +33,7 @@ fn dates(ds: &Dataset, name: &str) -> Vec<NaiveDateTime> {
 
 fn check(ds: &Dataset) {
     check_without_ns(ds);
-    let nat = NaiveDateTime::NAT;
+    let nat = Instant::NAT;
     // Exact to the nanosecond (no rounding through f64), and the _FillValue is NaT.
     assert_eq!(
         dates(ds, "t_ns"),
@@ -46,7 +46,7 @@ fn check(ds: &Dataset) {
 }
 
 fn check_without_ns(ds: &Dataset) {
-    let nat = NaiveDateTime::NAT;
+    let nat = Instant::NAT;
     let day = |d: &str| dt(&format!("{d}T00:00:00"));
     assert_eq!(dates(ds, "t"), [day("2020-01-01"), nat, day("2020-01-03")]);
     assert_eq!(
@@ -67,8 +67,8 @@ fn check_without_ns(ds: &Dataset) {
             CfDate::from_ymd(Calendar::NoLeap, 2001, 1, 1).unwrap(),
         ]
     );
-    let d: Vec<TimeDelta> = ds.data_vars()["d"]
-        .data::<TimeDelta>()
+    let d: Vec<Duration> = ds.data_vars()["d"]
+        .data::<Duration>()
         .unwrap()
         .iter()
         .copied()
@@ -76,9 +76,9 @@ fn check_without_ns(ds: &Dataset) {
     assert_eq!(
         d,
         [
-            TimeDelta::minutes(90),
-            TimeDelta::NAT,
-            TimeDelta::minutes(-5)
+            Duration::from_minutes(90).unwrap(),
+            Duration::NAT,
+            Duration::from_minutes(-5).unwrap()
         ]
     );
 }
@@ -105,12 +105,12 @@ fn computes_with_nat() {
     // Reductions skip NaT.
     let mean = t.mean(..).unwrap();
     assert_eq!(
-        mean.data::<NaiveDateTime>().unwrap().first(),
+        mean.data::<Instant>().unwrap().first(),
         Some(&dt("2020-01-02T00:00:00"))
     );
     let min = t.min(..).unwrap();
     assert_eq!(
-        min.data::<NaiveDateTime>().unwrap().first(),
+        min.data::<Instant>().unwrap().first(),
         Some(&dt("2020-01-01T00:00:00"))
     );
     assert_eq!(
@@ -121,10 +121,14 @@ fn computes_with_nat() {
     // Arithmetic propagates NaT.
     let first = t.isel([("x", 0)]).unwrap().to_owned();
     let diff = (&t - &first).unwrap();
-    let diff: Vec<TimeDelta> = diff.data::<TimeDelta>().unwrap().iter().copied().collect();
+    let diff: Vec<Duration> = diff.data::<Duration>().unwrap().iter().copied().collect();
     assert_eq!(
         diff,
-        [TimeDelta::zero(), TimeDelta::NAT, TimeDelta::days(2)]
+        [
+            Duration::ZERO,
+            Duration::NAT,
+            Duration::from_days(2).unwrap()
+        ]
     );
 
     // Alignment fills missing labels with NaT.
@@ -133,12 +137,7 @@ fn computes_with_nat() {
         .with_dim_coord("x", annoray::ndarray::array![3i64, 4])
         .unwrap();
     let out = align(&[&t, &other], Join::Outer).unwrap();
-    let filled: Vec<NaiveDateTime> = out[0]
-        .data::<NaiveDateTime>()
-        .unwrap()
-        .iter()
-        .copied()
-        .collect();
+    let filled: Vec<Instant> = out[0].data::<Instant>().unwrap().iter().copied().collect();
     assert_eq!(filled.len(), 4);
     assert!(filled[3].is_nat());
 }
@@ -165,7 +164,7 @@ fn round_trips() {
             let want = dates(&ds, "t_ns");
             for (a, b) in ns.iter().zip(&want) {
                 assert!(a.is_nat() == b.is_nat(), "{ns:?}");
-                assert!(a.is_nat() || (*a - *b).num_microseconds().unwrap().abs() <= 1);
+                assert!(a.is_nat() || (a.unix_nanos() - b.unix_nanos()).abs() < 1_000);
             }
             back.remove("t_ns").unwrap();
             check_without_ns(&back);

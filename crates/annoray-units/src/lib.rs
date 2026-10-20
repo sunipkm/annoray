@@ -7,7 +7,11 @@
 //! - **Affine, epoch and logarithmic units** (°C, `days since 1970-01-01`, dB) are first-class.
 //! - **Angle is a dimension**, erasable with [`Unit::erase_angle`].
 //! - **UDUNITS-2 / CF parsing** backed by the full UDUNITS database, plus UCUM-style `kg.m2/s2`.
-//! - **All CF calendars** via [`CfDate`], with conversion to and from chrono.
+//! - **Instants and durations** as 64-bit nanosecond counts ([`Instant`], [`Duration`]), the
+//!   layout of numpy's `datetime64[ns]` and `timedelta64[ns]`.
+//! - **Time zones** ([`TimeZone`]): UTC, fixed offsets and IANA zones, from the system's time
+//!   zone database or a bundled copy (feature `tzdb-bundle`).
+//! - **All CF calendars** via [`CfDate`], with conversion to and from instants.
 //!
 //! ```
 //! use annoray_units::{Unit, UnitPolicy};
@@ -42,6 +46,7 @@ mod dimension;
 pub mod dims;
 mod error;
 mod extra;
+mod instant;
 mod parse;
 mod quantity;
 mod registry;
@@ -50,16 +55,19 @@ mod static_unit;
 mod table;
 pub mod time;
 mod unit;
+mod zone;
 
 use std::str::FromStr;
 
 pub use dimension::{BaseDim, Dimension};
 pub use error::UnitError;
+pub use instant::{Duration, Instant};
 pub use quantity::{Dyn, IntoUnit, Kind, Quantity, SameDimension};
 pub use scale::{Rational, Scale};
 pub use static_unit::{StaticUnit, StaticValue, converter_from, converter_into};
 pub use time::{Calendar, CfDate, EpochCodec, RefDate};
 pub use unit::{BinaryPlan, Converter, LogBase, LogRef, Unit, UnitKind, UnitPolicy};
+pub use zone::{Disambiguation, TimeZone};
 
 impl FromStr for Unit {
     type Err = UnitError;

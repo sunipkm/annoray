@@ -161,8 +161,24 @@ attribute is decoded into it when a file is opened.
 
 ## Time and calendars
 
-- **Dates in the standard calendar** decode to `datetime64` only when every value is on or
-  after 1582-10-15. Otherwise they decode to CF dates, never silently shifted.
+- **Time zones.** A date-time variable carries a time zone (`.dt.tz`, `.dt.tz_convert`,
+  `.dt.tz_localize`), kept through operations, written to files as a `time_zone` attribute
+  and read back. Its components, resampling bins (local midnight), date-string selection and
+  display are wall-clock times in the zone; the values stay UTC `datetime64[ns]`. Date-times
+  in different zones are not concatenated, merged or aligned.
+  - *xarray:* no zones; pandas' timezone-aware data become object arrays of `Timestamp`s.
+- **Times with a zone convert exactly.** whenever's `Instant`, `ZonedDateTime` and
+  `OffsetDateTime`, timezone-aware `datetime`s and pandas times become UTC instants in whole
+  nanoseconds, keeping a shared zone; `whenever.PlainDateTime` and mixes of times with and
+  without a zone are refused. `.dt.to_whenever()` gives whenever objects back.
+  - *NumPy:* `UserWarning: no explicit representation of timezones available for
+    np.datetime64` for aware `datetime`s; a `ZonedDateTime` becomes midnight of its date, and
+    an `Instant` an error.
+- **Dates in the standard calendar** decode to `datetime64[ns]` when they are within its
+  range, 1678–2262; otherwise to CF dates, never silently shifted. Data read when opened
+  (dimension coordinates, or everything with `lazy=False`) are checked value by value. Lazy
+  data are decided by their first and last values, as xarray decides; a value in between
+  outside the range is an error when the data are read.
 - **`months since` / `years since` units are rejected**, as cftime does.
 - **Masked integer times in non-standard calendars** decode to NaT.
   - *xarray:* raises `OverflowError` inside cftime.

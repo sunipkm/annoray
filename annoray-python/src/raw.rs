@@ -12,7 +12,6 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use chrono::{NaiveDateTime, TimeDelta};
 use ndarray::{ArrayD, IxDyn};
 use numpy::{PyArrayDyn, PyArrayMethods};
 use pyo3::exceptions::PyValueError;
@@ -21,9 +20,7 @@ use pyo3::prelude::*;
 use crate::convert::{attr_from_py, attrs_to_py, io_error, value_error};
 use annoray::io::{Format, RawDataset, WriteOptions, default_backend};
 use annoray::units::{Calendar, CfDate};
-use annoray::{
-    BloscCodec, BloscShuffle, Compression, DType, Dataset, NaT, Owned, TypedArray, Variable,
-};
+use annoray::{BloscCodec, BloscShuffle, Compression, DType, Dataset, Owned, TypedArray, Variable};
 use pyo3::types::{PyDict, PyString, PyTuple};
 
 // ----- Rust → Python -----
@@ -268,24 +265,9 @@ fn values_from_py(v: &Bound<'_, PyDict>) -> PyResult<TypedArray<Owned>> {
         "num" => numeric_from_py(&data)?,
         // Nanoseconds since the epoch; i64::MIN is NaT.
         "datetime" => {
-            let epoch = chrono::DateTime::UNIX_EPOCH.naive_utc();
-            TypedArray::DateTime(i64_array(&data)?.mapv(|ns| {
-                if ns == i64::MIN {
-                    NaiveDateTime::NAT
-                } else {
-                    epoch
-                        .checked_add_signed(TimeDelta::nanoseconds(ns))
-                        .unwrap_or(NaiveDateTime::NAT)
-                }
-            }))
+            TypedArray::DateTime(i64_array(&data)?.mapv(annoray::Instant::from_unix_nanos))
         }
-        "timedelta" => TypedArray::TimeDelta(i64_array(&data)?.mapv(|ns| {
-            if ns == i64::MIN {
-                TimeDelta::NAT
-            } else {
-                TimeDelta::nanoseconds(ns)
-            }
-        })),
+        "timedelta" => TypedArray::TimeDelta(i64_array(&data)?.mapv(annoray::Duration::from_nanos)),
         "str" => {
             let flat: Vec<String> = data.extract()?;
             let shape: Vec<usize> = get("shape")?.extract()?;

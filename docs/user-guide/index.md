@@ -7,5 +7,6 @@ documentation is built.
 :maxdepth: 2
 
 units
+time
 io
 ```

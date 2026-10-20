@@ -360,6 +360,7 @@ impl<S: Repr> DataArrayBase<S> {
         };
         let mut var = Variable::new(dims, shaped(&shape, out)?)?;
         var.set_unit(self.unit().cloned());
+        var.take_zone_from(self.variable());
         let mut coords = indexmap::IndexMap::new();
         coords.insert(Name::from("quantile"), quantile_coord(qs, scalar_q)?);
         coords.extend(kept_coords(self, reduced));
@@ -431,6 +432,7 @@ impl<S: Repr> DataArrayBase<S> {
         ));
         let mut var = Variable::from_typed(r.kept.clone(), labels)?;
         var.set_unit(coord.unit().cloned());
+        var.take_zone_from(coord);
         let out = DataArrayBase::from_parts(self.name().cloned(), var, kept_coords(self, &reduced))
             .with_attrs_from(self.attrs());
         if found.iter().all(Option::is_some) {
@@ -720,6 +722,7 @@ impl Weighted {
         };
         let mut var = Variable::new(dims, shaped(&shape, out)?)?;
         var.set_unit(self.data.unit().cloned());
+        var.take_zone_from(self.data.variable());
         let mut coords = indexmap::IndexMap::new();
         coords.insert(Name::from("quantile"), quantile_coord(qs, scalar_q)?);
         coords.extend(kept_coords(&data, &reduced));

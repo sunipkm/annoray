@@ -5,8 +5,8 @@ use crate::{
     AttrValue, Attrs, DType, DatasetBase, LazySource, NaT, Name, Owned, Repr, TypedArray,
     VariableBase, View,
 };
+use annoray_units::Duration;
 use annoray_units::{Calendar, CfDate, Unit};
-use chrono::{NaiveDateTime, TimeDelta};
 use ndarray::{ArrayD, IxDyn};
 
 use crate::cf::num::{attr_f64, attr_of, f64_to_int, flip_sign, is_float, is_int, to_f64};
@@ -157,7 +157,7 @@ fn encode_times(
 
 /// Durations as integers in the coarsest exact unit.
 fn encode_durations(
-    a: &ArrayD<TimeDelta>,
+    a: &ArrayD<Duration>,
     var: &str,
     attrs: &mut Attrs,
     int64_ok: bool,
@@ -169,10 +169,7 @@ fn encode_durations(
             if t.is_nat() {
                 return Some(None);
             }
-            i128::from(t.num_seconds())
-                .checked_mul(1_000_000_000)
-                .and_then(|s| s.checked_add(i128::from(t.subsec_nanos())))
-                .map(Some)
+            Some(Some(i128::from(t.nanos())))
         })
         .collect::<Option<_>>()
         .ok_or_else(|| invalid(var, "duration out of range"))?;
@@ -395,6 +392,21 @@ fn encode_var<'a, R: Repr>(
     if let Some(u) = v.unit() {
         attrs.insert("units".into(), AttrValue::Str(u.to_string()));
     }
+    // The zone of date-times, as an attribute of annoray's (CF has none).
+    if let Some(z) = v.time_zone() {
+        match attrs.get("time_zone") {
+            Some(AttrValue::Str(a)) if a == z.name() => {}
+            Some(_) => {
+                return Err(invalid(
+                    name,
+                    format!("a time_zone attribute differs from the time zone {z}"),
+                ));
+            }
+            None => {
+                attrs.insert("time_zone".into(), AttrValue::Str(z.name().to_owned()));
+            }
+        }
+    }
     // CF attributes `decode_coords_all` moved to the encoding.
     for (attr, value) in &enc.cf_related {
         if attrs.contains_key(attr.as_str()) {
@@ -427,11 +439,11 @@ fn encode_var<'a, R: Repr>(
                     .unwrap_or(Calendar::ProlepticGregorian);
                 let dates = a
                     .iter()
-                    .map(|d: &NaiveDateTime| {
+                    .map(|d| {
                         if d.is_nat() {
                             Ok(CfDate::NAT)
                         } else {
-                            CfDate::from_chrono(*d, cal)
+                            d.in_calendar(cal)
                         }
                     })
                     .collect::<std::result::Result<Vec<_>, _>>()?;

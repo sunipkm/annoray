@@ -145,6 +145,7 @@ fn windowed<S: Repr>(
     dims.push(window_dim.clone());
     let mut out = Variable::from_typed(dims, data)?;
     out.set_unit(v.unit().cloned());
+    out.take_zone_from(v);
     Ok(out)
 }
 

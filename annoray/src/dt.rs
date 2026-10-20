@@ -3,11 +3,13 @@
 
 use std::str::FromStr;
 
-use annoray_units::CfDate;
-use chrono::{Datelike, NaiveDateTime, Timelike};
+use annoray_units::{CfDate, Disambiguation, Instant, TimeZone};
 use ndarray::{ArrayD, IxDyn};
 
-use crate::{CoreError, NaT, Owned, Repr, Result, TypedArray, Variable, VariableBase};
+use crate::{
+    CoreError, DType, DataArray, DataArrayBase, NaT, Owned, Repr, Result, TypedArray, Variable,
+    VariableBase,
+};
 
 /// A component of a date.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -71,26 +73,6 @@ trait Parts {
     fn month_number(&self) -> u32;
 }
 
-impl Parts for NaiveDateTime {
-    fn number(&self, c: DtComponent) -> Option<i64> {
-        Some(match c {
-            DtComponent::Year => i64::from(self.year()),
-            DtComponent::Month => i64::from(self.month()),
-            DtComponent::Day => i64::from(self.day()),
-            DtComponent::Hour => i64::from(self.hour()),
-            DtComponent::Minute => i64::from(self.minute()),
-            DtComponent::Second => i64::from(self.second()),
-            DtComponent::DayOfYear => i64::from(self.ordinal()),
-            DtComponent::DayOfWeek => i64::from(self.weekday().num_days_from_monday()),
-            DtComponent::Season => return None,
-        })
-    }
-
-    fn month_number(&self) -> u32 {
-        self.month()
-    }
-}
-
 impl Parts for CfDate {
     fn number(&self, c: DtComponent) -> Option<i64> {
         Some(match c {
@@ -111,8 +93,9 @@ impl Parts for CfDate {
                 if !self.calendar().is_real_world() {
                     return None;
                 }
-                let dt = NaiveDateTime::try_from(*self).ok()?;
-                i64::from(dt.weekday().num_days_from_monday())
+                // 1970-01-01 was a Thursday (Monday = 0).
+                let days = self.unix_nanos().ok()?.div_euclid(86_400_000_000_000);
+                i64::try_from(days.checked_add(3)?.rem_euclid(7)).ok()?
             }
             DtComponent::Season => return None,
         })
@@ -159,7 +142,23 @@ pub(crate) fn components<S: Repr>(
         Ok((data, missing))
     }
     match v.typed()? {
-        TypedArray::DateTime(a) => go(&a, c),
+        TypedArray::DateTime(a) => {
+            // The wall-clock fields of each instant in the variable's zone (UTC by default).
+            let zone = v.time_zone();
+            let fields = a
+                .iter()
+                .map(|t| {
+                    if t.is_nat() {
+                        Ok(CfDate::NAT)
+                    } else {
+                        t.to_local(zone.map_or(0, |z| z.offset_at(*t)))
+                    }
+                })
+                .collect::<std::result::Result<Vec<_>, _>>()?;
+            let fields = ArrayD::from_shape_vec(IxDyn(a.shape()), fields)
+                .map_err(|_| CoreError::InvalidReduction("shape".into()))?;
+            go(&fields.view(), c)
+        }
         TypedArray::CfDate(a) => go(&a, c),
         other => Err(CoreError::UnsupportedDType {
             op: "date-time components",
@@ -196,5 +195,89 @@ impl<S: Repr> VariableBase<S> {
             other => other,
         };
         Variable::from_typed(self.dims().iter().cloned(), data)
+    }
+}
+
+fn not_datetimes(op: &'static str, dtype: DType) -> CoreError {
+    CoreError::UnsupportedDType { op, dtype }
+}
+
+impl<S: Repr> VariableBase<S> {
+    /// The same instants with their wall-clock times in `tz` (`None`: UTC), as pandas'
+    /// `tz_convert`. Only how the times read changes: their components, resampling bins and
+    /// display.
+    ///
+    /// # Errors
+    /// [`CoreError::UnsupportedDType`] for data that are not date-times.
+    pub fn tz_convert(&self, tz: Option<TimeZone>) -> Result<Variable> {
+        if self.dtype() != DType::DateTime {
+            return Err(not_datetimes("tz_convert", self.dtype()));
+        }
+        let mut out = self.to_owned();
+        out.set_time_zone(tz)?;
+        Ok(out)
+    }
+
+    /// The instants at which clocks in `tz` (`None`: UTC) show the same wall-clock times as
+    /// these do in their own zone, as pandas' `tz_localize` (applied to times read as UTC
+    /// that were local times). Times that `tz` skips or repeats are resolved by `how`.
+    ///
+    /// # Errors
+    /// [`CoreError::UnsupportedDType`] for data that are not date-times; a
+    /// [`UnitError::LocalTime`](annoray_units::UnitError::LocalTime) for a skipped or
+    /// repeated time with [`Disambiguation::Raise`].
+    pub fn tz_localize(&self, tz: Option<TimeZone>, how: Disambiguation) -> Result<Variable> {
+        let TypedArray::DateTime(a) = self.typed()? else {
+            return Err(not_datetimes("tz_localize", self.dtype()));
+        };
+        let from = self.time_zone();
+        let moved = a
+            .iter()
+            .map(|t| {
+                if t.is_nat() {
+                    return Ok(Instant::NAT);
+                }
+                let wall = t.to_local(from.map_or(0, |z| z.offset_at(*t)))?;
+                match &tz {
+                    Some(z) => z.instant_of(&wall, how),
+                    None => Instant::try_from(wall),
+                }
+            })
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        let data = ArrayD::from_shape_vec(IxDyn(a.shape()), moved)
+            .map_err(|_| CoreError::InvalidReduction("shape".into()))?;
+        let mut out = self.to_owned();
+        out.data_mut::<Instant>()?.assign(&data);
+        out.set_time_zone(tz)?;
+        Ok(out)
+    }
+}
+
+impl<S: Repr> DataArrayBase<S> {
+    /// The time zone of date-time data, if one is set.
+    #[must_use]
+    pub fn time_zone(&self) -> Option<&TimeZone> {
+        self.variable().time_zone()
+    }
+
+    /// The data's instants with their wall-clock times in `tz`; see
+    /// [`VariableBase::tz_convert`].
+    ///
+    /// # Errors
+    /// As for [`VariableBase::tz_convert`].
+    pub fn tz_convert(&self, tz: Option<TimeZone>) -> Result<DataArray> {
+        let var = self.variable().tz_convert(tz)?;
+        let (name, _, coords) = self.to_owned().into_parts();
+        Ok(DataArray::from_parts(name, var, coords))
+    }
+
+    /// The data's wall-clock times read in `tz`; see [`VariableBase::tz_localize`].
+    ///
+    /// # Errors
+    /// As for [`VariableBase::tz_localize`].
+    pub fn tz_localize(&self, tz: Option<TimeZone>, how: Disambiguation) -> Result<DataArray> {
+        let var = self.variable().tz_localize(tz, how)?;
+        let (name, _, coords) = self.to_owned().into_parts();
+        Ok(DataArray::from_parts(name, var, coords))
     }
 }

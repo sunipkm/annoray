@@ -21,8 +21,7 @@
 
 use std::str::FromStr;
 
-use annoray_units::{Calendar, CfDate};
-use chrono::NaiveDateTime;
+use annoray_units::{Calendar, CfDate, Disambiguation, Duration, Instant, RefDate, TimeZone};
 use ndarray::{ArrayD, IxDyn};
 
 use crate::dataarray::DataArrayBase;
@@ -40,38 +39,84 @@ const NS_PER_DAY: i128 = 86_400_000_000_000;
 /// [`CoreError::InvalidLabel`] for a `start` that does not parse;
 /// [`CoreError::InvalidReduction`] for an unknown frequency, or period ends and weeks (not
 /// supported yet); [`CoreError::ArithmeticOverflow`] past the representable dates.
-pub fn date_range(
+pub fn date_range(start: &str, periods: usize, freq: &str) -> Result<ndarray::Array1<Instant>> {
+    date_range_zoned(start, periods, freq, None)
+}
+
+/// [`date_range`] on the wall clocks of zone `tz` (pandas' `date_range` with `tz`): `start`
+/// is a wall-clock time in `tz` unless it carries a UTC offset, steps of whole days and
+/// period starts fall on wall-clock times (local midnight, so a day across a daylight-saving
+/// change lasts 23 or 25 hours), and shorter steps are exact durations. A wall-clock time
+/// the zone skips or repeats is resolved as [`Disambiguation::Compatible`] does.
+///
+/// # Errors
+/// As for [`date_range`].
+pub fn date_range_tz(
     start: &str,
     periods: usize,
     freq: &str,
-) -> Result<ndarray::Array1<NaiveDateTime>> {
-    let start = parse_start(start)?;
+    tz: &TimeZone,
+) -> Result<ndarray::Array1<Instant>> {
+    date_range_zoned(start, periods, freq, Some(tz))
+}
+
+fn date_range_zoned(
+    start: &str,
+    periods: usize,
+    freq: &str,
+    tz: Option<&TimeZone>,
+) -> Result<ndarray::Array1<Instant>> {
+    let parsed = parse_start(start)?;
+    let utc_of = |wall: &CfDate| -> Result<Instant> {
+        Ok(match tz {
+            Some(z) => z.instant_of(wall, Disambiguation::Compatible)?,
+            None => Instant::try_from(*wall)?,
+        })
+    };
+    // The start as a wall-clock time in the zone: an offset makes it an instant (in UTC
+    // without a zone), and a start without one is already a wall-clock time.
+    let given = parsed.in_calendar(Calendar::ProlepticGregorian)?;
+    let first = match tz {
+        Some(z) if parsed.utc_offset_minutes != 0 => z.to_local(Instant::try_from(given)?)?,
+        _ => given,
+    };
     let f: Freq = freq.parse()?;
     let overflow = || CoreError::ArithmeticOverflow("date_range");
     let mut out = Vec::with_capacity(periods);
     match f.unit {
         Unit::Tick(ns) => {
             let step = ns.checked_mul(i128::from(f.n)).ok_or_else(overflow)?;
-            let mut t = start;
-            for _ in 0..periods {
-                out.push(t);
-                let d = i64::try_from(step).map_err(|_| overflow())?;
-                t = t
-                    .checked_add_signed(chrono::TimeDelta::nanoseconds(d))
-                    .ok_or_else(overflow)?;
+            if tz.is_some() && step.rem_euclid(NS_PER_DAY) == 0 {
+                // Whole days: the same wall-clock time each day.
+                let mut wall = first;
+                for _ in 0..periods {
+                    out.push(utc_of(&wall)?);
+                    wall = wall.checked_add_nanos(step)?;
+                }
+            } else {
+                let mut t = utc_of(&first)?;
+                let d = Duration::from_nanos(i64::try_from(step).map_err(|_| overflow())?);
+                for _ in 0..periods {
+                    out.push(t);
+                    t = t.checked_add(d).ok_or_else(overflow)?;
+                }
             }
         }
         Unit::Start { step, anchor } => {
-            use chrono::Datelike;
             let months = step.checked_mul(f.n).ok_or_else(overflow)?;
-            let index = |d: &NaiveDateTime| {
-                i64::from(d.year())
-                    .checked_mul(12)
-                    .and_then(|y| y.checked_add(i64::from(d.month0())))
-            };
-            let mut m = index(&start).ok_or_else(overflow)?;
+            let mut m = first
+                .year()
+                .checked_mul(12)
+                .and_then(|y| y.checked_add(i64::from(first.month()).saturating_sub(1)))
+                .ok_or_else(overflow)?;
             // The first period start at or after `start`.
-            let on_start = start.day() == 1 && start.time() == chrono::NaiveTime::MIN;
+            let on_start = first.day() == 1
+                && (
+                    first.hour(),
+                    first.minute(),
+                    first.second(),
+                    first.nanosecond(),
+                ) == (0, 0, 0, 0);
             if !on_start {
                 m = m.checked_add(1).ok_or_else(overflow)?;
             }
@@ -82,12 +127,10 @@ pub fn date_range(
                     .ok_or_else(overflow)?;
             }
             for _ in 0..periods {
-                let (y, mo) = (m.div_euclid(12), m.rem_euclid(12));
-                let y = i32::try_from(y).map_err(|_| overflow())?;
-                let mo = u32::try_from(mo).map_err(|_| overflow())?;
-                let d = chrono::NaiveDate::from_ymd_opt(y, mo.saturating_add(1), 1)
-                    .ok_or_else(overflow)?;
-                out.push(d.and_time(chrono::NaiveTime::MIN));
+                let mo =
+                    u8::try_from(m.rem_euclid(12).saturating_add(1)).map_err(|_| overflow())?;
+                let wall = CfDate::from_ymd(Calendar::ProlepticGregorian, m.div_euclid(12), mo, 1)?;
+                out.push(utc_of(&wall)?);
                 m = m.checked_add(months).ok_or_else(overflow)?;
             }
         }
@@ -115,23 +158,7 @@ pub fn date_range_in(
     freq: &str,
     calendar: annoray_units::Calendar,
 ) -> Result<ndarray::Array1<annoray_units::CfDate>> {
-    use annoray_units::CfDate;
-    use chrono::{Datelike, Timelike};
-    let in_cal = |t: NaiveDateTime| -> Result<CfDate> {
-        let to8 = |v: u32| u8::try_from(v).map_err(|_| CoreError::ArithmeticOverflow("date"));
-        Ok(CfDate::from_ymd(
-            calendar,
-            i64::from(t.year()),
-            to8(t.month())?,
-            to8(t.day())?,
-        )?
-        .and_hms_nano(
-            to8(t.hour())?,
-            to8(t.minute())?,
-            to8(t.second())?,
-            t.nanosecond(),
-        )?)
-    };
+    let in_cal = |t: RefDate| -> Result<CfDate> { Ok(t.in_calendar(calendar)?) };
     let first = in_cal(parse_start(start)?)?;
     let last = end.map(|e| parse_start(e).and_then(in_cal)).transpose()?;
     if periods.is_none() && last.is_none() {
@@ -204,7 +231,8 @@ pub fn date_range_in(
     Ok(ndarray::Array1::from(out))
 }
 
-fn parse_start(s: &str) -> Result<NaiveDateTime> {
+/// A date, or a date and time of day, with an optional UTC offset.
+fn parse_start(s: &str) -> Result<RefDate> {
     // A year ("2000") or a month ("2000-03") means its first day, as in pandas.
     let digits = |t: &str| !t.is_empty() && t.bytes().all(|b| b.is_ascii_digit());
     let full = match s.split('-').collect::<Vec<_>>().as_slice() {
@@ -212,24 +240,11 @@ fn parse_start(s: &str) -> Result<NaiveDateTime> {
         [y, m] if y.len() == 4 && digits(y) && m.len() == 2 && digits(m) => format!("{y}-{m}-01"),
         _ => s.to_owned(),
     };
-    let s = full.as_str();
-    if let Ok(d) = chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d") {
-        return Ok(d.and_time(chrono::NaiveTime::MIN));
-    }
-    for f in [
-        "%Y-%m-%dT%H:%M:%S%.f",
-        "%Y-%m-%d %H:%M:%S%.f",
-        "%Y-%m-%dT%H:%M",
-        "%Y-%m-%d %H:%M",
-    ] {
-        if let Ok(t) = NaiveDateTime::parse_from_str(s, f) {
-            return Ok(t);
-        }
-    }
-    Err(CoreError::InvalidLabel {
-        dim: Name::from("time"),
-        reason: format!("start {s:?} is not an ISO 8601 date"),
-    })
+    full.parse::<RefDate>()
+        .map_err(|_| CoreError::InvalidLabel {
+            dim: Name::from("time"),
+            reason: format!("start {s:?} is not an ISO 8601 date"),
+        })
 }
 
 fn invalid(reason: impl Into<String>) -> CoreError {
@@ -526,14 +541,16 @@ fn grouper<S: Repr>(coord: &VariableBase<S>, dim: &Name, freq: &str) -> Result<G
     }
     let freq: Freq = freq.parse()?;
     let typed = coord.typed()?;
-    let (dates, chrono): (Vec<Option<CfDate>>, bool) = match &typed {
+    let zone = coord.time_zone();
+    let (dates, instants): (Vec<Option<CfDate>>, bool) = match &typed {
+        // Bins fall on wall-clock times in the coordinate's zone (local midnight for days).
         TypedArray::DateTime(a) => (
             a.iter()
                 .map(|d| {
                     if d.is_nat() {
                         Ok(None)
                     } else {
-                        CfDate::from_chrono(*d, Calendar::ProlepticGregorian).map(Some)
+                        d.to_local(zone.map_or(0, |z| z.offset_at(*d))).map(Some)
                     }
                 })
                 .collect::<std::result::Result<_, _>>()?,
@@ -558,16 +575,21 @@ fn grouper<S: Repr>(coord: &VariableBase<S>, dim: &Name, freq: &str) -> Result<G
         }
     }
     let shape = IxDyn(&[labels.len()]);
-    let data = if chrono {
+    let data = if instants {
+        // Each bin starts at the first instant its wall-clock start occurs.
         let c = labels
             .iter()
-            .map(|d| NaiveDateTime::try_from(*d))
+            .map(|d| match zone {
+                Some(z) => z.instant_of(d, Disambiguation::Compatible),
+                None => Instant::try_from(*d),
+            })
             .collect::<std::result::Result<Vec<_>, _>>()?;
         TypedArray::DateTime(ArrayD::from_shape_vec(shape, c).map_err(|_| overflow())?)
     } else {
         TypedArray::CfDate(ArrayD::from_shape_vec(shape, labels).map_err(|_| overflow())?)
     };
-    let labels = Variable::from_typed([dim.clone()], data)?;
+    let mut labels = Variable::from_typed([dim.clone()], data)?;
+    labels.take_zone_from(coord);
     Ok(Grouper::new(
         dim.clone(),
         dim.clone(),

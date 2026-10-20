@@ -8,7 +8,7 @@
 //! | `dtype = "bool"` ints | `bool` | — |
 //! | `_FillValue` / `missing_value` | NaN (ints become floats) | the fill values and on-disk dtype |
 //! | `scale_factor` / `add_offset` | unpacked floats | the factors and packed dtype |
-//! | `units = "<u> since <date>"`, `calendar` | dates (chrono or CF calendar) | units and calendar |
+//! | `units = "<u> since <date>"`, `calendar` | dates (instants or CF calendar) | units and calendar |
 //! | other `units` | [`Unit`](annoray_units::Unit) on the variable | the original spelling (the unit's label) |
 //! | `coordinates` attributes, dimension variables | coordinates | — |
 //!

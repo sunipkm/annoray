@@ -377,13 +377,12 @@ mod properties {
             prop_assert_eq!(codec.encode_int(&d).unwrap(), n);
         }
 
-        /// Reference dates in all calendars resolve, and chrono round-trips real-world calendars.
+        /// Reference dates in all calendars resolve, and instants round-trip real-world calendars.
         #[test]
-        fn chrono_round_trip(y in -3000i64..3000, m in 1u8..=12, d in 1u8..=28, cal in proptest::sample::select(&CALENDARS[..3])) {
-            prop_assume!(y != 0 || cal.has_year_zero());
+        fn instant_round_trip(y in 1678i64..2262, m in 1u8..=12, d in 1u8..=28, cal in proptest::sample::select(&CALENDARS[..3])) {
             let Ok(date) = CfDate::from_ymd(cal, y, m, d) else { return Ok(()) }; // e.g. the 1582 gap
-            let dt = chrono::NaiveDateTime::try_from(date).unwrap();
-            prop_assert_eq!(CfDate::from_chrono(dt, cal).unwrap(), date);
+            let t = crate::Instant::try_from(date).unwrap();
+            prop_assert_eq!(t.in_calendar(cal).unwrap(), date);
             let r = RefDate { year: y, month: m, day: d, hour: 0, minute: 0, second: 0, nanosecond: 0, utc_offset_minutes: 0 };
             prop_assert_eq!(r.in_calendar(cal).unwrap(), date);
         }

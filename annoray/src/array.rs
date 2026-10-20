@@ -26,11 +26,12 @@ pub enum DType {
     U64,
     Bool,
     Str,
-    /// `chrono::NaiveDateTime` (real-world calendars).
+    /// [`Instant`](annoray_units::Instant): nanoseconds since 1970-01-01 UTC (real-world
+    /// calendars), numpy's `datetime64[ns]`.
     DateTime,
     /// [`CfDate`](annoray_units::CfDate) (any CF calendar).
     CfDate,
-    /// `chrono::TimeDelta`.
+    /// [`Duration`](annoray_units::Duration): nanoseconds, numpy's `timedelta64[ns]`.
     TimeDelta,
 }
 
@@ -93,9 +94,9 @@ pub enum TypedArray<S: Repr> {
     U64(Arr<S, u64>),
     Bool(Arr<S, bool>),
     Str(Arr<S, String>),
-    DateTime(Arr<S, chrono::NaiveDateTime>),
+    DateTime(Arr<S, annoray_units::Instant>),
     CfDate(Arr<S, annoray_units::CfDate>),
-    TimeDelta(Arr<S, chrono::TimeDelta>),
+    TimeDelta(Arr<S, annoray_units::Duration>),
 }
 
 /// Run `$body` with `$a` bound to the inner array, whatever its element type.
@@ -186,7 +187,7 @@ macro_rules! impl_element {
 impl_element!(
     F32 f32, F64 f64, I8 i8, I16 i16, I32 i32, I64 i64,
     U8 u8, U16 u16, U32 u32, U64 u64, Bool bool, Str String,
-    DateTime chrono::NaiveDateTime, CfDate annoray_units::CfDate, TimeDelta chrono::TimeDelta,
+    DateTime annoray_units::Instant, CfDate annoray_units::CfDate, TimeDelta annoray_units::Duration,
 );
 
 impl TypedArray<Owned> {

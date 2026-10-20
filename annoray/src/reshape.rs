@@ -496,6 +496,7 @@ fn cumulative<S: Repr>(v: &VariableBase<S>, dim: &str, op: Cumulative) -> Result
     };
     let mut out = Variable::from_typed(v.dims().iter().cloned(), data)?;
     out.set_unit(v.unit().cloned());
+    out.take_zone_from(v);
     out.attrs_mut()
         .extend(v.attrs().iter().map(|(k, a)| (k.clone(), a.clone())));
     Ok(out)
@@ -531,6 +532,7 @@ impl<S: Repr> VariableBase<S> {
             Variable::from_typed(dims, self.typed()?.to_owned().insert_axis_owned(at))?
         };
         out.set_unit(self.unit().cloned());
+        out.take_zone_from(self);
         *out.encoding_mut() = self.encoding().clone();
         out.attrs_mut()
             .extend(self.attrs().iter().map(|(k, a)| (k.clone(), a.clone())));

@@ -21,7 +21,7 @@ use std::cmp::Ordering;
 use std::ops::RangeFull;
 
 use annoray_units::{CfDate, Unit, UnitPolicy};
-use chrono::{NaiveDateTime, TimeDelta};
+use annoray_units::{Duration, Instant};
 use ndarray::{ArrayD, ArrayView1, ArrayViewD, ArrayViewMutD, Axis, Dimension, IxDyn};
 
 use crate::dataarray::DataArrayBase;
@@ -304,7 +304,7 @@ macro_rules! red_time {
         }
     )*};
 }
-red_time!(NaiveDateTime, TimeDelta);
+red_time!(Instant, Duration);
 
 impl RedElem for CfDate {
     fn missing(&self) -> bool {
@@ -1364,10 +1364,6 @@ fn time_stats<T: RedElem + NaT>(
     })
 }
 
-fn epoch() -> NaiveDateTime {
-    chrono::DateTime::UNIX_EPOCH.naive_utc()
-}
-
 fn stats(
     a: &TypedArray<View<'_>>,
     op: Reduction,
@@ -1398,8 +1394,13 @@ fn stats(
             axes,
             op,
             skipna,
-            |v| td_ns(&v.signed_duration_since(epoch())),
-            |ns| epoch().checked_add_signed(td_from_ns(ns)?),
+            |v| (!v.is_nat()).then(|| i128::from(v.unix_nanos())),
+            |ns| {
+                i64::try_from(ns)
+                    .ok()
+                    .map(Instant::from_unix_nanos)
+                    .filter(|t| !t.is_nat())
+            },
         )?),
         TypedArray::TimeDelta(x) => {
             TypedArray::TimeDelta(time_stats(x, axes, op, skipna, td_ns, td_from_ns)?)
@@ -1525,6 +1526,7 @@ fn reduce_var<S: Repr>(
         .collect();
     let mut out = Variable::from_typed(out_dims, data)?;
     out.set_unit(reduced_unit(v.unit(), op, n)?);
+    out.take_zone_from(v);
     if opts.keep_attrs {
         out.attrs_mut()
             .extend(v.attrs().iter().map(|(k, a)| (k.clone(), a.clone())));

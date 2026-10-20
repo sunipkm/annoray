@@ -103,6 +103,7 @@ fn carry<S: Repr>(
 fn like(v: &Variable, data: TypedArray<crate::Owned>) -> Result<Variable> {
     let mut out = Variable::from_typed(v.dims().to_vec(), data)?;
     out.set_unit(v.unit().cloned());
+    out.take_zone_from(v);
     out.attrs_mut()
         .extend(v.attrs().iter().map(|(k, a)| (k.clone(), a.clone())));
     Ok(out)
@@ -548,10 +549,7 @@ fn gap_in(gap: &Label, unit: Option<&Unit>, time: bool) -> Result<f64> {
         Label::Int(v) => Ok(*v as f64),
         Label::Float(v) => Ok(*v),
         Label::Quantity(v, u) => quantity(*v, u),
-        Label::TimeDelta(td) => {
-            let secs = td.num_seconds() as f64 + f64::from(td.subsec_nanos()) * 1e-9;
-            quantity(secs, &"s".parse::<Unit>()?)
-        }
+        Label::TimeDelta(td) => quantity(td.as_secs_f64(), &"s".parse::<Unit>()?),
         Label::Str(s) => quantity(1.0, &s.parse::<Unit>()?),
         other => Err(invalid(format!("{other} is not a gap length"))),
     }

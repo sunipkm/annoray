@@ -87,6 +87,19 @@ print(hourly.resample(time="1D").mean().values)
 print(hourly.rolling(time=24).mean().dropna("time").values[:3])
 ```
 
+## Times and time zones
+
+Date-times are `datetime64[ns]` instants in UTC. A variable of them can carry a time zone,
+which sets the wall-clock times its components, resampling bins and display use; times that
+know their zone (whenever's, timezone-aware `datetime`s, pandas') keep it when they become an
+array. The [time chapter](../user-guide/time.md) covers the details.
+
+```{code-cell} python
+local = hourly.assign_coords(time=hourly.time.dt.tz_convert("America/New_York"))
+print(local.time.dt.hour.values[:3])  # 20:00, 21:00, 22:00 on the evening before
+print(local.resample(time="1D").mean().sizes)  # local days: one more than in UTC
+```
+
 ## Files
 
 netCDF and Zarr are read and written by annoray's own backends. Files open lazily:

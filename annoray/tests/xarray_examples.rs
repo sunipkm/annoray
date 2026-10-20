@@ -8,13 +8,10 @@ use annoray::{
     CfDate, CoreError, DType, DataArray, DataArrayView, Dataset, Label, LabelIndexer, Unit,
     UnitPolicy, Variable, isel, sel,
 };
-use chrono::{NaiveDate, NaiveDateTime, TimeDelta};
+use annoray::{Duration, Instant};
 
-fn date(y: i32, m: u32, d: u32) -> NaiveDateTime {
-    NaiveDate::from_ymd_opt(y, m, d)
-        .unwrap()
-        .and_hms_opt(0, 0, 0)
-        .unwrap()
+fn date(y: i64, m: u8, d: u8) -> Instant {
+    Instant::from_ymd(y, m, d).unwrap()
 }
 
 /// temp(time: 4, lat: 3) = arange(12), time = 2020-01-01, -01-15, -02-01, -03-01; lat = 10, 20, 30.
@@ -125,7 +122,7 @@ fn coordinates_follow_selection() {
     assert_eq!(
         r.coord("time")
             .unwrap()
-            .data::<NaiveDateTime>()
+            .data::<Instant>()
             .unwrap()
             .iter()
             .cloned()
@@ -167,10 +164,10 @@ fn arithmetic_matches_xarray() {
     let d = (&td - &first).unwrap();
     assert_eq!(d.dtype(), DType::TimeDelta);
     let days: Vec<i64> = d
-        .data::<TimeDelta>()
+        .data::<Duration>()
         .unwrap()
         .iter()
-        .map(TimeDelta::num_days)
+        .map(|d| d.nanos() / 86_400_000_000_000)
         .collect();
     assert_eq!(days, vec![0, 14, 31, 60]);
 
@@ -487,7 +484,7 @@ fn fancy_indexing_matches_xarray() {
         vec![9.0, 10.0, 11.0, 0.0, 1.0, 2.0, 9.0, 10.0, 11.0]
     );
     assert_eq!(
-        r.coord("time").unwrap().data::<NaiveDateTime>().unwrap()[[1]],
+        r.coord("time").unwrap().data::<Instant>().unwrap()[[1]],
         date(2020, 1, 1)
     );
     let r = t.sel_take("lat", [30.0, 10.0]).unwrap();

@@ -204,24 +204,25 @@ def date_range(
         try:
             import pandas as pd
         except ImportError:
-            if start is None or periods is None or end is not None:
+            if start is None or periods is None or end is not None or tz is not None:
                 raise ImportError(
-                    "date_range needs pandas for this form; give start and periods"
+                    "date_range needs pandas for this form; give start and periods (and "
+                    "set a zone with .dt.tz_convert)"
                 ) from None
             return _native(str(start), periods, freq)
-        return np.asarray(
-            pd.date_range(
-                start,
-                end,
-                periods,
-                freq,
-                tz=tz,
-                normalize=normalize,
-                name=name,
-                inclusive=cast(Any, inclusive),
-                unit=cast(Any, unit),
-            ).values
+        index = pd.date_range(
+            start,
+            end,
+            periods,
+            freq,
+            tz=tz,
+            normalize=normalize,
+            name=name,
+            inclusive=cast(Any, inclusive),
+            unit=cast(Any, unit),
         )
+        # With a zone, pandas' index keeps it (a DataArray made from it takes the zone).
+        return index if tz is not None else np.asarray(index.values)
     if use_cftime is False:
         raise ValueError(f"use_cftime=False needs a standard calendar, not {calendar!r}")
     if start is None:

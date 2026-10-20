@@ -1,8 +1,8 @@
 //! isnull, fillna, where_, dropna, reindex (expected values from Python xarray).
 #![allow(clippy::unwrap_used, clippy::indexing_slicing)]
 
-use annoray::{DataArray, Dataset, How, NaT, Variable};
-use chrono::NaiveDateTime;
+use annoray::Instant;
+use annoray::{DataArray, Dataset, How, Variable};
 use ndarray::{Array1, array};
 
 const NAN: f64 = f64::NAN;
@@ -58,13 +58,13 @@ fn where_and_fill() {
         [20, 30]
     );
     // Times become NaT.
-    let t: Array1<NaiveDateTime> = vec!["2000-01-01T00:00:00".parse().unwrap(); 3].into();
+    let t: Array1<Instant> = vec!["2000-01-01T00:00:00".parse().unwrap(); 3].into();
     let td = DataArray::from_array(["x"], t.into_dyn())
         .unwrap()
         .with_dim_coord("x", array![10i64, 20, 30])
         .unwrap();
     let tw = td.where_(&c).unwrap();
-    assert!(tw.data::<NaiveDateTime>().unwrap()[[1]].is_nat());
+    assert!(tw.data::<Instant>().unwrap()[[1]].is_nat());
     assert_eq!(
         tw.isnull()
             .unwrap()

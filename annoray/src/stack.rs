@@ -102,6 +102,7 @@ fn stack_var<R: Repr>(
     });
     let mut out = Variable::from_typed(others.into_iter().chain([new.clone()]), data)?;
     out.set_unit(var.unit().cloned());
+    out.take_zone_from(var);
     out.attrs_mut()
         .extend(var.attrs().iter().map(|(k, a)| (k.clone(), a.clone())));
     *out.encoding_mut() = var.encoding().clone();
@@ -341,13 +342,13 @@ fn unstack_var<R: Repr>(var: &VariableBase<R>, plan: &Plan, fill: Option<f64>) -
         TypedArray::F64(a) => TypedArray::F64(with_fill!(a, f)),
         TypedArray::F32(a) => TypedArray::F32(with_fill!(a, f as f32)),
         TypedArray::DateTime(a) => {
-            TypedArray::DateTime(with_fill!(a, <chrono::NaiveDateTime as NaT>::NAT))
+            TypedArray::DateTime(with_fill!(a, <annoray_units::Instant as NaT>::NAT))
         }
         TypedArray::CfDate(a) => {
             TypedArray::CfDate(with_fill!(a, <annoray_units::CfDate as NaT>::NAT))
         }
         TypedArray::TimeDelta(a) => {
-            TypedArray::TimeDelta(with_fill!(a, <chrono::TimeDelta as NaT>::NAT))
+            TypedArray::TimeDelta(with_fill!(a, <annoray_units::Duration as NaT>::NAT))
         }
         other if plan.complete => typed_map!(other, a => {
             a.permuted_axes(IxDyn(&perm))
@@ -396,6 +397,7 @@ fn unstack_var<R: Repr>(var: &VariableBase<R>, plan: &Plan, fill: Option<f64>) -
         data,
     )?;
     out.set_unit(var.unit().cloned());
+    out.take_zone_from(var);
     out.attrs_mut()
         .extend(var.attrs().iter().map(|(k, a)| (k.clone(), a.clone())));
     let mut enc = var.encoding().clone();

@@ -262,6 +262,7 @@ fn vindex_var<R: Repr>(var: &VariableBase<R>, ix: &IndexMap<Name, Ix>) -> Result
     });
     let mut out = Variable::from_typed(out_dims, data)?;
     out.set_unit(var.unit().cloned());
+    out.take_zone_from(var);
     out.attrs_mut()
         .extend(var.attrs().iter().map(|(k, a)| (k.clone(), a.clone())));
     Ok(out)

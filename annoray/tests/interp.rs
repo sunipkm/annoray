@@ -1,9 +1,9 @@
 //! interp against Python xarray (`fixtures/interp.txt`, from `fixtures/gen_interp.py`).
 #![allow(clippy::unwrap_used, clippy::indexing_slicing, clippy::panic)]
 
+use annoray::Instant;
 use annoray::units::Unit;
 use annoray::{DataArray, Dataset, Extrapolate, InterpMethod, InterpOptions, TypedArray, Variable};
-use chrono::NaiveDateTime;
 use ndarray::{Array1, ArrayD, IxDyn, array};
 
 const NAN: f64 = f64::NAN;
@@ -70,7 +70,7 @@ fn same(got: &[f64], want: &str, line: &str) {
 #[test]
 fn matches_xarray() {
     let table = include_str!("../../fixtures/interp.txt");
-    let dt = |s: &str| -> NaiveDateTime { s.parse().unwrap() };
+    let dt = |s: &str| -> Instant { s.parse().unwrap() };
     for line in table.lines() {
         let f: Vec<&str> = line.split('|').collect();
         let method = if f[1] == "nearest" {
@@ -88,12 +88,12 @@ fn matches_xarray() {
                     .unwrap()
             }
             "time" => {
-                let t: Array1<NaiveDateTime> = array![
+                let t: Array1<Instant> = array![
                     dt("2000-01-01T00:00:00"),
                     dt("2000-01-02T00:00:00"),
                     dt("2000-01-03T00:00:00")
                 ];
-                let at: Array1<NaiveDateTime> = array![
+                let at: Array1<Instant> = array![
                     dt("2000-01-01T06:00:00"),
                     dt("2000-01-02T18:00:00"),
                     dt("2000-01-04T00:00:00")
@@ -398,14 +398,14 @@ fn power_law_needs_ratio_scales() {
         .with_dim_coord(
             "x",
             array![
-                "2020-01-01T00:00:00".parse::<NaiveDateTime>().unwrap(),
-                "2020-01-02T00:00:00".parse::<NaiveDateTime>().unwrap()
+                "2020-01-01T00:00:00".parse::<Instant>().unwrap(),
+                "2020-01-02T00:00:00".parse::<Instant>().unwrap()
             ],
         )
         .unwrap();
     let at_t = Variable::new(
         ["x"],
-        array!["2020-01-03T00:00:00".parse::<NaiveDateTime>().unwrap()].into_dyn(),
+        array!["2020-01-03T00:00:00".parse::<Instant>().unwrap()].into_dyn(),
     )
     .unwrap();
     assert!(times.interp("x", &at_t, opts).is_err());

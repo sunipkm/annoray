@@ -18,11 +18,10 @@ test = false
 doctest = false
 
 [dependencies]
-chrono.workspace = true
 ndarray.workspace = true
 numpy.workspace = true
 pyo3 = { workspace = true, features = ["multiple-pymethods", "abi3-py311"] }
-annoray.workspace = true
+annoray = { workspace = true, features = ["tzdb-bundle"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 libc.workspace = true

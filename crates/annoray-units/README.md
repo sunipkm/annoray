@@ -14,8 +14,10 @@ Runtime and compile-time physical units with exact scales; the units layer of
   UDUNITS database rounds or predates them.
 - **Non-multiplicative units:** affine (°C), epoch (`days since 1970-01-01`) and logarithmic
   (dB) units.
+- **Instants and durations:** `Instant` and `Duration`, 64-bit nanosecond counts with the
+  memory layout of numpy's `datetime64[ns]` and `timedelta64[ns]`.
 - **Calendars:** all CF calendars (`noleap`, `360_day`, …) via `CfDate`, interconvertible with
-  chrono.
+  instants.
 - **Dimension-typed quantities:** `Quantity<D>` with `typenum` exponents over the eight base
   dimensions (SI + angle); derived dimensions are composed with `dimension!`, and dimensional
   errors are type errors.

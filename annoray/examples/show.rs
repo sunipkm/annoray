@@ -1,14 +1,9 @@
 //! Prints a small dataset, xarray style: `cargo run --example show`.
 use annoray::ndarray::{ArrayD, IxDyn, array};
 use annoray::{DataArray, Dataset, Variable, sel};
-use chrono::NaiveDate;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let t = |d| {
-        NaiveDate::from_ymd_opt(2020, 1, d)
-            .and_then(|d| d.and_hms_opt(0, 0, 0))
-            .ok_or("bad date")
-    };
+    let t = |d| annoray::Instant::from_ymd(2020, 1, d);
     let temp = DataArray::from_array(
         ["time", "lat"],
         ArrayD::from_shape_vec(
