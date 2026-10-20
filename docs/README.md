@@ -29,6 +29,9 @@ sphinx-build -b html -W --keep-going -d docs/_build/doctrees docs docs/_build/ht
 
 - `api/*.md`: the reference pages. A new public method or function goes into the right
   section there; `check_api.py` fails until it does.
-- `getting-started/overview.md` is executed at build time (myst-nb): its output is real.
+- Pages with `file_format: mystnb` front matter (the overview, the user guide and the API
+  reference pages) are executed at build time: their output is real, and an example that
+  raises fails the build. Each API section opens with an example of its core operations;
+  a new section gets one too.
 - `_tools/deploy.py`: places a build in a checkout of `gh-pages` and rebuilds the version
   switcher (`switcher.json`).

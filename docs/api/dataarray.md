@@ -1,3 +1,10 @@
+---
+file_format: mystnb
+kernelspec:
+  name: python3
+  display_name: Python 3
+---
+
 # DataArray
 
 A labelled, units-aware N-dimensional array.
@@ -11,7 +18,30 @@ A labelled, units-aware N-dimensional array.
    DataArray
 ```
 
+Each section has a short example; the examples share this setup:
+
+```{code-cell} python
+import numpy as np
+import annoray as ar
+
+temp = ar.DataArray(
+    280.0 + np.arange(12.0).reshape(4, 3),
+    dims=("time", "station"),
+    coords={"time": ar.date_range("2026-07-01", 4, "D"), "station": ["a", "b", "c"]},
+    name="temperature",
+    units="K",
+)
+temp
+```
+
 ## Attributes
+
+```{code-cell} python
+print(temp.dims, temp.sizes, temp.dtype)
+print(temp.coords["station"].values)
+temp.attrs["source"] = "synthetic"  # attributes, coordinates and the name can change
+print(temp.attrs)
+```
 
 ```{eval-rst}
 .. autosummary::
@@ -40,6 +70,11 @@ A labelled, units-aware N-dimensional array.
 
 ## Units
 
+```{code-cell} python
+print(temp.units, temp.dimension)
+print(temp.to("degC").values[0])  # exact conversion
+```
+
 ```{eval-rst}
 .. autosummary::
    :toctree: generated/
@@ -51,6 +86,12 @@ A labelled, units-aware N-dimensional array.
 ```
 
 ## Memory and copying
+
+```{code-cell} python
+print(temp.astype("float32").dtype)
+print(temp.isel(time=0, station=0).item())
+print(temp.to_numpy().flags.writeable)  # values are read-only views
+```
 
 ```{eval-rst}
 .. autosummary::
@@ -68,6 +109,14 @@ A labelled, units-aware N-dimensional array.
 ```
 
 ## Indexing
+
+```{code-cell} python
+print(temp.isel(time=0).values)
+print(temp.sel(station="b", time=slice("2026-07-02", "2026-07-03")).values)
+# Values are immutable: put / put_sel return an updated copy, converting the unit.
+print(temp.put_sel(ar.Quantity(0.0, "degC"), station="a", time="2026-07-01").values[0])
+print(temp.sortby("station", ascending=False).station.values)
+```
 
 ```{eval-rst}
 .. autosummary::
@@ -99,6 +148,13 @@ A labelled, units-aware N-dimensional array.
 
 ## Missing values
 
+```{code-cell} python
+gappy = temp.where(temp > ar.Quantity(283.0, "K"))
+print(int(gappy.isnull().sum()))
+print(gappy.ffill("time").isel(station=0).values)
+print(gappy.fillna(ar.Quantity(0.0, "degC")).isel(time=0).values)
+```
+
 ```{eval-rst}
 .. autosummary::
    :toctree: generated/
@@ -116,6 +172,11 @@ A labelled, units-aware N-dimensional array.
 
 ## Comparisons
 
+```{code-cell} python
+print(temp.equals(temp.copy()))
+print(temp.equals(temp.to("degC")))  # the same quantities in another unit
+```
+
 ```{eval-rst}
 .. autosummary::
    :toctree: generated/
@@ -127,6 +188,13 @@ A labelled, units-aware N-dimensional array.
 ```
 
 ## Aggregation
+
+```{code-cell} python
+print(temp.mean("time").values, temp.mean("time").units)
+print(temp.max().item())
+print(temp.idxmax("time").values)
+print(temp.quantile(0.5, dim="time").values)
+```
 
 ```{eval-rst}
 .. autosummary::
@@ -152,6 +220,10 @@ A labelled, units-aware N-dimensional array.
 
 ## Cumulative
 
+```{code-cell} python
+print(temp.isel(station=0).cumsum("time").values)
+```
+
 ```{eval-rst}
 .. autosummary::
    :toctree: generated/
@@ -163,6 +235,13 @@ A labelled, units-aware N-dimensional array.
 ```
 
 ## Computation
+
+```{code-cell} python
+print(temp.diff("time").isel(station=0).values)
+print(temp.differentiate("time").units)  # a rate: kelvin per second
+print(temp.shift(time=1).isel(station=0).values)
+print(temp.clip(max=ar.Quantity(10.0, "degC")).isel(station=0).values)
+```
 
 ```{eval-rst}
 .. autosummary::
@@ -190,6 +269,14 @@ A labelled, units-aware N-dimensional array.
 
 ## Grouped and windowed
 
+```{code-cell} python
+print(temp.resample(time="2D").mean().values)
+print(temp.rolling(time=2).mean().isel(station=0).values)
+print(temp.coarsen(time=2).max().sizes)
+w = ar.DataArray([1.0, 1.0, 2.0], dims="station")
+print(temp.weighted(w).mean("station").values)
+```
+
 ```{eval-rst}
 .. autosummary::
    :toctree: generated/
@@ -204,6 +291,14 @@ A labelled, units-aware N-dimensional array.
 ```
 
 ## Reshaping and renaming
+
+```{code-cell} python
+print(temp.transpose("station", "time").dims)
+print(temp.expand_dims("run").sizes)
+print(temp.stack(point=("time", "station")).sizes)
+print(temp.assign_coords(elevation=("station", [10.0, 250.0, 1200.0])).coords["elevation"].values)
+print(temp.rename("t").name)
+```
 
 ```{eval-rst}
 .. autosummary::
@@ -224,6 +319,12 @@ A labelled, units-aware N-dimensional array.
 
 ## Time and text
 
+```{code-cell} python
+print(temp.time.dt.dayofweek.values)
+print(temp.time.dt.tz_convert("America/New_York").dt.hour.values)
+print(temp.station.str.upper().values)
+```
+
 ```{eval-rst}
 .. autosummary::
    :toctree: generated/
@@ -235,6 +336,10 @@ A labelled, units-aware N-dimensional array.
 
 ## Plotting
 
+```{code-cell} python
+temp.isel(station=0).plot();
+```
+
 ```{eval-rst}
 .. autosummary::
    :toctree: generated/
@@ -243,6 +348,16 @@ A labelled, units-aware N-dimensional array.
 ```
 
 ## Input and output
+
+```{code-cell} python
+import os, tempfile
+
+path = os.path.join(tempfile.mkdtemp(), "temperature.nc")
+temp.to_netcdf(path)
+print(ar.open_dataarray(path).units)
+print(list(temp.to_dataset().data_vars))
+print(sorted(temp.to_dict()))
+```
 
 ```{eval-rst}
 .. autosummary::

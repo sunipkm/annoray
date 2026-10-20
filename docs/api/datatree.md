@@ -1,3 +1,10 @@
+---
+file_format: mystnb
+kernelspec:
+  name: python3
+  display_name: Python 3
+---
+
 # DataTree
 
 A tree of datasets; a node is a view of the shared tree at a path.
@@ -11,7 +18,25 @@ A tree of datasets; a node is a view of the shared tree at a path.
    DataTree
 ```
 
+Each section has a short example; the examples share this setup:
+
+```{code-cell} python
+import numpy as np
+import annoray as ar
+
+tree = ar.DataTree.from_dict({
+    "/": ar.Dataset(attrs={"title": "campaign"}),
+    "/surface": ar.Dataset({"t": ("time", [280.0, 281.0, 283.0], {"units": "K"})}),
+    "/upper": ar.Dataset({"t": ("time", [250.0, 248.5, 247.0], {"units": "K"})}),
+})
+```
+
 ## Tree structure
+
+```{code-cell} python
+print(tree.groups)
+print(tree["surface"].path, tree["surface"].parent.path, tree["surface"].is_leaf)
+```
 
 ```{eval-rst}
 .. autosummary::
@@ -46,6 +71,11 @@ A tree of datasets; a node is a view of the shared tree at a path.
 
 ## Node contents
 
+```{code-cell} python
+print(tree["surface"].dataset["t"].units)
+print(list(tree["upper"].data_vars))
+```
+
 ```{eval-rst}
 .. autosummary::
    :toctree: generated/
@@ -67,6 +97,11 @@ A tree of datasets; a node is a view of the shared tree at a path.
 
 ## Editing
 
+```{code-cell} python
+tree2 = tree.assign(note=ar.DataArray("synthetic"))
+print(list(tree2.data_vars), list(tree.data_vars))
+```
+
 ```{eval-rst}
 .. autosummary::
    :toctree: generated/
@@ -81,6 +116,11 @@ A tree of datasets; a node is a view of the shared tree at a path.
 
 ## Selecting nodes
 
+```{code-cell} python
+print(tree.match("surf*").groups)
+print(tree.filter(lambda node: node.has_data).groups)
+```
+
 ```{eval-rst}
 .. autosummary::
    :toctree: generated/
@@ -93,6 +133,11 @@ A tree of datasets; a node is a view of the shared tree at a path.
 
 ## Mapping over nodes
 
+```{code-cell} python
+celsius = tree.map_over_datasets(lambda ds: ds.map(lambda v: v.to("degC")))
+print(celsius["surface"]["t"].values)
+```
+
 ```{eval-rst}
 .. autosummary::
    :toctree: generated/
@@ -102,6 +147,10 @@ A tree of datasets; a node is a view of the shared tree at a path.
 ```
 
 ## Memory and copying
+
+```{code-cell} python
+print(tree.astype("float32")["surface"]["t"].dtype)
+```
 
 ```{eval-rst}
 .. autosummary::
@@ -115,6 +164,10 @@ A tree of datasets; a node is a view of the shared tree at a path.
 ```
 
 ## Indexing
+
+```{code-cell} python
+print(tree.isel(time=0)["upper"]["t"].values)
+```
 
 ```{eval-rst}
 .. autosummary::
@@ -131,6 +184,10 @@ A tree of datasets; a node is a view of the shared tree at a path.
 
 ## Missing values
 
+```{code-cell} python
+print(tree.where(tree > ar.Quantity(249.0, "K"))["upper"]["t"].values)
+```
+
 ```{eval-rst}
 .. autosummary::
    :toctree: generated/
@@ -144,6 +201,10 @@ A tree of datasets; a node is a view of the shared tree at a path.
 
 ## Comparisons
 
+```{code-cell} python
+print(tree.equals(tree.copy()))
+```
+
 ```{eval-rst}
 .. autosummary::
    :toctree: generated/
@@ -153,6 +214,10 @@ A tree of datasets; a node is a view of the shared tree at a path.
 ```
 
 ## Aggregation
+
+```{code-cell} python
+print(tree.mean("time")["surface"]["t"].item())
+```
 
 ```{eval-rst}
 .. autosummary::
@@ -174,6 +239,10 @@ A tree of datasets; a node is a view of the shared tree at a path.
 
 ## Cumulative
 
+```{code-cell} python
+print(tree.cumsum("time")["upper"]["t"].values)
+```
+
 ```{eval-rst}
 .. autosummary::
    :toctree: generated/
@@ -183,6 +252,10 @@ A tree of datasets; a node is a view of the shared tree at a path.
 ```
 
 ## Computation
+
+```{code-cell} python
+print(tree.diff("time")["surface"]["t"].values)
+```
 
 ```{eval-rst}
 .. autosummary::
@@ -197,6 +270,10 @@ A tree of datasets; a node is a view of the shared tree at a path.
 
 ## Reshaping and renaming
 
+```{code-cell} python
+print(tree.isel(time=slice(0, 1)).squeeze()["surface"]["t"].values)
+```
+
 ```{eval-rst}
 .. autosummary::
    :toctree: generated/
@@ -205,6 +282,14 @@ A tree of datasets; a node is a view of the shared tree at a path.
 ```
 
 ## Input and output
+
+```{code-cell} python
+import os, tempfile
+
+path = os.path.join(tempfile.mkdtemp(), "tree.nc")
+tree.to_netcdf(path)
+print(ar.open_datatree(path).groups)
+```
 
 ```{eval-rst}
 .. autosummary::

@@ -10,6 +10,10 @@ This page lists the differences by topic. Each entry gives annoray's behaviour, 
 
 ## Data model and assignment
 
+Data are immutable from Python; containers are not. A `DataArray`'s data and unit are fixed
+for its lifetime (its coordinates, attributes and name can change), while a `Dataset` is a
+mutable collection whose variables are replaced, never written into.
+
 - **Values are immutable from Python.** `da[...] = v`, `da.loc[...] = v` and
   `da.values[...] = v` raise `TypeError`; `.values` is a read-only NumPy view of the Rust
   buffer. `da.put(value, **positions)` and `da.put_sel(value, method=, tolerance=, **labels)`
@@ -22,8 +26,10 @@ This page lists the differences by topic. Each entry gives annoray's behaviour, 
     - a dimension coordinate of `value` must match the target at the selected positions;
     - `value` is converted into the target's unit;
     - the element type never changes (`2.5` into an `int32` array is an error, not `2`).
-  - Bulk edits: `arr = da.values.copy()`, edit `arr`, then `da.copy(data=arr)`. Datasets:
-    `ds.assign(v=ds.v.put(...))`.
+  - Bulk edits: `arr = da.values.copy()`, edit `arr`, then `da.copy(data=arr)`. Datasets
+    have no `put`: `ds["v"] = ds["v"].put(...)` replaces the variable in place, and
+    `ds.assign(v=ds["v"].put(...))` returns a new dataset. Arrays taken from the dataset
+    earlier keep their values either way.
   - In Rust, data is mutated in place through `data_mut` / `isel_mut`, where the borrow
     checker rules out aliasing.
 - **Containers are assignable.** These work as in xarray: `ds["v"] = ...`, `del ds["v"]`,

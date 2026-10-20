@@ -1,3 +1,10 @@
+---
+file_format: mystnb
+kernelspec:
+  name: python3
+  display_name: Python 3
+---
+
 # Units
 
 Units belong to the data: `da.units` is a {class}`Unit`, scalars with units are
@@ -17,7 +24,19 @@ opened. Dimensionally inconsistent operations raise {class}`UnitError`.
    dimension
 ```
 
+Each section has a short example; the examples share this setup:
+
+```{code-cell} python
+import annoray as ar
+```
+
 ## Unit
+
+```{code-cell} python
+u = ar.Unit("km/h")
+print(u.dimension, u.si_factor, u.is_convertible("m/s"))
+print(ar.Unit("degC").kind, ar.Unit("degC").offset)
+```
 
 ```{eval-rst}
 .. currentmodule:: annoray
@@ -37,6 +56,15 @@ opened. Dimensionally inconsistent operations raise {class}`UnitError`.
 
 ## Quantity
 
+```{code-cell} python
+q = ar.Quantity(90.0, "km/h")
+print(q.to("m/s"), q.magnitude, q.units)
+try:
+    q + ar.Quantity(1.0, "kg")
+except ar.UnitError as e:
+    print("UnitError:", e)
+```
+
 ```{eval-rst}
 .. currentmodule:: annoray
 
@@ -52,6 +80,11 @@ opened. Dimensionally inconsistent operations raise {class}`UnitError`.
 ```
 
 ## Dimension
+
+```{code-cell} python
+print(ar.Unit("N").dimension.exponents)
+print(ar.Unit("m/m").dimension.dimensionless)
+```
 
 ```{eval-rst}
 .. currentmodule:: annoray
@@ -69,6 +102,16 @@ opened. Dimensionally inconsistent operations raise {class}`UnitError`.
 (`Length(2.5, "km")`), annotate arrays and quantities (`DataArray[Velocity]`), and
 {func}`annoray.dims.checked` enforces the annotations at call time. Derived dimensions are
 declared as {class}`annoray.dims.Dim` subclasses.
+
+```{code-cell} python
+from annoray.dims import Length, Time, Velocity, checked
+
+@checked
+def speed(d: Length, t: Time) -> Velocity:
+    return d / t
+
+print(speed(ar.Quantity(5.0, "km"), ar.Quantity(30.0, "min")).to("km/h"))
+```
 
 ```{eval-rst}
 .. currentmodule:: annoray

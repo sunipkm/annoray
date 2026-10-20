@@ -1,3 +1,10 @@
+---
+file_format: mystnb
+kernelspec:
+  name: python3
+  display_name: Python 3
+---
+
 # Dataset
 
 A dict-like collection of data arrays sharing dimensions and coordinates.
@@ -11,7 +18,29 @@ A dict-like collection of data arrays sharing dimensions and coordinates.
    Dataset
 ```
 
+Each section has a short example; the examples share this setup:
+
+```{code-cell} python
+import numpy as np
+import annoray as ar
+
+ds = ar.Dataset(
+    {
+        "temperature": (("time", "station"), 280.0 + np.arange(12.0).reshape(4, 3), {"units": "K"}),
+        "pressure": ("time", [1012.0, 1009.5, 1004.2, 1007.8], {"units": "hPa"}),
+    },
+    coords={"time": ar.date_range("2026-07-01", 4, "D"), "station": ["a", "b", "c"]},
+)
+ds
+```
+
 ## Attributes
+
+```{code-cell} python
+print(ds.sizes)
+print(list(ds.data_vars), list(ds.coords))
+print(ds["pressure"].units)
+```
 
 ```{eval-rst}
 .. autosummary::
@@ -34,6 +63,16 @@ A dict-like collection of data arrays sharing dimensions and coordinates.
 
 ## Contents
 
+```{code-cell} python
+# Variables are replaced, never written into: arrays taken earlier keep their values.
+edited = ds.copy()
+before = edited["pressure"]
+edited["pressure"] = edited["pressure"].to("Pa")
+print(before.units, edited["pressure"].units)
+wind = ar.DataArray([3.0, 5.5, 2.1, 4.0], dims="time", units="m/s")
+print(list(ds.assign(wind=wind).data_vars))  # a new dataset; ds is unchanged
+```
+
 ```{eval-rst}
 .. autosummary::
    :toctree: generated/
@@ -47,6 +86,11 @@ A dict-like collection of data arrays sharing dimensions and coordinates.
 ```
 
 ## Memory and copying
+
+```{code-cell} python
+print(ds.astype("float32")["temperature"].dtype)
+print(ds.copy().identical(ds))
+```
 
 ```{eval-rst}
 .. autosummary::
@@ -62,6 +106,12 @@ A dict-like collection of data arrays sharing dimensions and coordinates.
 ```
 
 ## Indexing
+
+```{code-cell} python
+print(ds.isel(time=0)["pressure"].item())
+print(ds.sel(station="b", time="2026-07-02")["temperature"].item())
+print(ds.sortby("station", ascending=False)["station"].values)
+```
 
 ```{eval-rst}
 .. autosummary::
@@ -90,6 +140,12 @@ A dict-like collection of data arrays sharing dimensions and coordinates.
 
 ## Missing values
 
+```{code-cell} python
+low = ds.where(ds["pressure"] < ar.Quantity(1010.0, "hPa"))
+print(low["pressure"].values)
+print(low.dropna("time", how="all").sizes)
+```
+
 ```{eval-rst}
 .. autosummary::
    :toctree: generated/
@@ -107,6 +163,10 @@ A dict-like collection of data arrays sharing dimensions and coordinates.
 
 ## Comparisons
 
+```{code-cell} python
+print(ds.equals(ds.copy()))
+```
+
 ```{eval-rst}
 .. autosummary::
    :toctree: generated/
@@ -117,6 +177,11 @@ A dict-like collection of data arrays sharing dimensions and coordinates.
 ```
 
 ## Aggregation
+
+```{code-cell} python
+means = ds.mean("time")
+print(means["temperature"].values, means["pressure"].item())
+```
 
 ```{eval-rst}
 .. autosummary::
@@ -142,6 +207,10 @@ A dict-like collection of data arrays sharing dimensions and coordinates.
 
 ## Cumulative
 
+```{code-cell} python
+print(ds.cumsum("time")["pressure"].values)
+```
+
 ```{eval-rst}
 .. autosummary::
    :toctree: generated/
@@ -152,6 +221,11 @@ A dict-like collection of data arrays sharing dimensions and coordinates.
 ```
 
 ## Computation
+
+```{code-cell} python
+print(ds.diff("time")["pressure"].values)
+print(ds.map(lambda v: v.max())["pressure"].item())
+```
 
 ```{eval-rst}
 .. autosummary::
@@ -178,6 +252,11 @@ A dict-like collection of data arrays sharing dimensions and coordinates.
 
 ## Grouped and windowed
 
+```{code-cell} python
+print(ds.resample(time="2D").mean()["pressure"].values)
+print(ds.rolling(time=2).mean()["pressure"].values)
+```
+
 ```{eval-rst}
 .. autosummary::
    :toctree: generated/
@@ -192,6 +271,12 @@ A dict-like collection of data arrays sharing dimensions and coordinates.
 ```
 
 ## Reshaping and renaming
+
+```{code-cell} python
+print(ds.rename_vars(pressure="p").data_vars.keys())
+print(ds.drop_vars("pressure").data_vars.keys())
+print(ds.expand_dims("run").sizes)
+```
 
 ```{eval-rst}
 .. autosummary::
@@ -219,6 +304,11 @@ A dict-like collection of data arrays sharing dimensions and coordinates.
 
 ## Time and text
 
+```{code-cell} python
+noleap = ds.convert_calendar("noleap")
+print(noleap["time"].values[0])
+```
+
 ```{eval-rst}
 .. autosummary::
    :toctree: generated/
@@ -228,6 +318,10 @@ A dict-like collection of data arrays sharing dimensions and coordinates.
 
 ## Plotting
 
+```{code-cell} python
+ds.isel(station=0).plot.scatter(x="pressure", y="temperature");
+```
+
 ```{eval-rst}
 .. autosummary::
    :toctree: generated/
@@ -236,6 +330,19 @@ A dict-like collection of data arrays sharing dimensions and coordinates.
 ```
 
 ## Input and output
+
+```{code-cell} python
+import os, tempfile
+
+path = os.path.join(tempfile.mkdtemp(), "obs.nc")
+ds.to_netcdf(path)
+back = ar.open_dataset(path)
+print(back["pressure"].units, back["temperature"].is_lazy)
+try:
+    ds.to_dataarray(dim="variable")  # one array needs one unit
+except ar.UnitError as e:
+    print("UnitError:", e)
+```
 
 ```{eval-rst}
 .. autosummary::

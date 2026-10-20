@@ -64,15 +64,68 @@ print(temp.sel(station=["a", "c"], time="2026-07-02").values)
 
 ## Updating values
 
-Values are immutable from Python: an object's data never changes underneath a reference to
-it. {meth}`~annoray.DataArray.put` and {meth}`~annoray.DataArray.put_sel` return an updated
-copy, converting the value into the array's unit:
+Values are immutable from Python: an array's data never changes underneath a reference to
+it. Containers are not: a {class}`~annoray.Dataset` is a mutable collection of immutable
+variables, and a {class}`~annoray.DataArray`'s coordinates, attributes and name can be
+changed, but its data and unit are fixed for its lifetime.
+
+| | Values | Replaceable in place |
+|---|---|---|
+| `DataArray` | immutable (`da[...] = v` and `.values[...] = v` raise) | coordinates, `attrs`, `name` |
+| `Dataset` | immutable (each variable's) | variables (`ds["v"] = ...`, `del ds["v"]`, `update`), coordinates, `attrs` |
+
+{meth}`~annoray.DataArray.put` (by position) and {meth}`~annoray.DataArray.put_sel` (by
+label) return an updated copy, converting the value into the array's unit:
 
 ```{code-cell} python
 fixed = temp.put_sel(ar.Quantity(9.0, "degC"), station="b", time="2026-07-01")
 print(fixed.values)
 print(temp.values[0, 1])  # unchanged
 ```
+
+A dataset has no `put` of its own: a variable is edited with `put` and put back, which
+replaces it in the dataset (or `assign` gives a new dataset and leaves this one as it was).
+Arrays taken from the dataset before keep their values:
+
+```{code-cell} python
+ds = temp.to_dataset()
+before = ds["temperature"]
+ds["temperature"] = ds["temperature"].put_sel(ar.Quantity(9.0, "degC"), station="b")
+print(ds["temperature"].values[:, 1])
+print(before.values[:, 1])  # unchanged
+```
+
+## Adding values
+
+An array grows along a dimension with {func}`~annoray.concat`; there is no `append`
+method. A new value is a one-element array with its coordinate, in any compatible unit
+(it is converted into the first array's):
+
+```{code-cell} python
+point = ar.DataArray(
+    [[9.0, 11.0, 7.5]],
+    dims=("time", "station"),
+    coords={"time": [np.datetime64("2026-07-03", "ns")], "station": ["a", "b", "c"]},
+    units="degC",
+)
+longer = ar.concat([temp, point], dim="time")
+print(longer.sizes, longer.values[-1])
+```
+
+Since values are immutable, each `concat` copies everything it joins, so growing an array
+one value at a time in a loop takes time quadratic in its length. Values that arrive one
+by one are collected first and joined in a single `concat`:
+
+```{code-cell} python
+pieces = [temp]
+for day in range(3, 6):
+    t = np.datetime64("2026-07-01", "ns") + np.timedelta64(day - 1, "D")
+    pieces.append(point.assign_coords(time=[t]))
+print(ar.concat(pieces, dim="time").sizes)
+```
+
+Values streamed to a file go through {class}`~annoray.NetcdfWriter`, whose `append` grows the
+file in place without rewriting what is already written.
 
 ## Grouping and windows
 
