@@ -45,7 +45,7 @@ def test_fixed_offsets_and_utc():
 def test_naive_times_have_no_zone():
     da = ar.DataArray(utc("2024-05-11T03:00"), dims="t")
     assert da.dt.tz is None
-    naive = dt.datetime(2024, 5, 11)  # noqa: DTZ001
+    naive = dt.datetime.fromisoformat("2024-05-11")  # no zone
     assert ar.DataArray([naive], dims="t").dt.tz is None
 
 
@@ -82,7 +82,7 @@ def test_whenever_inputs():
 def test_times_with_and_without_a_zone_do_not_mix():
     w = pytest.importorskip("whenever")
     with pytest.raises(TypeError, match="no time zone"):
-        naive = dt.datetime(2024, 5, 11)  # noqa: DTZ001
+        naive = dt.datetime.fromisoformat("2024-05-11")  # no zone
         ar.DataArray([w.ZonedDateTime(2024, 5, 11, tz=NY), naive], dims="t")
 
 

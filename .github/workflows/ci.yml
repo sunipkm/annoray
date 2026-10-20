@@ -76,8 +76,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      # hdf5plugin: imported by the fixture scripts pyright checks.
-      - run: pip install "./annoray-python[test]" hdf5plugin ruff pyright
+      # hdf5plugin: imported by the fixture scripts pyright checks. ruff is pinned: its default
+      # rules change between releases, and the package's config selects none of its own.
+      - run: pip install "./annoray-python[test]" hdf5plugin ruff==0.17.1 pyright
       # numbagg (with numba and llvmlite, ~160 MB) is only the reference for rolling_exp,
       # whose arithmetic does not depend on the platform: one job is enough. Elsewhere those
       # tests skip.
