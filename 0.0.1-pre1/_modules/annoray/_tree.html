@@ -1,0 +1,1258 @@
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../../" data-theme="auto">
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>annoray._tree &#8212; annoray</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "auto";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "auto";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../../_static/styles/theme.css?digest=18bd87630a240e9c25be" rel="stylesheet" />
+<link href="../../_static/styles/pydata-sphinx-theme.css?digest=18bd87630a240e9c25be" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../../_static/mystnb.11b39860a7a0cbfd473a3ad8a317855267ff0bd372690045ca344a6b62be495e.css" />
+    <link rel="stylesheet" type="text/css" href="../../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../_static/sphinx-design.min.css?v=95c83b7e" />
+  
+  <!-- So that users can add custom icons -->
+  <script defer src="../../_static/scripts/fontawesome.js?digest=18bd87630a240e9c25be"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../../_static/scripts/bootstrap.js?digest=18bd87630a240e9c25be" />
+<link rel="preload" as="script" href="../../_static/scripts/pydata-sphinx-theme.js?digest=18bd87630a240e9c25be" />
+
+    <script src="../../_static/documentation_options.js?v=4dd95a75"></script>
+    <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../../_static/copybutton.js?v=f281be69"></script>
+    <script src="../../_static/design-tabs.js?v=f930bc37"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = '_modules/annoray/_tree';</script>
+    <script>
+        DOCUMENTATION_OPTIONS.theme_version = '0.23.0';
+        DOCUMENTATION_OPTIONS.theme_switcher_json_url = 'https://sunipkm.github.io/annoray/switcher.json';
+        DOCUMENTATION_OPTIONS.theme_switcher_version_match = '0.0.1-pre1';
+        DOCUMENTATION_OPTIONS.show_version_warning_banner =
+            false;
+        </script>
+    <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="color-scheme" content="light dark"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="0.0.1-pre1" />
+  
+    
+    <script src="../../_static/searchtools.js"></script>
+    <script src="../../_static/language_data.js"></script>
+    <script src="../../searchindex.js"></script>
+  
+  </head>
+  <body data-default-mode="auto">
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+  
+  
+  
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="../../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header id="pst-header" class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button type="button" class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-3 navbar-header-items__start">
+    
+      <div class="navbar-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../../index.html">
+  
+  
+  
+  
+  
+  
+    <p class="title logo__title">annoray</p>
+  
+</a></div>
+    
+  </div>
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    <div class="me-auto navbar-header-items__center">
+      
+        <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../getting-started/installation.html">
+    Installation
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../getting-started/overview.html">
+    Overview
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../getting-started/examples.html">
+    Examples
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../xarray-differences.html">
+    Differences from xarray
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../user-guide/index.html">
+    User guide
+  </a>
+</li>
+
+            <li class="nav-item dropdown">
+                <button class="btn dropdown-toggle nav-item" type="button"
+                data-bs-toggle="dropdown" aria-expanded="false"
+                aria-controls="pst-nav-more-links">
+                    More
+                </button>
+                <ul id="pst-nav-more-links" class="dropdown-menu">
+                    
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="../../api/index.html">
+    API reference
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="../../rust.html">
+    Rust crates
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="../../performance.html">
+    Performance
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-external" href="https://docs.rs/annoray">
+    Rust API
+  </a>
+</li>
+
+                </ul>
+            </li>
+            
+  </ul>
+</nav></div>
+      
+    </div>
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button type="button" class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+        </div>
+      
+      
+        <div class="navbar-item">
+<div class="version-switcher__container dropdown pst-js-only">
+  <button id="pst-version-switcher-button-2"
+    type="button"
+    class="version-switcher__button btn btn-sm dropdown-toggle"
+    data-bs-toggle="dropdown"
+    aria-haspopup="listbox"
+    aria-controls="pst-version-switcher-list-2"
+    aria-label="Version switcher list"
+  >
+    Choose version  <!-- this text may get changed later by javascript -->
+    <span class="caret"></span>
+  </button>
+  <div id="pst-version-switcher-list-2"
+    class="version-switcher__menu dropdown-menu list-group-flush py-0"
+    role="listbox" aria-labelledby="pst-version-switcher-button-2">
+    <!-- dropdown will be populated by javascript on page load -->
+  </div>
+</div></div>
+      
+        <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button type="button" class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+      
+        <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/sunipkm/annoray" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-square-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
+        </li>
+</ul></div>
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button type="button" class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+    </div>
+  
+
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+        
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar hide-on-wide">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../getting-started/installation.html">
+    Installation
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../getting-started/overview.html">
+    Overview
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../getting-started/examples.html">
+    Examples
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../xarray-differences.html">
+    Differences from xarray
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../user-guide/index.html">
+    User guide
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../api/index.html">
+    API reference
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../rust.html">
+    Rust crates
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../performance.html">
+    Performance
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-external" href="https://docs.rs/annoray">
+    Rust API
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+<div class="version-switcher__container dropdown pst-js-only">
+  <button id="pst-version-switcher-button-3"
+    type="button"
+    class="version-switcher__button btn btn-sm dropdown-toggle"
+    data-bs-toggle="dropdown"
+    aria-haspopup="listbox"
+    aria-controls="pst-version-switcher-list-3"
+    aria-label="Version switcher list"
+  >
+    Choose version  <!-- this text may get changed later by javascript -->
+    <span class="caret"></span>
+  </button>
+  <div id="pst-version-switcher-list-3"
+    class="version-switcher__menu dropdown-menu list-group-flush py-0"
+    role="listbox" aria-labelledby="pst-version-switcher-button-3">
+    <!-- dropdown will be populated by javascript on page load -->
+  </div>
+</div></div>
+        
+          <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button type="button" class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+        
+          <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/sunipkm/annoray" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-square-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
+        </li>
+</ul></div>
+        
+      </div>
+    
+  </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+<nav aria-label="Breadcrumb" class="d-print-none">
+  <ul class="bd-breadcrumbs">
+    
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="../../index.html" class="nav-link" aria-label="Home">
+        <i class="fa-solid fa-home"></i>
+      </a>
+    </li>
+    
+    <li class="breadcrumb-item"><a href="../index.html" class="nav-link">Module code</a></li>
+    
+    
+    <li class="breadcrumb-item"><a href="../annoray.html" class="nav-link">annoray</a></li>
+    
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">annoray._tree</span></li>
+  </ul>
+</nav>
+</div>
+      
+    </div>
+  
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <h1>Source code for annoray._tree</h1><div class="highlight"><pre>
+<span></span><span class="sd">"""xarray's DataTree API on annoray's tree nodes (``annoray._annoray.DataTree``: a shared</span>
+<span class="sd">root and a path, so nodes taken from a tree are views of it).</span>
+
+<span class="sd">Traversal is breadth first, as xarray's ``subtree``. ``map_over_datasets``, arithmetic and</span>
+<span class="sd">the Dataset methods apply node by node to each node's dataset with its inherited</span>
+<span class="sd">coordinates; results do not repeat inherited coordinates. A node removed from its tree (or</span>
+<span class="sd">replaced) is no longer reachable through views taken earlier — take a ``copy()`` to keep</span>
+<span class="sd">one (xarray keeps such a node alive as its own tree).</span>
+<span class="sd">"""</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">operator</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">posixpath</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">collections.abc</span><span class="w"> </span><span class="kn">import</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">Iterator</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">PurePosixPath</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">annoray._annoray</span><span class="w"> </span><span class="kn">import</span> <span class="n">DataArray</span><span class="p">,</span> <span class="n">Dataset</span><span class="p">,</span> <span class="n">DataTree</span>
+
+<span class="c1"># ----- structure -----</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">children</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">DataTree</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">"""Child name → node."""</span>
+    <span class="k">return</span> <span class="nb">dict</span><span class="p">(</span><span class="nb">zip</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">_child_names</span><span class="p">(),</span> <span class="n">node</span><span class="o">.</span><span class="n">_list_children</span><span class="p">(),</span> <span class="n">strict</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">subtree</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">DataTree</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">"""This node and every node below it, breadth first."""</span>
+    <span class="n">out</span><span class="p">,</span> <span class="n">queue</span> <span class="o">=</span> <span class="p">[],</span> <span class="p">[</span><span class="n">node</span><span class="p">]</span>
+    <span class="k">while</span> <span class="n">queue</span><span class="p">:</span>
+        <span class="n">n</span> <span class="o">=</span> <span class="n">queue</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+        <span class="n">out</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>
+        <span class="n">queue</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">n</span><span class="o">.</span><span class="n">_list_children</span><span class="p">())</span>
+    <span class="k">return</span> <span class="n">out</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">descendants</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">DataTree</span><span class="p">]:</span>
+    <span class="k">return</span> <span class="n">subtree</span><span class="p">(</span><span class="n">node</span><span class="p">)[</span><span class="mi">1</span><span class="p">:]</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">leaves</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">DataTree</span><span class="p">]:</span>
+    <span class="k">return</span> <span class="p">[</span><span class="n">n</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">subtree</span><span class="p">(</span><span class="n">node</span><span class="p">)</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">n</span><span class="o">.</span><span class="n">_child_names</span><span class="p">()]</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">parents</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">DataTree</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">"""The ancestors, nearest first."""</span>
+    <span class="n">out</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">p</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">parent</span>
+    <span class="k">while</span> <span class="n">p</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">out</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">p</span><span class="p">)</span>
+        <span class="n">p</span> <span class="o">=</span> <span class="n">p</span><span class="o">.</span><span class="n">parent</span>
+    <span class="k">return</span> <span class="n">out</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">lineage</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">DataTree</span><span class="p">]:</span>
+    <span class="k">return</span> <span class="p">[</span><span class="n">node</span><span class="p">,</span> <span class="o">*</span><span class="n">parents</span><span class="p">(</span><span class="n">node</span><span class="p">)]</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">ancestors</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">DataTree</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">"""The root first, this node last."""</span>
+    <span class="k">return</span> <span class="n">lineage</span><span class="p">(</span><span class="n">node</span><span class="p">)[::</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">groups</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">]:</span>
+    <span class="k">return</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">n</span><span class="o">.</span><span class="n">path</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">subtree</span><span class="p">(</span><span class="n">node</span><span class="p">))</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">level</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+    <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="n">parents</span><span class="p">(</span><span class="n">node</span><span class="p">))</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">depth</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""The deepest level in the whole tree."""</span>
+    <span class="k">return</span> <span class="nb">max</span><span class="p">(</span><span class="n">level</span><span class="p">(</span><span class="n">n</span><span class="p">)</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">subtree</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">root</span><span class="p">))</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">width</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""The number of nodes at this node's level, across the whole tree."""</span>
+    <span class="n">lv</span> <span class="o">=</span> <span class="n">level</span><span class="p">(</span><span class="n">node</span><span class="p">)</span>
+    <span class="k">return</span> <span class="nb">sum</span><span class="p">(</span><span class="mi">1</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">subtree</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">root</span><span class="p">)</span> <span class="k">if</span> <span class="n">level</span><span class="p">(</span><span class="n">n</span><span class="p">)</span> <span class="o">==</span> <span class="n">lv</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">is_leaf</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="k">return</span> <span class="ow">not</span> <span class="n">node</span><span class="o">.</span><span class="n">_child_names</span><span class="p">()</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">has_data</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="n">ds</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">to_dataset</span><span class="p">(</span><span class="n">inherit</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="k">return</span> <span class="nb">bool</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">ds</span><span class="o">.</span><span class="n">data_vars</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">len</span><span class="p">(</span><span class="n">ds</span><span class="o">.</span><span class="n">coords</span><span class="p">))</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">has_attrs</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="k">return</span> <span class="nb">bool</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">to_dataset</span><span class="p">(</span><span class="n">inherit</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span><span class="o">.</span><span class="n">attrs</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">is_empty</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="k">return</span> <span class="ow">not</span> <span class="n">has_data</span><span class="p">(</span><span class="n">node</span><span class="p">)</span> <span class="ow">and</span> <span class="n">is_leaf</span><span class="p">(</span><span class="n">node</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">relative_to</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">,</span> <span class="n">other</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""This node's path relative to ``other`` (in the same tree)."""</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">node</span><span class="o">.</span><span class="n">_same_root</span><span class="p">(</span><span class="n">other</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"relative_to: the nodes are not in the same tree"</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">posixpath</span><span class="o">.</span><span class="n">relpath</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">path</span><span class="p">,</span> <span class="n">other</span><span class="o">.</span><span class="n">path</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">same_tree</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">,</span> <span class="n">other</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">node</span><span class="o">.</span><span class="n">_same_root</span><span class="p">(</span><span class="n">other</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">find_common_ancestor</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">,</span> <span class="n">other</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">DataTree</span><span class="p">:</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">node</span><span class="o">.</span><span class="n">_same_root</span><span class="p">(</span><span class="n">other</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"find_common_ancestor: the nodes are not in the same tree"</span><span class="p">)</span>
+    <span class="n">common</span> <span class="o">=</span> <span class="n">posixpath</span><span class="o">.</span><span class="n">commonpath</span><span class="p">([</span><span class="n">node</span><span class="o">.</span><span class="n">path</span><span class="p">,</span> <span class="n">other</span><span class="o">.</span><span class="n">path</span><span class="p">])</span>
+    <span class="n">found</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">root</span><span class="o">.</span><span class="n">_node</span><span class="p">(</span><span class="n">common</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">found</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>  <span class="c1"># pragma: no cover (the common path of two nodes exists)</span>
+        <span class="k">raise</span> <span class="ne">KeyError</span><span class="p">(</span><span class="n">common</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">found</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">isomorphic</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">,</span> <span class="n">other</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""The same structure: the same child names at every level (any order)."""</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">DataTree</span><span class="p">):</span>
+        <span class="k">return</span> <span class="kc">False</span>
+    <span class="n">mine</span><span class="p">,</span> <span class="n">theirs</span> <span class="o">=</span> <span class="n">children</span><span class="p">(</span><span class="n">node</span><span class="p">),</span> <span class="n">children</span><span class="p">(</span><span class="n">other</span><span class="p">)</span>
+    <span class="k">return</span> <span class="nb">set</span><span class="p">(</span><span class="n">mine</span><span class="p">)</span> <span class="o">==</span> <span class="nb">set</span><span class="p">(</span><span class="n">theirs</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">all</span><span class="p">(</span><span class="n">isomorphic</span><span class="p">(</span><span class="n">mine</span><span class="p">[</span><span class="n">k</span><span class="p">],</span> <span class="n">theirs</span><span class="p">[</span><span class="n">k</span><span class="p">])</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">mine</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_at</span><span class="p">(</span><span class="n">tree</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">,</span> <span class="n">rel</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">DataTree</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""The node at relative path ``rel`` (``"."`` for ``tree`` itself)."""</span>
+    <span class="n">found</span> <span class="o">=</span> <span class="n">tree</span> <span class="k">if</span> <span class="n">rel</span> <span class="o">==</span> <span class="s2">"."</span> <span class="k">else</span> <span class="n">tree</span><span class="o">.</span><span class="n">_node</span><span class="p">(</span><span class="n">rel</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">found</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">KeyError</span><span class="p">(</span><span class="n">rel</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">found</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_all_pairs</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">,</span> <span class="n">other</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Iterator</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="n">DataTree</span><span class="p">,</span> <span class="n">DataTree</span><span class="p">]]:</span>
+    <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">subtree</span><span class="p">(</span><span class="n">node</span><span class="p">):</span>
+        <span class="k">yield</span> <span class="n">a</span><span class="p">,</span> <span class="n">_at</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">relative_to</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">node</span><span class="p">))</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">equals</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">,</span> <span class="n">other</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Isomorphic, every node's own dataset ``equals``."""</span>
+    <span class="k">return</span> <span class="p">(</span>
+        <span class="nb">isinstance</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">DataTree</span><span class="p">)</span>
+        <span class="ow">and</span> <span class="n">isomorphic</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">other</span><span class="p">)</span>
+        <span class="ow">and</span> <span class="nb">all</span><span class="p">(</span>
+            <span class="n">a</span><span class="o">.</span><span class="n">to_dataset</span><span class="p">(</span><span class="n">inherit</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span><span class="o">.</span><span class="n">equals</span><span class="p">(</span><span class="n">b</span><span class="o">.</span><span class="n">to_dataset</span><span class="p">(</span><span class="n">inherit</span><span class="o">=</span><span class="kc">False</span><span class="p">))</span>
+            <span class="k">for</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span> <span class="ow">in</span> <span class="n">_all_pairs</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">other</span><span class="p">)</span>
+        <span class="p">)</span>
+    <span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">identical</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">,</span> <span class="n">other</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Isomorphic, every node's own dataset ``identical``, and the same name."""</span>
+    <span class="k">return</span> <span class="p">(</span>
+        <span class="nb">isinstance</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">DataTree</span><span class="p">)</span>
+        <span class="ow">and</span> <span class="n">node</span><span class="o">.</span><span class="n">name</span> <span class="o">==</span> <span class="n">other</span><span class="o">.</span><span class="n">name</span>
+        <span class="ow">and</span> <span class="n">isomorphic</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">other</span><span class="p">)</span>
+        <span class="ow">and</span> <span class="nb">all</span><span class="p">(</span>
+            <span class="n">a</span><span class="o">.</span><span class="n">to_dataset</span><span class="p">(</span><span class="n">inherit</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span><span class="o">.</span><span class="n">identical</span><span class="p">(</span><span class="n">b</span><span class="o">.</span><span class="n">to_dataset</span><span class="p">(</span><span class="n">inherit</span><span class="o">=</span><span class="kc">False</span><span class="p">))</span>
+            <span class="k">for</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span> <span class="ow">in</span> <span class="n">_all_pairs</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">other</span><span class="p">)</span>
+        <span class="p">)</span>
+    <span class="p">)</span>
+
+
+<span class="c1"># ----- dataset-like access -----</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">ds</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dataset</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""This node's dataset with the coordinates it inherits (a copy)."""</span>
+    <span class="k">return</span> <span class="n">node</span><span class="o">.</span><span class="n">to_dataset</span><span class="p">(</span><span class="n">inherit</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">data_vars</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">ds</span><span class="p">(</span><span class="n">node</span><span class="p">)</span><span class="o">.</span><span class="n">data_vars</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">coords</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">ds</span><span class="p">(</span><span class="n">node</span><span class="p">)</span><span class="o">.</span><span class="n">coords</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">dims</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">ds</span><span class="p">(</span><span class="n">node</span><span class="p">)</span><span class="o">.</span><span class="n">dims</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">sizes</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">ds</span><span class="p">(</span><span class="n">node</span><span class="p">)</span><span class="o">.</span><span class="n">sizes</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">attrs</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">annoray._mapping</span><span class="w"> </span><span class="kn">import</span> <span class="n">AttrsDict</span>
+
+    <span class="k">return</span> <span class="n">AttrsDict</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">_plain_attrs</span><span class="p">(</span><span class="n">node</span><span class="p">))</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_plain_attrs</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+    <span class="k">return</span> <span class="nb">dict</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">to_dataset</span><span class="p">(</span><span class="n">inherit</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span><span class="o">.</span><span class="n">attrs</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_edit_attrs</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">,</span> <span class="n">changed</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span> <span class="n">removed</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="n">own</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">to_dataset</span><span class="p">(</span><span class="n">inherit</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">removed</span><span class="p">:</span>
+        <span class="k">del</span> <span class="n">own</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="n">k</span><span class="p">]</span>
+    <span class="n">own</span><span class="o">.</span><span class="n">attrs</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">changed</span><span class="p">)</span>
+    <span class="n">node</span><span class="o">.</span><span class="n">_set_dataset</span><span class="p">(</span><span class="n">own</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">set_attrs</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="n">own</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">to_dataset</span><span class="p">(</span><span class="n">inherit</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">own</span><span class="o">.</span><span class="n">attrs</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+    <span class="n">node</span><span class="o">.</span><span class="n">_set_dataset</span><span class="p">(</span><span class="n">own</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">encoding</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">annoray._mapping</span><span class="w"> </span><span class="kn">import</span> <span class="n">EncodingDict</span>
+
+    <span class="k">return</span> <span class="n">EncodingDict</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">_plain_encoding</span><span class="p">(</span><span class="n">node</span><span class="p">))</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_plain_encoding</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+    <span class="k">return</span> <span class="nb">dict</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">to_dataset</span><span class="p">(</span><span class="n">inherit</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span><span class="o">.</span><span class="n">encoding</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_edit_encoding</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">,</span> <span class="n">changed</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span> <span class="n">removed</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="n">own</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">to_dataset</span><span class="p">(</span><span class="n">inherit</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">enc</span> <span class="o">=</span> <span class="n">own</span><span class="o">.</span><span class="n">encoding</span>
+    <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">removed</span><span class="p">:</span>
+        <span class="k">del</span> <span class="n">enc</span><span class="p">[</span><span class="n">k</span><span class="p">]</span>
+    <span class="n">enc</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">changed</span><span class="p">)</span>
+    <span class="n">node</span><span class="o">.</span><span class="n">_set_dataset</span><span class="p">(</span><span class="n">own</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_split</span><span class="p">(</span><span class="n">key</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+    <span class="n">parent</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">name</span> <span class="o">=</span> <span class="n">key</span><span class="o">.</span><span class="n">rstrip</span><span class="p">(</span><span class="s2">"/"</span><span class="p">)</span><span class="o">.</span><span class="n">rpartition</span><span class="p">(</span><span class="s2">"/"</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">parent</span><span class="p">,</span> <span class="n">name</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">getitem</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""A node (``"a"``, ``"a/b"``, ``"/a"``) or a variable (``"v"``, ``"a/v"``; inherited</span>
+<span class="sd">    coordinates too)."""</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">"DataTree keys are paths or variable names (strings)"</span><span class="p">)</span>
+    <span class="n">found</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">_node</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">found</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">found</span>
+    <span class="n">parent</span><span class="p">,</span> <span class="n">name</span> <span class="o">=</span> <span class="n">_split</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+    <span class="n">owner</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">_node</span><span class="p">(</span><span class="n">parent</span><span class="p">)</span> <span class="k">if</span> <span class="n">parent</span> <span class="k">else</span> <span class="n">node</span>
+    <span class="k">if</span> <span class="n">owner</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="n">owner</span><span class="o">.</span><span class="n">to_dataset</span><span class="p">(</span><span class="n">inherit</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">data</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">data</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
+    <span class="k">raise</span> <span class="ne">KeyError</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">setitem</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""A child (a DataTree, copied; or a Dataset as a new node) or a variable."""</span>
+    <span class="n">parent</span><span class="p">,</span> <span class="n">name</span> <span class="o">=</span> <span class="n">_split</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+    <span class="n">owner</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">_node</span><span class="p">(</span><span class="n">parent</span><span class="p">)</span> <span class="k">if</span> <span class="n">parent</span> <span class="k">else</span> <span class="n">node</span>
+    <span class="k">if</span> <span class="n">owner</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">KeyError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"no node </span><span class="si">{</span><span class="n">parent</span><span class="si">!r}</span><span class="s2"> to put </span><span class="si">{</span><span class="n">name</span><span class="si">!r}</span><span class="s2"> in"</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">DataTree</span><span class="p">):</span>
+        <span class="n">owner</span><span class="o">.</span><span class="n">_set_child</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">Dataset</span><span class="p">):</span>
+        <span class="n">owner</span><span class="o">.</span><span class="n">_set_child</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">DataTree</span><span class="p">(</span><span class="n">value</span><span class="p">))</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">own</span> <span class="o">=</span> <span class="n">owner</span><span class="o">.</span><span class="n">to_dataset</span><span class="p">(</span><span class="n">inherit</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">own</span><span class="o">.</span><span class="n">coords</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">DataArray</span><span class="p">):</span>
+            <span class="n">own</span><span class="o">.</span><span class="n">coords</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">own</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
+        <span class="n">owner</span><span class="o">.</span><span class="n">_set_dataset</span><span class="p">(</span><span class="n">own</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">delitem</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="n">parent</span><span class="p">,</span> <span class="n">name</span> <span class="o">=</span> <span class="n">_split</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+    <span class="n">owner</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">_node</span><span class="p">(</span><span class="n">parent</span><span class="p">)</span> <span class="k">if</span> <span class="n">parent</span> <span class="k">else</span> <span class="n">node</span>
+    <span class="k">if</span> <span class="n">owner</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">KeyError</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">owner</span><span class="o">.</span><span class="n">_child_names</span><span class="p">():</span>
+        <span class="n">owner</span><span class="o">.</span><span class="n">_del_child</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+        <span class="k">return</span>
+    <span class="n">own</span> <span class="o">=</span> <span class="n">owner</span><span class="o">.</span><span class="n">to_dataset</span><span class="p">(</span><span class="n">inherit</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">own</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">KeyError</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+    <span class="k">del</span> <span class="n">own</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
+    <span class="n">owner</span><span class="o">.</span><span class="n">_set_dataset</span><span class="p">(</span><span class="n">own</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">contains</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""A variable of this node (inherited coordinates included) or a child: not a path,</span>
+<span class="sd">    as xarray."""</span>
+    <span class="k">return</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">_child_names</span><span class="p">()</span> <span class="ow">or</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">to_dataset</span><span class="p">(</span><span class="n">inherit</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">keys</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">"""The node's data variables, then its children (xarray's iteration order)."""</span>
+    <span class="k">return</span> <span class="p">[</span><span class="o">*</span><span class="n">node</span><span class="o">.</span><span class="n">to_dataset</span><span class="p">(</span><span class="n">inherit</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span><span class="o">.</span><span class="n">data_vars</span><span class="p">,</span> <span class="o">*</span><span class="n">node</span><span class="o">.</span><span class="n">_child_names</span><span class="p">()]</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">length</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+    <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="n">keys</span><span class="p">(</span><span class="n">node</span><span class="p">))</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">values</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">Any</span><span class="p">]:</span>
+    <span class="k">return</span> <span class="p">[</span><span class="n">getitem</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">k</span><span class="p">)</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">keys</span><span class="p">(</span><span class="n">node</span><span class="p">)]</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">items</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
+    <span class="k">return</span> <span class="p">[(</span><span class="n">k</span><span class="p">,</span> <span class="n">getitem</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">k</span><span class="p">))</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">keys</span><span class="p">(</span><span class="n">node</span><span class="p">)]</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">get</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">default</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">getitem</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">key</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">KeyError</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">default</span>
+
+
+<span class="c1"># ----- whole trees -----</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">to_dict</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">,</span> <span class="n">relative</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Dataset</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">"""Path → each node's own dataset (absolute paths, or relative to this node)."""</span>
+    <span class="k">return</span> <span class="p">{</span>
+        <span class="p">(</span><span class="n">relative_to</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="n">node</span><span class="p">)</span> <span class="k">if</span> <span class="n">relative</span> <span class="k">else</span> <span class="n">n</span><span class="o">.</span><span class="n">path</span><span class="p">):</span> <span class="n">n</span><span class="o">.</span><span class="n">to_dataset</span><span class="p">(</span><span class="n">inherit</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">subtree</span><span class="p">(</span><span class="n">node</span><span class="p">)</span>
+    <span class="p">}</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">copy</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">,</span> <span class="n">deep</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">DataTree</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""This node's subtree as a new tree (annoray never shares data between trees)."""</span>
+    <span class="k">return</span> <span class="n">node</span><span class="o">.</span><span class="n">_detached</span><span class="p">()</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_rebuild</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">,</span> <span class="n">datasets</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Dataset</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">DataTree</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""A tree from relative path → dataset; a coordinate identical to one an ancestor</span>
+<span class="sd">    defines is not repeated below it (as xarray rebuilds results)."""</span>
+    <span class="n">out</span> <span class="o">=</span> <span class="n">DataTree</span><span class="o">.</span><span class="n">from_dict</span><span class="p">(</span>
+        <span class="p">{</span><span class="s2">"/"</span> <span class="k">if</span> <span class="n">k</span> <span class="o">==</span> <span class="s2">"."</span> <span class="k">else</span> <span class="n">k</span><span class="p">:</span> <span class="n">v</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">datasets</span><span class="o">.</span><span class="n">items</span><span class="p">()},</span> <span class="n">name</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">name</span>
+    <span class="p">)</span>
+    <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">descendants</span><span class="p">(</span><span class="n">out</span><span class="p">):</span>
+        <span class="n">above</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">parents</span><span class="p">(</span><span class="n">n</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">p</span><span class="o">.</span><span class="n">to_dataset</span><span class="p">(</span><span class="n">inherit</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span><span class="o">.</span><span class="n">coords</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                <span class="n">above</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="n">c</span><span class="p">)</span>
+        <span class="n">own</span> <span class="o">=</span> <span class="n">n</span><span class="o">.</span><span class="n">to_dataset</span><span class="p">(</span><span class="n">inherit</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+        <span class="n">repeated</span> <span class="o">=</span> <span class="p">[</span><span class="n">k</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">own</span><span class="o">.</span><span class="n">coords</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">if</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">above</span> <span class="ow">and</span> <span class="n">c</span><span class="o">.</span><span class="n">identical</span><span class="p">(</span><span class="n">above</span><span class="p">[</span><span class="n">k</span><span class="p">])]</span>
+        <span class="k">if</span> <span class="n">repeated</span><span class="p">:</span>
+            <span class="n">n</span><span class="o">.</span><span class="n">_set_dataset</span><span class="p">(</span><span class="n">own</span><span class="o">.</span><span class="n">drop_vars</span><span class="p">(</span><span class="n">repeated</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">out</span>
+
+
+<div class="viewcode-block" id="map_over_datasets">
+<a class="viewcode-back" href="../../api/generated/annoray.map_over_datasets.html#annoray.map_over_datasets">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">map_over_datasets</span><span class="p">(</span>
+    <span class="n">node</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">,</span> <span class="n">func</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span> <span class="o">*</span><span class="n">args</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""``func(dataset, *args)`` for every node (each node's dataset with its inherited</span>
+<span class="sd">    coordinates; DataTree arguments give their corresponding node's dataset), as a tree of</span>
+<span class="sd">    the results (a tuple of trees for tuple results)."""</span>
+    <span class="n">kwargs</span> <span class="o">=</span> <span class="n">kwargs</span> <span class="ow">or</span> <span class="p">{}</span>
+    <span class="n">results</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">subtree</span><span class="p">(</span><span class="n">node</span><span class="p">):</span>
+        <span class="n">rel</span> <span class="o">=</span> <span class="n">relative_to</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="n">node</span><span class="p">)</span>
+        <span class="n">call_args</span> <span class="o">=</span> <span class="p">[</span><span class="n">_at</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">rel</span><span class="p">)</span><span class="o">.</span><span class="n">to_dataset</span><span class="p">()</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">DataTree</span><span class="p">)</span> <span class="k">else</span> <span class="n">a</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">args</span><span class="p">]</span>
+        <span class="n">results</span><span class="p">[</span><span class="n">rel</span><span class="p">]</span> <span class="o">=</span> <span class="n">func</span><span class="p">(</span><span class="n">n</span><span class="o">.</span><span class="n">to_dataset</span><span class="p">(),</span> <span class="o">*</span><span class="n">call_args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+    <span class="n">first</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span><span class="nb">iter</span><span class="p">(</span><span class="n">results</span><span class="o">.</span><span class="n">values</span><span class="p">()))</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">first</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">tuple</span><span class="p">(</span>
+            <span class="n">_rebuild</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="n">r</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">results</span><span class="o">.</span><span class="n">items</span><span class="p">()})</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">first</span><span class="p">))</span>
+        <span class="p">)</span>
+    <span class="k">return</span> <span class="n">_rebuild</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">results</span><span class="p">)</span></div>
+
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">map_over_datasets_fn</span><span class="p">(</span><span class="n">func</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span> <span class="o">*</span><span class="n">args</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""xarray's module-level ``map_over_datasets``: the trees among ``args`` must be</span>
+<span class="sd">    isomorphic; ``func`` gets each node's datasets in their place."""</span>
+    <span class="n">trees</span> <span class="o">=</span> <span class="p">[</span><span class="n">a</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">args</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">DataTree</span><span class="p">)]</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">trees</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">"map_over_datasets needs at least one DataTree"</span><span class="p">)</span>
+    <span class="n">first</span> <span class="o">=</span> <span class="n">trees</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">trees</span><span class="p">[</span><span class="mi">1</span><span class="p">:]:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">isomorphic</span><span class="p">(</span><span class="n">first</span><span class="p">,</span> <span class="n">t</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"map_over_datasets: the trees are not isomorphic"</span><span class="p">)</span>
+    <span class="n">idx</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">first</span><span class="p">)</span>
+    <span class="n">rest</span> <span class="o">=</span> <span class="n">args</span><span class="p">[:</span><span class="n">idx</span><span class="p">]</span> <span class="o">+</span> <span class="n">args</span><span class="p">[</span><span class="n">idx</span> <span class="o">+</span> <span class="mi">1</span> <span class="p">:]</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">call</span><span class="p">(</span><span class="n">ds_</span><span class="p">:</span> <span class="n">Dataset</span><span class="p">,</span> <span class="o">*</span><span class="n">others</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">**</span><span class="n">kw</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+        <span class="n">full</span> <span class="o">=</span> <span class="p">[</span><span class="o">*</span><span class="n">others</span><span class="p">[:</span><span class="n">idx</span><span class="p">],</span> <span class="n">ds_</span><span class="p">,</span> <span class="o">*</span><span class="n">others</span><span class="p">[</span><span class="n">idx</span><span class="p">:]]</span>
+        <span class="k">return</span> <span class="n">func</span><span class="p">(</span><span class="o">*</span><span class="n">full</span><span class="p">,</span> <span class="o">**</span><span class="n">kw</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">map_over_datasets</span><span class="p">(</span><span class="n">first</span><span class="p">,</span> <span class="n">call</span><span class="p">,</span> <span class="o">*</span><span class="n">rest</span><span class="p">,</span> <span class="n">kwargs</span><span class="o">=</span><span class="n">kwargs</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="group_subtrees">
+<a class="viewcode-back" href="../../api/generated/annoray.group_subtrees.html#annoray.group_subtrees">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">group_subtrees</span><span class="p">(</span><span class="o">*</span><span class="n">trees</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Iterator</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">DataTree</span><span class="p">,</span> <span class="o">...</span><span class="p">]]]:</span>
+<span class="w">    </span><span class="sd">"""``(relative path, nodes)`` for every position of isomorphic trees, breadth first."""</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">trees</span><span class="p">:</span>
+        <span class="k">return</span>
+    <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">trees</span><span class="p">[</span><span class="mi">1</span><span class="p">:]:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">isomorphic</span><span class="p">(</span><span class="n">trees</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">t</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"group_subtrees: the trees are not isomorphic"</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">subtree</span><span class="p">(</span><span class="n">trees</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
+        <span class="n">rel</span> <span class="o">=</span> <span class="n">relative_to</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="n">trees</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+        <span class="k">yield</span> <span class="n">rel</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">n</span> <span class="k">if</span> <span class="n">i</span> <span class="o">==</span> <span class="mi">0</span> <span class="k">else</span> <span class="n">_at</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">rel</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">t</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">trees</span><span class="p">))</span></div>
+
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">match</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">,</span> <span class="n">pattern</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">DataTree</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""The nodes whose path (relative to this one) matches the glob ``pattern``, as a new</span>
+<span class="sd">    tree (ancestors not matched are empty; matched nodes keep what they inherited)."""</span>
+    <span class="n">picked</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="n">relative_to</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="n">node</span><span class="p">):</span> <span class="n">n</span><span class="o">.</span><span class="n">to_dataset</span><span class="p">(</span><span class="n">inherit</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">subtree</span><span class="p">(</span><span class="n">node</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">PurePosixPath</span><span class="p">(</span><span class="n">relative_to</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="n">node</span><span class="p">))</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">pattern</span><span class="p">)</span>
+    <span class="p">}</span>
+    <span class="k">return</span> <span class="n">_rebuild</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">picked</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">filter</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">,</span> <span class="n">filterfunc</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[</span><span class="n">DataTree</span><span class="p">],</span> <span class="nb">bool</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">DataTree</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""The nodes for which ``filterfunc(node)`` holds, as a new tree (keeping what they</span>
+<span class="sd">    inherited)."""</span>
+    <span class="n">picked</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="n">relative_to</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="n">node</span><span class="p">):</span> <span class="n">n</span><span class="o">.</span><span class="n">to_dataset</span><span class="p">(</span><span class="n">inherit</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">subtree</span><span class="p">(</span><span class="n">node</span><span class="p">)</span> <span class="k">if</span> <span class="n">filterfunc</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>
+    <span class="p">}</span>
+    <span class="k">return</span> <span class="n">_rebuild</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">picked</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">filter_like</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">,</span> <span class="n">other</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">DataTree</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""The nodes whose relative path also exists in ``other``."""</span>
+    <span class="n">paths</span> <span class="o">=</span> <span class="p">{</span><span class="n">relative_to</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="n">other</span><span class="p">)</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">subtree</span><span class="p">(</span><span class="n">other</span><span class="p">)}</span>
+    <span class="k">return</span> <span class="nb">filter</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="k">lambda</span> <span class="n">n</span><span class="p">:</span> <span class="n">relative_to</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="n">node</span><span class="p">)</span> <span class="ow">in</span> <span class="n">paths</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">drop_nodes</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">,</span> <span class="n">names</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">errors</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"raise"</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">DataTree</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""A copy without the named children."""</span>
+    <span class="n">names</span> <span class="o">=</span> <span class="p">[</span><span class="n">names</span><span class="p">]</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">names</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="k">else</span> <span class="nb">list</span><span class="p">(</span><span class="n">names</span><span class="p">)</span>
+    <span class="n">missing</span> <span class="o">=</span> <span class="p">[</span><span class="n">n</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">names</span> <span class="k">if</span> <span class="n">n</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">_child_names</span><span class="p">()]</span>
+    <span class="k">if</span> <span class="n">missing</span> <span class="ow">and</span> <span class="n">errors</span> <span class="o">==</span> <span class="s2">"raise"</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">KeyError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"no children </span><span class="si">{</span><span class="n">missing</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+    <span class="n">out</span> <span class="o">=</span> <span class="n">copy</span><span class="p">(</span><span class="n">node</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">names</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">out</span><span class="o">.</span><span class="n">_child_names</span><span class="p">():</span>
+            <span class="n">out</span><span class="o">.</span><span class="n">_del_child</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">out</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">prune</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">,</span> <span class="n">drop_size_zero_vars</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">DataTree</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""A copy without the nodes whose subtree holds no data variables."""</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">keeps</span><span class="p">(</span><span class="n">n</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">subtree</span><span class="p">(</span><span class="n">n</span><span class="p">):</span>
+            <span class="n">vars_</span> <span class="o">=</span> <span class="n">m</span><span class="o">.</span><span class="n">to_dataset</span><span class="p">(</span><span class="n">inherit</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span><span class="o">.</span><span class="n">data_vars</span>
+            <span class="k">if</span> <span class="n">drop_size_zero_vars</span><span class="p">:</span>
+                <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="n">v</span><span class="o">.</span><span class="n">size</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">vars_</span><span class="o">.</span><span class="n">values</span><span class="p">()):</span>
+                    <span class="k">return</span> <span class="kc">True</span>
+            <span class="k">elif</span> <span class="nb">len</span><span class="p">(</span><span class="n">vars_</span><span class="p">):</span>
+                <span class="k">return</span> <span class="kc">True</span>
+        <span class="k">return</span> <span class="kc">False</span>
+
+    <span class="n">out</span> <span class="o">=</span> <span class="n">copy</span><span class="p">(</span><span class="n">node</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="nb">reversed</span><span class="p">(</span><span class="n">descendants</span><span class="p">(</span><span class="n">out</span><span class="p">)):</span>
+        <span class="n">parent</span> <span class="o">=</span> <span class="n">n</span><span class="o">.</span><span class="n">parent</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">keeps</span><span class="p">(</span><span class="n">n</span><span class="p">)</span> <span class="ow">and</span> <span class="n">parent</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">n</span><span class="o">.</span><span class="n">name</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">parent</span><span class="o">.</span><span class="n">_del_child</span><span class="p">(</span><span class="n">n</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">out</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">pipe</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">,</span> <span class="n">func</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">):</span>
+        <span class="n">f</span><span class="p">,</span> <span class="n">target</span> <span class="o">=</span> <span class="n">func</span>
+        <span class="k">return</span> <span class="n">f</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="p">{</span><span class="n">target</span><span class="p">:</span> <span class="n">node</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">})</span>
+    <span class="k">return</span> <span class="n">func</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">assign</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">,</span> <span class="n">items</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">DataTree</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""A copy with variables (or children) added or replaced on this node."""</span>
+    <span class="n">out</span> <span class="o">=</span> <span class="n">copy</span><span class="p">(</span><span class="n">node</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="p">{</span><span class="o">**</span><span class="p">(</span><span class="n">items</span> <span class="ow">or</span> <span class="p">{}),</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">}</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+        <span class="n">setitem</span><span class="p">(</span><span class="n">out</span><span class="p">,</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">out</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">load</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">DataTree</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Read every lazily loaded value of this subtree, in place; returns this node."""</span>
+    <span class="n">node</span><span class="o">.</span><span class="n">_load</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">node</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">compute</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">DataTree</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""A copy with every value read into memory."""</span>
+    <span class="n">out</span> <span class="o">=</span> <span class="n">copy</span><span class="p">(</span><span class="n">node</span><span class="p">)</span>
+    <span class="n">out</span><span class="o">.</span><span class="n">_load</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">out</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">chunk</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">DataTree</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""No-op without dask."""</span>
+    <span class="k">return</span> <span class="n">node</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">repr_html</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+    <span class="kn">import</span><span class="w"> </span><span class="nn">html</span>
+
+    <span class="k">return</span> <span class="sa">f</span><span class="s2">"&lt;pre&gt;</span><span class="si">{</span><span class="n">html</span><span class="o">.</span><span class="n">escape</span><span class="p">(</span><span class="nb">repr</span><span class="p">(</span><span class="n">node</span><span class="p">))</span><span class="si">}</span><span class="s2">&lt;/pre&gt;"</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">reduce_pickle</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+    <span class="k">return</span> <span class="p">(</span><span class="n">_from_state</span><span class="p">,</span> <span class="p">(</span><span class="n">to_dict</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">relative</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span> <span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="p">))</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_from_state</span><span class="p">(</span><span class="n">datasets</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Dataset</span><span class="p">],</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">DataTree</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">DataTree</span><span class="o">.</span><span class="n">from_dict</span><span class="p">({(</span><span class="s2">"/"</span> <span class="k">if</span> <span class="n">k</span> <span class="o">==</span> <span class="s2">"."</span> <span class="k">else</span> <span class="n">k</span><span class="p">):</span> <span class="n">v</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">datasets</span><span class="o">.</span><span class="n">items</span><span class="p">()},</span> <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">)</span>
+
+
+<span class="c1"># ----- node-by-node computation -----</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_per_node</span><span class="p">(</span><span class="n">method</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Callable</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="n">DataTree</span><span class="p">]:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">apply</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">DataTree</span><span class="p">:</span>
+        <span class="k">def</span><span class="w"> </span><span class="nf">one</span><span class="p">(</span><span class="n">d</span><span class="p">:</span> <span class="n">Dataset</span><span class="p">,</span> <span class="o">*</span><span class="n">a</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dataset</span><span class="p">:</span>
+            <span class="c1"># Reductions leave a node without data as it is (nothing to reduce: xarray</span>
+            <span class="c1"># keeps its coordinates); selections still apply to its coordinates.</span>
+            <span class="k">if</span> <span class="n">method</span> <span class="ow">in</span> <span class="n">_REDUCTIONS</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">len</span><span class="p">(</span><span class="n">d</span><span class="o">.</span><span class="n">data_vars</span><span class="p">):</span>
+                <span class="k">return</span> <span class="n">d</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">call</span><span class="p">(</span><span class="n">d</span><span class="p">,</span> <span class="o">*</span><span class="n">a</span><span class="p">)</span>
+            <span class="k">except</span> <span class="p">(</span><span class="ne">ValueError</span><span class="p">,</span> <span class="ne">KeyError</span><span class="p">,</span> <span class="ne">TypeError</span><span class="p">):</span>
+                <span class="c1"># A node with no data (only coordinates) is left as it is.</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="nb">len</span><span class="p">(</span><span class="n">d</span><span class="o">.</span><span class="n">data_vars</span><span class="p">):</span>
+                    <span class="k">return</span> <span class="n">d</span>
+                <span class="k">raise</span>
+
+        <span class="k">def</span><span class="w"> </span><span class="nf">call</span><span class="p">(</span><span class="n">d</span><span class="p">:</span> <span class="n">Dataset</span><span class="p">,</span> <span class="o">*</span><span class="n">a</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dataset</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">method</span> <span class="o">==</span> <span class="s2">"isel"</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">d</span><span class="o">.</span><span class="n">isel</span><span class="p">(</span><span class="o">*</span><span class="n">a</span><span class="p">,</span> <span class="n">missing_dims</span><span class="o">=</span><span class="s2">"ignore"</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">method</span> <span class="o">==</span> <span class="s2">"sel"</span><span class="p">:</span>
+                <span class="n">wanted</span> <span class="o">=</span> <span class="p">{</span><span class="o">**</span><span class="p">(</span><span class="n">a</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">if</span> <span class="n">a</span> <span class="k">else</span> <span class="p">{}),</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">}</span>
+                <span class="k">return</span> <span class="n">d</span><span class="o">.</span><span class="n">sel</span><span class="p">({</span><span class="n">k</span><span class="p">:</span> <span class="n">v</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">wanted</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">if</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">d</span><span class="o">.</span><span class="n">dims</span><span class="p">})</span>
+            <span class="k">return</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">d</span><span class="p">,</span> <span class="n">method</span><span class="p">)(</span><span class="o">*</span><span class="n">a</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+        <span class="c1"># Tree arguments give each node the corresponding node's dataset.</span>
+        <span class="k">return</span> <span class="n">map_over_datasets</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">one</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">)</span>
+
+    <span class="n">apply</span><span class="o">.</span><span class="vm">__name__</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"node_</span><span class="si">{</span><span class="n">method</span><span class="si">}</span><span class="s2">"</span>
+    <span class="n">apply</span><span class="o">.</span><span class="vm">__doc__</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"``Dataset.</span><span class="si">{</span><span class="n">method</span><span class="si">}</span><span class="s2">`` applied to every node."</span>
+    <span class="k">return</span> <span class="n">apply</span>
+
+
+<span class="n">_REDUCTIONS</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">"mean"</span><span class="p">,</span>
+    <span class="s2">"sum"</span><span class="p">,</span>
+    <span class="s2">"prod"</span><span class="p">,</span>
+    <span class="s2">"std"</span><span class="p">,</span>
+    <span class="s2">"var"</span><span class="p">,</span>
+    <span class="s2">"min"</span><span class="p">,</span>
+    <span class="s2">"max"</span><span class="p">,</span>
+    <span class="s2">"median"</span><span class="p">,</span>
+    <span class="s2">"count"</span><span class="p">,</span>
+    <span class="s2">"any"</span><span class="p">,</span>
+    <span class="s2">"all"</span><span class="p">,</span>
+    <span class="s2">"quantile"</span><span class="p">,</span>
+    <span class="s2">"cumsum"</span><span class="p">,</span>
+    <span class="s2">"cumprod"</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="n">METHODS</span> <span class="o">=</span> <span class="p">(</span>
+    <span class="s2">"mean"</span><span class="p">,</span>
+    <span class="s2">"sum"</span><span class="p">,</span>
+    <span class="s2">"prod"</span><span class="p">,</span>
+    <span class="s2">"std"</span><span class="p">,</span>
+    <span class="s2">"var"</span><span class="p">,</span>
+    <span class="s2">"min"</span><span class="p">,</span>
+    <span class="s2">"max"</span><span class="p">,</span>
+    <span class="s2">"median"</span><span class="p">,</span>
+    <span class="s2">"count"</span><span class="p">,</span>
+    <span class="s2">"any"</span><span class="p">,</span>
+    <span class="s2">"all"</span><span class="p">,</span>
+    <span class="s2">"isel"</span><span class="p">,</span>
+    <span class="s2">"sel"</span><span class="p">,</span>
+    <span class="s2">"squeeze"</span><span class="p">,</span>
+    <span class="s2">"astype"</span><span class="p">,</span>
+    <span class="s2">"fillna"</span><span class="p">,</span>
+    <span class="s2">"dropna"</span><span class="p">,</span>
+    <span class="s2">"interp"</span><span class="p">,</span>
+    <span class="s2">"reindex"</span><span class="p">,</span>
+    <span class="s2">"round"</span><span class="p">,</span>
+    <span class="s2">"clip"</span><span class="p">,</span>
+    <span class="s2">"quantile"</span><span class="p">,</span>
+    <span class="s2">"diff"</span><span class="p">,</span>
+    <span class="s2">"shift"</span><span class="p">,</span>
+    <span class="s2">"roll"</span><span class="p">,</span>
+    <span class="s2">"cumsum"</span><span class="p">,</span>
+    <span class="s2">"cumprod"</span><span class="p">,</span>
+    <span class="s2">"isnull"</span><span class="p">,</span>
+    <span class="s2">"notnull"</span><span class="p">,</span>
+    <span class="s2">"where"</span><span class="p">,</span>
+    <span class="s2">"drop_vars"</span><span class="p">,</span>
+    <span class="s2">"rename_vars"</span><span class="p">,</span>
+    <span class="s2">"head"</span><span class="p">,</span>
+    <span class="s2">"tail"</span><span class="p">,</span>
+    <span class="s2">"thin"</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="c1"># As node_&lt;name&gt;, so that min, max, sum, any and all keep their builtin meaning here.</span>
+<span class="k">for</span> <span class="n">_name</span> <span class="ow">in</span> <span class="n">METHODS</span><span class="p">:</span>
+    <span class="nb">globals</span><span class="p">()[</span><span class="sa">f</span><span class="s2">"node_</span><span class="si">{</span><span class="n">_name</span><span class="si">}</span><span class="s2">"</span><span class="p">]</span> <span class="o">=</span> <span class="n">_per_node</span><span class="p">(</span><span class="n">_name</span><span class="p">)</span>
+
+<span class="n">_BINOPS</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">"add"</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">add</span><span class="p">,</span>
+    <span class="s2">"sub"</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">sub</span><span class="p">,</span>
+    <span class="s2">"mul"</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">mul</span><span class="p">,</span>
+    <span class="s2">"truediv"</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">truediv</span><span class="p">,</span>
+    <span class="s2">"pow"</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">pow</span><span class="p">,</span>
+    <span class="s2">"and"</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">and_</span><span class="p">,</span>
+    <span class="s2">"or"</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">or_</span><span class="p">,</span>
+    <span class="s2">"xor"</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">xor</span><span class="p">,</span>
+    <span class="s2">"lt"</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">lt</span><span class="p">,</span>
+    <span class="s2">"le"</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">le</span><span class="p">,</span>
+    <span class="s2">"gt"</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">gt</span><span class="p">,</span>
+    <span class="s2">"ge"</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">ge</span><span class="p">,</span>
+    <span class="s2">"eq"</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">eq</span><span class="p">,</span>
+    <span class="s2">"ne"</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">ne</span><span class="p">,</span>
+<span class="p">}</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">binary</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">,</span> <span class="n">other</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">op</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">reflected</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""``node op other`` node by node (a tree ``other`` must be isomorphic)."""</span>
+    <span class="n">f</span> <span class="o">=</span> <span class="n">_BINOPS</span><span class="p">[</span><span class="n">op</span><span class="p">]</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">DataTree</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">isomorphic</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"arithmetic between trees needs isomorphic trees"</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">map_over_datasets</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="k">lambda</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">f</span><span class="p">(</span><span class="n">b</span><span class="p">,</span> <span class="n">a</span><span class="p">)</span> <span class="k">if</span> <span class="n">reflected</span> <span class="k">else</span> <span class="n">f</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">),</span> <span class="n">other</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">map_over_datasets</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="k">lambda</span> <span class="n">a</span><span class="p">:</span> <span class="n">f</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">a</span><span class="p">)</span> <span class="k">if</span> <span class="n">reflected</span> <span class="k">else</span> <span class="n">f</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">other</span><span class="p">))</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">unary</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">DataTree</span><span class="p">,</span> <span class="n">op</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">DataTree</span><span class="p">:</span>
+    <span class="n">f</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"neg"</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">neg</span><span class="p">,</span> <span class="s2">"pos"</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">pos</span><span class="p">,</span> <span class="s2">"abs"</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">abs</span><span class="p">,</span> <span class="s2">"invert"</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">invert</span><span class="p">}[</span>
+        <span class="n">op</span>
+    <span class="p">]</span>
+    <span class="k">return</span> <span class="n">map_over_datasets</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">f</span><span class="p">)</span>
+
+
+<span class="c1"># ----- files -----</span>
+
+
+<div class="viewcode-block" id="open_groups">
+<a class="viewcode-back" href="../../api/generated/annoray.open_groups.html#annoray.open_groups">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">open_groups</span><span class="p">(</span><span class="n">filename_or_obj</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Dataset</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">"""Every group of a file (or Zarr store) as a dataset, by path."""</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">annoray._annoray</span><span class="w"> </span><span class="kn">import</span> <span class="n">open_datatree</span>
+
+    <span class="k">return</span> <span class="n">to_dict</span><span class="p">(</span><span class="n">open_datatree</span><span class="p">(</span><span class="n">filename_or_obj</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">))</span></div>
+
+
+
+<div class="viewcode-block" id="open_datatree">
+<a class="viewcode-back" href="../../api/generated/annoray.open_datatree.html#annoray.open_datatree">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">open_datatree</span><span class="p">(</span><span class="n">filename_or_obj</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">engine</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">DataTree</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Open every group of a netCDF-4/HDF5 file or Zarr store as a DataTree (lazily)."""</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">annoray._annoray</span><span class="w"> </span><span class="kn">import</span> <span class="n">open_datatree</span> <span class="k">as</span> <span class="n">_open</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">annoray._io</span><span class="w"> </span><span class="kn">import</span> <span class="n">_check</span>
+
+    <span class="n">_check</span><span class="p">(</span><span class="n">engine</span><span class="p">,</span> <span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="n">v</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">if</span> <span class="n">k</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"chunks"</span><span class="p">,</span> <span class="s2">"cache"</span><span class="p">,</span> <span class="s2">"lock"</span><span class="p">)})</span>
+    <span class="k">return</span> <span class="n">_open</span><span class="p">(</span>
+        <span class="n">filename_or_obj</span><span class="p">,</span> <span class="o">**</span><span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="n">v</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">if</span> <span class="n">k</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"chunks"</span><span class="p">,</span> <span class="s2">"cache"</span><span class="p">,</span> <span class="s2">"lock"</span><span class="p">)}</span>
+    <span class="p">)</span></div>
+
+</pre></div>
+
+                </article>
+              
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="../../_static/scripts/bootstrap.js?digest=18bd87630a240e9c25be"></script>
+<script defer src="../../_static/scripts/pydata-sphinx-theme.js?digest=18bd87630a240e9c25be"></script>
+
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item">
+
+  <p class="copyright">
+    
+      © Copyright 2026, Sunip K. Mukherjee.
+      <br/>
+    
+  </p>
+</div>
+      
+        <div class="footer-item">
+
+  <p class="sphinx-version">
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 9.1.1.
+  </p>
+</div>
+      
+    </div>
+  
+  
+  
+    <div class="footer-items__end">
+      
+        <div class="footer-item">
+<p class="theme-version">
+  <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.23.0.
+</p></div>
+      
+    </div>
+  
+</div>
+
+  </footer>
+  </body>
+</html>

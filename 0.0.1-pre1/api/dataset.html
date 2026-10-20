@@ -1,0 +1,1543 @@
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../" data-theme="auto">
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Dataset &#8212; annoray</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "auto";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "auto";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../_static/styles/theme.css?digest=18bd87630a240e9c25be" rel="stylesheet" />
+<link href="../_static/styles/pydata-sphinx-theme.css?digest=18bd87630a240e9c25be" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../_static/mystnb.11b39860a7a0cbfd473a3ad8a317855267ff0bd372690045ca344a6b62be495e.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
+  
+  <!-- So that users can add custom icons -->
+  <script defer src="../_static/scripts/fontawesome.js?digest=18bd87630a240e9c25be"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=18bd87630a240e9c25be" />
+<link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=18bd87630a240e9c25be" />
+
+    <script src="../_static/documentation_options.js?v=4dd95a75"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../_static/copybutton.js?v=f281be69"></script>
+    <script src="../_static/design-tabs.js?v=f930bc37"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'api/dataset';</script>
+    <script>
+        DOCUMENTATION_OPTIONS.theme_version = '0.23.0';
+        DOCUMENTATION_OPTIONS.theme_switcher_json_url = 'https://sunipkm.github.io/annoray/switcher.json';
+        DOCUMENTATION_OPTIONS.theme_switcher_version_match = '0.0.1-pre1';
+        DOCUMENTATION_OPTIONS.show_version_warning_banner =
+            false;
+        </script>
+    <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="annoray.Dataset" href="generated/annoray.Dataset.html" />
+    <link rel="prev" title="annoray.DataArray.from_series" href="generated/annoray.DataArray.from_series.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="color-scheme" content="light dark"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="0.0.1-pre1" />
+  
+    
+    <script src="../_static/searchtools.js"></script>
+    <script src="../_static/language_data.js"></script>
+    <script src="../searchindex.js"></script>
+  
+  </head>
+  <body data-default-mode="auto">
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+  
+  
+  
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header id="pst-header" class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button type="button" class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-3 navbar-header-items__start">
+    
+      <div class="navbar-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../index.html">
+  
+  
+  
+  
+  
+  
+    <p class="title logo__title">annoray</p>
+  
+</a></div>
+    
+  </div>
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    <div class="me-auto navbar-header-items__center">
+      
+        <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../getting-started/installation.html">
+    Installation
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../getting-started/overview.html">
+    Overview
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../getting-started/examples.html">
+    Examples
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../xarray-differences.html">
+    Differences from xarray
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../user-guide/index.html">
+    User guide
+  </a>
+</li>
+
+            <li class="nav-item dropdown">
+                <button class="btn dropdown-toggle nav-item" type="button"
+                data-bs-toggle="dropdown" aria-expanded="false"
+                aria-controls="pst-nav-more-links">
+                    More
+                </button>
+                <ul id="pst-nav-more-links" class="dropdown-menu">
+                    
+<li class=" current active">
+  <a class="nav-link dropdown-item nav-internal" href="index.html">
+    API reference
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="../rust.html">
+    Rust crates
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="../performance.html">
+    Performance
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-external" href="https://docs.rs/annoray">
+    Rust API
+  </a>
+</li>
+
+                </ul>
+            </li>
+            
+  </ul>
+</nav></div>
+      
+    </div>
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button type="button" class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+        </div>
+      
+      
+        <div class="navbar-item">
+<div class="version-switcher__container dropdown pst-js-only">
+  <button id="pst-version-switcher-button-2"
+    type="button"
+    class="version-switcher__button btn btn-sm dropdown-toggle"
+    data-bs-toggle="dropdown"
+    aria-haspopup="listbox"
+    aria-controls="pst-version-switcher-list-2"
+    aria-label="Version switcher list"
+  >
+    Choose version  <!-- this text may get changed later by javascript -->
+    <span class="caret"></span>
+  </button>
+  <div id="pst-version-switcher-list-2"
+    class="version-switcher__menu dropdown-menu list-group-flush py-0"
+    role="listbox" aria-labelledby="pst-version-switcher-button-2">
+    <!-- dropdown will be populated by javascript on page load -->
+  </div>
+</div></div>
+      
+        <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button type="button" class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+      
+        <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/sunipkm/annoray" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-square-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
+        </li>
+</ul></div>
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button type="button" class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+    </div>
+  
+
+  
+    <button type="button" class="pst-navbar-icon sidebar-toggle secondary-toggle" aria-label="On this page">
+      <span class="fa-solid fa-outdent"></span>
+    </button>
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../getting-started/installation.html">
+    Installation
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../getting-started/overview.html">
+    Overview
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../getting-started/examples.html">
+    Examples
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../xarray-differences.html">
+    Differences from xarray
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../user-guide/index.html">
+    User guide
+  </a>
+</li>
+
+
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="index.html">
+    API reference
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../rust.html">
+    Rust crates
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../performance.html">
+    Performance
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-external" href="https://docs.rs/annoray">
+    Rust API
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+<div class="version-switcher__container dropdown pst-js-only">
+  <button id="pst-version-switcher-button-3"
+    type="button"
+    class="version-switcher__button btn btn-sm dropdown-toggle"
+    data-bs-toggle="dropdown"
+    aria-haspopup="listbox"
+    aria-controls="pst-version-switcher-list-3"
+    aria-label="Version switcher list"
+  >
+    Choose version  <!-- this text may get changed later by javascript -->
+    <span class="caret"></span>
+  </button>
+  <div id="pst-version-switcher-list-3"
+    class="version-switcher__menu dropdown-menu list-group-flush py-0"
+    role="listbox" aria-labelledby="pst-version-switcher-button-3">
+    <!-- dropdown will be populated by javascript on page load -->
+  </div>
+</div></div>
+        
+          <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button type="button" class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+        
+          <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/sunipkm/annoray" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-square-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
+        </li>
+</ul></div>
+        
+      </div>
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item pst-sidebar-collapse"><button type="button" id="pst-collapse-sidebar-button" aria-expanded="true" aria-controls="pst-primary-sidebar">
+  <svg class="pst-icon" role="img" aria-hidden="true" focusable="false" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+    <path fill="currentColor" d="M3 15.5C2.36232 15.5 1.74874 15.2564 1.28478 14.8189C0.820828 14.3815 0.541576 13.7832 0.504167 13.1467L0.5 13L0.5 3C0.499965 2.36232 0.743605 1.74874 1.18107 1.28478C1.61854 0.820828 2.21676 0.541576 2.85333 0.504167L3 0.5L13 0.5C13.6377 0.499965 14.2513 0.743605 14.7152 1.18107C15.1792 1.61854 15.4584 2.21676 15.4958 2.85333L15.5 3L15.5 13C15.5 13.6377 15.2564 14.2513 14.8189 14.7152C14.3815 15.1792 13.7832 15.4584 13.1467 15.4958L13 15.5L3 15.5ZM3 13.8333L10.5 13.8333L10.5 2.16667L3 2.16667C2.79589 2.16669 2.59889 2.24163 2.44636 2.37726C2.29383 2.5129 2.19638 2.69979 2.1725 2.9025L2.16667 3L2.16667 13C2.16669 13.2041 2.24163 13.4011 2.37726 13.5536C2.5129 13.7062 2.69979 13.8036 2.9025 13.8275L3 13.8333ZM6.65583 10.325L6.5775 10.2558L4.91083 8.58917C4.76735 8.44567 4.68116 8.25476 4.66843 8.05223C4.65569 7.84971 4.71729 7.6495 4.84167 7.48917L4.91083 7.41083L6.5775 5.74417C6.72747 5.59471 6.9287 5.50794 7.14032 5.50148C7.35194 5.49502 7.55809 5.56935 7.7169 5.70937C7.8757 5.8494 7.97525 6.04463 7.99533 6.25539C8.01541 6.46616 7.95451 6.67667 7.825 6.84417L7.75583 6.9225L6.67917 8L7.75583 9.0775C7.89931 9.22099 7.98551 9.41191 7.99824 9.61443C8.01097 9.81695 7.94938 10.0172 7.825 10.1775L7.75583 10.2558C7.61234 10.3993 7.42142 10.4855 7.2189 10.4982C7.01638 10.511 6.81617 10.4494 6.65583 10.325Z"/>
+  </svg>
+  <span class="pst-collapse-sidebar-label">Collapse Sidebar</span>
+  <span class="pst-expand-sidebar-label">Expand Sidebar</span>
+</button></div>
+        <div class="sidebar-primary-item">
+
+<nav class="bd-docs-nav bd-links"
+     aria-label="Section Navigation">
+  <p class="bd-links__title" role="heading" aria-level="1">Section Navigation</p>
+  <div class="bd-toc-item navbar-nav"><ul class="current nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="dataarray.html">DataArray</a></li>
+<li class="toctree-l1 current active has-children"><a aria-current="page" class="current reference internal" href="#">Dataset</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.html">annoray.Dataset</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.dims.html">annoray.Dataset.dims</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.sizes.html">annoray.Dataset.sizes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.values.html">annoray.Dataset.values</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.attrs.html">annoray.Dataset.attrs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.encoding.html">annoray.Dataset.encoding</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.coords.html">annoray.Dataset.coords</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.data_vars.html">annoray.Dataset.data_vars</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.variables.html">annoray.Dataset.variables</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.indexes.html">annoray.Dataset.indexes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.xindexes.html">annoray.Dataset.xindexes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.nbytes.html">annoray.Dataset.nbytes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.chunks.html">annoray.Dataset.chunks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.loc.html">annoray.Dataset.loc</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.keys.html">annoray.Dataset.keys</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.items.html">annoray.Dataset.items</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.get.html">annoray.Dataset.get</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.update.html">annoray.Dataset.update</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.assign.html">annoray.Dataset.assign</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.set_coords.html">annoray.Dataset.set_coords</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.copy.html">annoray.Dataset.copy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.astype.html">annoray.Dataset.astype</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.load.html">annoray.Dataset.load</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.compute.html">annoray.Dataset.compute</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.persist.html">annoray.Dataset.persist</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.chunk.html">annoray.Dataset.chunk</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.close.html">annoray.Dataset.close</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.isel.html">annoray.Dataset.isel</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.sel.html">annoray.Dataset.sel</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.head.html">annoray.Dataset.head</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.tail.html">annoray.Dataset.tail</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.thin.html">annoray.Dataset.thin</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.drop_isel.html">annoray.Dataset.drop_isel</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.drop_sel.html">annoray.Dataset.drop_sel</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.query.html">annoray.Dataset.query</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.reindex.html">annoray.Dataset.reindex</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.reindex_like.html">annoray.Dataset.reindex_like</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.interp.html">annoray.Dataset.interp</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.interp_like.html">annoray.Dataset.interp_like</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.sortby.html">annoray.Dataset.sortby</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.drop_duplicates.html">annoray.Dataset.drop_duplicates</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.get_index.html">annoray.Dataset.get_index</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.set_index.html">annoray.Dataset.set_index</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.reset_index.html">annoray.Dataset.reset_index</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.set_xindex.html">annoray.Dataset.set_xindex</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.swap_dims.html">annoray.Dataset.swap_dims</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.isnull.html">annoray.Dataset.isnull</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.notnull.html">annoray.Dataset.notnull</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.fillna.html">annoray.Dataset.fillna</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.dropna.html">annoray.Dataset.dropna</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.ffill.html">annoray.Dataset.ffill</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.bfill.html">annoray.Dataset.bfill</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.interpolate_na.html">annoray.Dataset.interpolate_na</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.where.html">annoray.Dataset.where</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.combine_first.html">annoray.Dataset.combine_first</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.equals.html">annoray.Dataset.equals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.identical.html">annoray.Dataset.identical</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.isin.html">annoray.Dataset.isin</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.all.html">annoray.Dataset.all</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.any.html">annoray.Dataset.any</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.argmax.html">annoray.Dataset.argmax</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.argmin.html">annoray.Dataset.argmin</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.count.html">annoray.Dataset.count</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.max.html">annoray.Dataset.max</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.mean.html">annoray.Dataset.mean</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.median.html">annoray.Dataset.median</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.min.html">annoray.Dataset.min</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.prod.html">annoray.Dataset.prod</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.std.html">annoray.Dataset.std</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.sum.html">annoray.Dataset.sum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.var.html">annoray.Dataset.var</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.quantile.html">annoray.Dataset.quantile</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.idxmax.html">annoray.Dataset.idxmax</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.idxmin.html">annoray.Dataset.idxmin</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.cumsum.html">annoray.Dataset.cumsum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.cumprod.html">annoray.Dataset.cumprod</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.cumulative_integrate.html">annoray.Dataset.cumulative_integrate</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.clip.html">annoray.Dataset.clip</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.round.html">annoray.Dataset.round</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.conj.html">annoray.Dataset.conj</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.conjugate.html">annoray.Dataset.conjugate</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.real.html">annoray.Dataset.real</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.imag.html">annoray.Dataset.imag</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.diff.html">annoray.Dataset.diff</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.differentiate.html">annoray.Dataset.differentiate</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.integrate.html">annoray.Dataset.integrate</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.shift.html">annoray.Dataset.shift</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.roll.html">annoray.Dataset.roll</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.rank.html">annoray.Dataset.rank</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.polyfit.html">annoray.Dataset.polyfit</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.pipe.html">annoray.Dataset.pipe</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.reduce.html">annoray.Dataset.reduce</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.map.html">annoray.Dataset.map</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.map_blocks.html">annoray.Dataset.map_blocks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.groupby.html">annoray.Dataset.groupby</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.groupby_bins.html">annoray.Dataset.groupby_bins</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.resample.html">annoray.Dataset.resample</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.rolling.html">annoray.Dataset.rolling</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.rolling_exp.html">annoray.Dataset.rolling_exp</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.coarsen.html">annoray.Dataset.coarsen</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.weighted.html">annoray.Dataset.weighted</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.transpose.html">annoray.Dataset.transpose</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.expand_dims.html">annoray.Dataset.expand_dims</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.squeeze.html">annoray.Dataset.squeeze</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.stack.html">annoray.Dataset.stack</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.unstack.html">annoray.Dataset.unstack</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.to_stacked_array.html">annoray.Dataset.to_stacked_array</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.pad.html">annoray.Dataset.pad</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.rename.html">annoray.Dataset.rename</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.rename_dims.html">annoray.Dataset.rename_dims</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.rename_vars.html">annoray.Dataset.rename_vars</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.drop_vars.html">annoray.Dataset.drop_vars</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.drop_dims.html">annoray.Dataset.drop_dims</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.assign_coords.html">annoray.Dataset.assign_coords</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.assign_attrs.html">annoray.Dataset.assign_attrs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.reset_coords.html">annoray.Dataset.reset_coords</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.merge.html">annoray.Dataset.merge</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.filter_by_attrs.html">annoray.Dataset.filter_by_attrs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.info.html">annoray.Dataset.info</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.convert_calendar.html">annoray.Dataset.convert_calendar</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.plot.html">annoray.Dataset.plot</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.to_netcdf.html">annoray.Dataset.to_netcdf</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.to_zarr.html">annoray.Dataset.to_zarr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.to_dataarray.html">annoray.Dataset.to_dataarray</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.to_array.html">annoray.Dataset.to_array</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.to_dataframe.html">annoray.Dataset.to_dataframe</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.to_pandas.html">annoray.Dataset.to_pandas</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.to_dict.html">annoray.Dataset.to_dict</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.to_xarray.html">annoray.Dataset.to_xarray</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.from_dict.html">annoray.Dataset.from_dict</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dataset.from_dataframe.html">annoray.Dataset.from_dataframe</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1"><a class="reference internal" href="datatree.html">DataTree</a></li>
+<li class="toctree-l1"><a class="reference internal" href="functions.html">Top-level functions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="units.html">Units</a></li>
+<li class="toctree-l1"><a class="reference internal" href="helpers.html">GroupBy, windows and weights</a></li>
+<li class="toctree-l1"><a class="reference internal" href="testing.html">Testing</a></li>
+</ul>
+</div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+<nav aria-label="Breadcrumb" class="d-print-none">
+  <ul class="bd-breadcrumbs">
+    
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="../index.html" class="nav-link" aria-label="Home">
+        <i class="fa-solid fa-home"></i>
+      </a>
+    </li>
+    
+    <li class="breadcrumb-item"><a href="index.html" class="nav-link">API reference</a></li>
+    
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">Dataset</span></li>
+  </ul>
+</nav>
+</div>
+      
+    </div>
+  
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section id="dataset">
+<h1>Dataset<a class="headerlink" href="#dataset" title="Link to this heading">#</a></h1>
+<p>A dict-like collection of data arrays sharing dimensions and coordinates.</p>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.html#annoray.Dataset" title="annoray.Dataset"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset</span></code></a>([data_vars, coords, attrs])</p></td>
+<td><p>A units-aware collection of labelled arrays sharing dimensions (xarray's <code class="code docutils literal notranslate"><span class="pre">Dataset</span></code>).</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Each section has a short example; the examples share this setup:</p>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">annoray</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">ar</span>
+
+<span class="n">ds</span> <span class="o">=</span> <span class="n">ar</span><span class="o">.</span><span class="n">Dataset</span><span class="p">(</span>
+    <span class="p">{</span>
+        <span class="s2">"temperature"</span><span class="p">:</span> <span class="p">((</span><span class="s2">"time"</span><span class="p">,</span> <span class="s2">"station"</span><span class="p">),</span> <span class="mf">280.0</span> <span class="o">+</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mf">12.0</span><span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">3</span><span class="p">),</span> <span class="p">{</span><span class="s2">"units"</span><span class="p">:</span> <span class="s2">"K"</span><span class="p">}),</span>
+        <span class="s2">"pressure"</span><span class="p">:</span> <span class="p">(</span><span class="s2">"time"</span><span class="p">,</span> <span class="p">[</span><span class="mf">1012.0</span><span class="p">,</span> <span class="mf">1009.5</span><span class="p">,</span> <span class="mf">1004.2</span><span class="p">,</span> <span class="mf">1007.8</span><span class="p">],</span> <span class="p">{</span><span class="s2">"units"</span><span class="p">:</span> <span class="s2">"hPa"</span><span class="p">}),</span>
+    <span class="p">},</span>
+    <span class="n">coords</span><span class="o">=</span><span class="p">{</span><span class="s2">"time"</span><span class="p">:</span> <span class="n">ar</span><span class="o">.</span><span class="n">date_range</span><span class="p">(</span><span class="s2">"2026-07-01"</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="s2">"D"</span><span class="p">),</span> <span class="s2">"station"</span><span class="p">:</span> <span class="p">[</span><span class="s2">"a"</span><span class="p">,</span> <span class="s2">"b"</span><span class="p">,</span> <span class="s2">"c"</span><span class="p">]},</span>
+<span class="p">)</span>
+<span class="n">ds</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output text_html"><pre>&lt;annoray.Dataset&gt; Size: 232B
+Dimensions:  (time: 4, station: 3)
+Coordinates:
+  * time        (time) datetime 2026-07-01 00:00:00 2026-07-02 00:00:00 2026-07-03 00:00:00 2026-07-04 00:00:00
+  * station     (station) str &quot;a&quot; &quot;b&quot; &quot;c&quot;
+Data variables:
+    temperature (time, station) float64 [K] 280 281 282 283 284 285 ...
+    pressure    (time) float64 [hPa] 1012 1009.5 1004.2 1007.8
+</pre></div></div>
+</div>
+<section id="attributes">
+<h2>Attributes<a class="headerlink" href="#attributes" title="Link to this heading">#</a></h2>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="nb">print</span><span class="p">(</span><span class="n">ds</span><span class="o">.</span><span class="n">sizes</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">ds</span><span class="o">.</span><span class="n">data_vars</span><span class="p">),</span> <span class="nb">list</span><span class="p">(</span><span class="n">ds</span><span class="o">.</span><span class="n">coords</span><span class="p">))</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">ds</span><span class="p">[</span><span class="s2">"pressure"</span><span class="p">]</span><span class="o">.</span><span class="n">units</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>{'time': 4, 'station': 3}
+['temperature', 'pressure'] ['time', 'station']
+hPa
+</pre></div>
+</div>
+</div>
+</div>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.dims.html#annoray.Dataset.dims" title="annoray.Dataset.dims"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.dims</span></code></a></p></td>
+<td><p>Dimension names.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Dataset.sizes.html#annoray.Dataset.sizes" title="annoray.Dataset.sizes"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.sizes</span></code></a></p></td>
+<td><p>Dimension name → length.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.values.html#annoray.Dataset.values" title="annoray.Dataset.values"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.values</span></code></a>()</p></td>
+<td><p>The data variables, as data arrays.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Dataset.attrs.html#annoray.Dataset.attrs" title="annoray.Dataset.attrs"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.attrs</span></code></a></p></td>
+<td><p>The global attributes, as a dict whose changes are applied to this dataset.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.encoding.html#annoray.Dataset.encoding" title="annoray.Dataset.encoding"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.encoding</span></code></a></p></td>
+<td><p>Dataset-level storage settings (<code class="code docutils literal notranslate"><span class="pre">unlimited_dims</span></code>); changes apply to this dataset.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Dataset.coords.html#annoray.Dataset.coords" title="annoray.Dataset.coords"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.coords</span></code></a></p></td>
+<td><p>Coordinates, as data arrays, in a dict whose assignments (<code class="code docutils literal notranslate"><span class="pre">ds.coords[&quot;x&quot;]</span> <span class="pre">=</span> <span class="pre">…</span></code>) and deletions apply to this dataset.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.data_vars.html#annoray.Dataset.data_vars" title="annoray.Dataset.data_vars"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.data_vars</span></code></a></p></td>
+<td><p>The data variables, as a live dict: <code class="code docutils literal notranslate"><span class="pre">ds.data_vars[&quot;v&quot;]</span> <span class="pre">=</span> <span class="pre">...</span></code> adds or replaces one.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Dataset.variables.html#annoray.Dataset.variables" title="annoray.Dataset.variables"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.variables</span></code></a></p></td>
+<td><p>Every variable (data variables and coordinates), by name.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.indexes.html#annoray.Dataset.indexes" title="annoray.Dataset.indexes"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.indexes</span></code></a></p></td>
+<td><p>Dimension → pandas index, for dimensions with a coordinate.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Dataset.xindexes.html#annoray.Dataset.xindexes" title="annoray.Dataset.xindexes"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.xindexes</span></code></a></p></td>
+<td><p>Dimension → pandas index, as <code class="code docutils literal notranslate"><span class="pre">indexes</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.nbytes.html#annoray.Dataset.nbytes" title="annoray.Dataset.nbytes"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.nbytes</span></code></a></p></td>
+<td><p>Bytes of all variables (not read for lazy data).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Dataset.chunks.html#annoray.Dataset.chunks" title="annoray.Dataset.chunks"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.chunks</span></code></a></p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">{}</span></code>: annoray does not use dask.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.loc.html#annoray.Dataset.loc" title="annoray.Dataset.loc"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.loc</span></code></a></p></td>
+<td><p>Label-based indexing with a mapping: <code class="code docutils literal notranslate"><span class="pre">ds.loc[{&quot;x&quot;:</span> <span class="pre">10.0}]</span></code> (read only).</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="contents">
+<h2>Contents<a class="headerlink" href="#contents" title="Link to this heading">#</a></h2>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># Variables are replaced, never written into: arrays taken earlier keep their values.</span>
+<span class="n">edited</span> <span class="o">=</span> <span class="n">ds</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+<span class="n">before</span> <span class="o">=</span> <span class="n">edited</span><span class="p">[</span><span class="s2">"pressure"</span><span class="p">]</span>
+<span class="n">edited</span><span class="p">[</span><span class="s2">"pressure"</span><span class="p">]</span> <span class="o">=</span> <span class="n">edited</span><span class="p">[</span><span class="s2">"pressure"</span><span class="p">]</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="s2">"Pa"</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">before</span><span class="o">.</span><span class="n">units</span><span class="p">,</span> <span class="n">edited</span><span class="p">[</span><span class="s2">"pressure"</span><span class="p">]</span><span class="o">.</span><span class="n">units</span><span class="p">)</span>
+<span class="n">wind</span> <span class="o">=</span> <span class="n">ar</span><span class="o">.</span><span class="n">DataArray</span><span class="p">([</span><span class="mf">3.0</span><span class="p">,</span> <span class="mf">5.5</span><span class="p">,</span> <span class="mf">2.1</span><span class="p">,</span> <span class="mf">4.0</span><span class="p">],</span> <span class="n">dims</span><span class="o">=</span><span class="s2">"time"</span><span class="p">,</span> <span class="n">units</span><span class="o">=</span><span class="s2">"m/s"</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">ds</span><span class="o">.</span><span class="n">assign</span><span class="p">(</span><span class="n">wind</span><span class="o">=</span><span class="n">wind</span><span class="p">)</span><span class="o">.</span><span class="n">data_vars</span><span class="p">))</span>  <span class="c1"># a new dataset; ds is unchanged</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>hPa Pa
+['temperature', 'pressure', 'wind']
+</pre></div>
+</div>
+</div>
+</div>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.keys.html#annoray.Dataset.keys" title="annoray.Dataset.keys"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.keys</span></code></a>()</p></td>
+<td><p>Names of the data variables.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Dataset.items.html#annoray.Dataset.items" title="annoray.Dataset.items"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.items</span></code></a>()</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">(name,</span> <span class="pre">DataArray)</span></code> pairs of the data variables.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.get.html#annoray.Dataset.get" title="annoray.Dataset.get"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.get</span></code></a>(key[, default])</p></td>
+<td><p>The variable (or coordinate) <code class="code docutils literal notranslate"><span class="pre">key</span></code>, or <code class="code docutils literal notranslate"><span class="pre">default</span></code> if there is none.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Dataset.update.html#annoray.Dataset.update" title="annoray.Dataset.update"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.update</span></code></a>(other)</p></td>
+<td><p>Add or replace variables in place from a mapping or another dataset (its data variables, with their coordinates); returns this dataset.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.assign.html#annoray.Dataset.assign" title="annoray.Dataset.assign"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.assign</span></code></a>([variables])</p></td>
+<td><p>A copy with variables added or replaced: <code class="code docutils literal notranslate"><span class="pre">ds.assign(t2=ds[&quot;t&quot;]</span> <span class="pre">*</span> <span class="pre">2)</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Dataset.set_coords.html#annoray.Dataset.set_coords" title="annoray.Dataset.set_coords"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.set_coords</span></code></a>(names)</p></td>
+<td><p>A copy with data variables turned into coordinates.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="memory-and-copying">
+<h2>Memory and copying<a class="headerlink" href="#memory-and-copying" title="Link to this heading">#</a></h2>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="nb">print</span><span class="p">(</span><span class="n">ds</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s2">"float32"</span><span class="p">)[</span><span class="s2">"temperature"</span><span class="p">]</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">ds</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span><span class="o">.</span><span class="n">identical</span><span class="p">(</span><span class="n">ds</span><span class="p">))</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>float32
+True
+</pre></div>
+</div>
+</div>
+</div>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.copy.html#annoray.Dataset.copy" title="annoray.Dataset.copy"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.copy</span></code></a>([deep, data])</p></td>
+<td><p>A copy (datasets are immutable, so deep and shallow copies are the same), with the data of variables replaced from <code class="code docutils literal notranslate"><span class="pre">data</span></code> (a mapping of name to values of the same shape) if given.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Dataset.astype.html#annoray.Dataset.astype" title="annoray.Dataset.astype"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.astype</span></code></a>(dtype, *[, keep_attrs])</p></td>
+<td><p>Every data variable converted to <code class="code docutils literal notranslate"><span class="pre">dtype</span></code> (coordinates unchanged); see <code class="code docutils literal notranslate"><span class="pre">DataArray.astype</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.load.html#annoray.Dataset.load" title="annoray.Dataset.load"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.load</span></code></a>()</p></td>
+<td><p>A copy with every variable read into memory.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Dataset.compute.html#annoray.Dataset.compute" title="annoray.Dataset.compute"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.compute</span></code></a>()</p></td>
+<td><p>Same as <code class="code docutils literal notranslate"><span class="pre">load</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.persist.html#annoray.Dataset.persist" title="annoray.Dataset.persist"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.persist</span></code></a>(**kwargs)</p></td>
+<td><p>No-op without dask.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Dataset.chunk.html#annoray.Dataset.chunk" title="annoray.Dataset.chunk"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.chunk</span></code></a>(*args, **kwargs)</p></td>
+<td><p>No-op without dask.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.close.html#annoray.Dataset.close" title="annoray.Dataset.close"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.close</span></code></a>()</p></td>
+<td><p>No-op: a file is released when the data read from it is dropped.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="indexing">
+<h2>Indexing<a class="headerlink" href="#indexing" title="Link to this heading">#</a></h2>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="nb">print</span><span class="p">(</span><span class="n">ds</span><span class="o">.</span><span class="n">isel</span><span class="p">(</span><span class="n">time</span><span class="o">=</span><span class="mi">0</span><span class="p">)[</span><span class="s2">"pressure"</span><span class="p">]</span><span class="o">.</span><span class="n">item</span><span class="p">())</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">ds</span><span class="o">.</span><span class="n">sel</span><span class="p">(</span><span class="n">station</span><span class="o">=</span><span class="s2">"b"</span><span class="p">,</span> <span class="n">time</span><span class="o">=</span><span class="s2">"2026-07-02"</span><span class="p">)[</span><span class="s2">"temperature"</span><span class="p">]</span><span class="o">.</span><span class="n">item</span><span class="p">())</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">ds</span><span class="o">.</span><span class="n">sortby</span><span class="p">(</span><span class="s2">"station"</span><span class="p">,</span> <span class="n">ascending</span><span class="o">=</span><span class="kc">False</span><span class="p">)[</span><span class="s2">"station"</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>1012.0 hPa
+284.0 K
+['c' 'b' 'a']
+</pre></div>
+</div>
+</div>
+</div>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.isel.html#annoray.Dataset.isel" title="annoray.Dataset.isel"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.isel</span></code></a>([indexers, drop, missing_dims])</p></td>
+<td><p>Select by position along named dimensions: <code class="code docutils literal notranslate"><span class="pre">ds.isel(time=0,</span> <span class="pre">lat=slice(10,</span> <span class="pre">20))</span></code>; integers drop the dimension, slices and integer arrays keep it.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Dataset.sel.html#annoray.Dataset.sel" title="annoray.Dataset.sel"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.sel</span></code></a>([indexers, method, tolerance, drop])</p></td>
+<td><p>Select by label: <code class="code docutils literal notranslate"><span class="pre">ds.sel(time=&quot;2020-01&quot;,</span> <span class="pre">lat=slice(30,</span> <span class="pre">60))</span></code>; slices are inclusive.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.head.html#annoray.Dataset.head" title="annoray.Dataset.head"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.head</span></code></a>([indexers])</p></td>
+<td><p>The first <code class="code docutils literal notranslate"><span class="pre">n</span></code> positions along each dimension (5 by default).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Dataset.tail.html#annoray.Dataset.tail" title="annoray.Dataset.tail"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.tail</span></code></a>([indexers])</p></td>
+<td><p>The last <code class="code docutils literal notranslate"><span class="pre">n</span></code> positions along each dimension (5 by default).</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.thin.html#annoray.Dataset.thin" title="annoray.Dataset.thin"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.thin</span></code></a>([indexers])</p></td>
+<td><p>Every <code class="code docutils literal notranslate"><span class="pre">n</span></code>-th position along each dimension.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Dataset.drop_isel.html#annoray.Dataset.drop_isel" title="annoray.Dataset.drop_isel"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.drop_isel</span></code></a>([indexers])</p></td>
+<td><p>Drop positions: <code class="code docutils literal notranslate"><span class="pre">ds.drop_isel(x=[0,</span> <span class="pre">2])</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.drop_sel.html#annoray.Dataset.drop_sel" title="annoray.Dataset.drop_sel"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.drop_sel</span></code></a>([labels])</p></td>
+<td><p>Drop entries by label from every variable: <code class="code docutils literal notranslate"><span class="pre">ds.drop_sel(x=[1,</span> <span class="pre">2])</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Dataset.query.html#annoray.Dataset.query" title="annoray.Dataset.query"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.query</span></code></a>([queries, parser, engine, ...])</p></td>
+<td><p>Positions along dimensions where boolean expressions over variables hold: <code class="code docutils literal notranslate"><span class="pre">ds.query(x=&quot;a</span> <span class="pre">&gt;</span> <span class="pre">2</span> <span class="pre">&amp;</span> <span class="pre">lab</span> <span class="pre">==</span> <span class="pre">'q'&quot;)</span></code> (units-aware; <code class="code docutils literal notranslate"><span class="pre">Q(value,</span> <span class="pre">unit)</span></code> for quantities).</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.reindex.html#annoray.Dataset.reindex" title="annoray.Dataset.reindex"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.reindex</span></code></a>([indexers, method, ...])</p></td>
+<td><p>Conform to new coordinate labels: positions without a match get <code class="code docutils literal notranslate"><span class="pre">fill_value</span></code> (NaN by default; <code class="code docutils literal notranslate"><span class="pre">&quot;&quot;</span></code> for text).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Dataset.reindex_like.html#annoray.Dataset.reindex_like" title="annoray.Dataset.reindex_like"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.reindex_like</span></code></a>(other, **kwargs)</p></td>
+<td><p>Reindexed onto another object's dimension coordinates.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.interp.html#annoray.Dataset.interp" title="annoray.Dataset.interp"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.interp</span></code></a>([coords, method, extrapolate])</p></td>
+<td><p>Interpolate along dimensions to new coordinate values (<code class="code docutils literal notranslate"><span class="pre">method</span></code> <code class="code docutils literal notranslate"><span class="pre">&quot;linear&quot;</span></code>, <code class="code docutils literal notranslate"><span class="pre">&quot;nearest&quot;</span></code>, or log-scale <code class="code docutils literal notranslate"><span class="pre">&quot;log_coord&quot;</span></code>, <code class="code docutils literal notranslate"><span class="pre">&quot;log_value&quot;</span></code>, <code class="code docutils literal notranslate"><span class="pre">&quot;loglog&quot;</span></code>); no extrapolation unless <code class="code docutils literal notranslate"><span class="pre">extrapolate</span></code> asks for it (<code class="code docutils literal notranslate"><span class="pre">&quot;edge&quot;</span></code>, <code class="code docutils literal notranslate"><span class="pre">&quot;extend&quot;</span></code>, or a number for a power law).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Dataset.interp_like.html#annoray.Dataset.interp_like" title="annoray.Dataset.interp_like"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.interp_like</span></code></a>(other[, method])</p></td>
+<td><p>Interpolated onto another object's dimension coordinates.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.sortby.html#annoray.Dataset.sortby" title="annoray.Dataset.sortby"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.sortby</span></code></a>(variables[, ascending])</p></td>
+<td><p>Sort along the dimension of a 1-D coordinate; NaN/NaT last.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Dataset.drop_duplicates.html#annoray.Dataset.drop_duplicates" title="annoray.Dataset.drop_duplicates"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.drop_duplicates</span></code></a>(dim, *[, keep])</p></td>
+<td><p>Drop positions whose label repeats (<code class="code docutils literal notranslate"><span class="pre">keep=&quot;first&quot;</span></code>, <code class="code docutils literal notranslate"><span class="pre">&quot;last&quot;</span></code> or <code class="code docutils literal notranslate"><span class="pre">False</span></code>).</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.get_index.html#annoray.Dataset.get_index" title="annoray.Dataset.get_index"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.get_index</span></code></a>(key)</p></td>
+<td><p>The pandas index of a dimension.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Dataset.set_index.html#annoray.Dataset.set_index" title="annoray.Dataset.set_index"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.set_index</span></code></a>([indexes, append])</p></td>
+<td><p>Make a coordinate the index of a dimension: <code class="code docutils literal notranslate"><span class="pre">ds.set_index(x=&quot;lab&quot;)</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.reset_index.html#annoray.Dataset.reset_index" title="annoray.Dataset.reset_index"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.reset_index</span></code></a>(dims_or_levels, *[, drop])</p></td>
+<td><p>Remove dimension indexes (<code class="code docutils literal notranslate"><span class="pre">drop=True</span></code>).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Dataset.set_xindex.html#annoray.Dataset.set_xindex" title="annoray.Dataset.set_xindex"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.set_xindex</span></code></a>(coord_names[, index_cls])</p></td>
+<td><p>Not supported (selection is by dimension coordinates); see <code class="code docutils literal notranslate"><span class="pre">set_index</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.swap_dims.html#annoray.Dataset.swap_dims" title="annoray.Dataset.swap_dims"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.swap_dims</span></code></a>([dims_dict])</p></td>
+<td><p>Make coordinates the indexes of dimensions: <code class="code docutils literal notranslate"><span class="pre">ds.swap_dims(x=&quot;label&quot;)</span></code>.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="missing-values">
+<h2>Missing values<a class="headerlink" href="#missing-values" title="Link to this heading">#</a></h2>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">low</span> <span class="o">=</span> <span class="n">ds</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">ds</span><span class="p">[</span><span class="s2">"pressure"</span><span class="p">]</span> <span class="o">&lt;</span> <span class="n">ar</span><span class="o">.</span><span class="n">Quantity</span><span class="p">(</span><span class="mf">1010.0</span><span class="p">,</span> <span class="s2">"hPa"</span><span class="p">))</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">low</span><span class="p">[</span><span class="s2">"pressure"</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">low</span><span class="o">.</span><span class="n">dropna</span><span class="p">(</span><span class="s2">"time"</span><span class="p">,</span> <span class="n">how</span><span class="o">=</span><span class="s2">"all"</span><span class="p">)</span><span class="o">.</span><span class="n">sizes</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>[   nan 1009.5 1004.2 1007.8]
+{'time': 3, 'station': 3}
+</pre></div>
+</div>
+</div>
+</div>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.isnull.html#annoray.Dataset.isnull" title="annoray.Dataset.isnull"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.isnull</span></code></a>()</p></td>
+<td><p>Where each data variable is missing (NaN/NaT).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Dataset.notnull.html#annoray.Dataset.notnull" title="annoray.Dataset.notnull"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.notnull</span></code></a>()</p></td>
+<td><p>Where each data variable is present.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.fillna.html#annoray.Dataset.fillna" title="annoray.Dataset.fillna"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.fillna</span></code></a>(value)</p></td>
+<td><p>Missing values replaced: a number, a quantity, or per variable (a Dataset or dict).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Dataset.dropna.html#annoray.Dataset.dropna" title="annoray.Dataset.dropna"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.dropna</span></code></a>(dim[, how])</p></td>
+<td><p>The dataset without the positions along <code class="code docutils literal notranslate"><span class="pre">dim</span></code> where any (<code class="code docutils literal notranslate"><span class="pre">how=&quot;any&quot;</span></code>) or every (<code class="code docutils literal notranslate"><span class="pre">how=&quot;all&quot;</span></code>) value of the data variables is missing.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.ffill.html#annoray.Dataset.ffill" title="annoray.Dataset.ffill"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.ffill</span></code></a>(dim[, limit])</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">DataArray.ffill</span></code> of every data variable along <code class="code docutils literal notranslate"><span class="pre">dim</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Dataset.bfill.html#annoray.Dataset.bfill" title="annoray.Dataset.bfill"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.bfill</span></code></a>(dim[, limit])</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">DataArray.bfill</span></code> of every data variable along <code class="code docutils literal notranslate"><span class="pre">dim</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.interpolate_na.html#annoray.Dataset.interpolate_na" title="annoray.Dataset.interpolate_na"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.interpolate_na</span></code></a>([dim, method, limit, ...])</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">DataArray.interpolate_na</span></code> of every data variable along <code class="code docutils literal notranslate"><span class="pre">dim</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Dataset.where.html#annoray.Dataset.where" title="annoray.Dataset.where"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.where</span></code></a>(cond[, other])</p></td>
+<td><p>Keep values where <code class="code docutils literal notranslate"><span class="pre">cond</span></code> (a boolean DataArray, a Dataset of booleans for the common variables, or a callable taking this dataset) holds; NaN (NaT) or <code class="code docutils literal notranslate"><span class="pre">other</span></code> elsewhere.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.combine_first.html#annoray.Dataset.combine_first" title="annoray.Dataset.combine_first"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.combine_first</span></code></a>(other)</p></td>
+<td><p>Gaps filled from <code class="code docutils literal notranslate"><span class="pre">other</span></code> variable by variable (outer join).</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="comparisons">
+<h2>Comparisons<a class="headerlink" href="#comparisons" title="Link to this heading">#</a></h2>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="nb">print</span><span class="p">(</span><span class="n">ds</span><span class="o">.</span><span class="n">equals</span><span class="p">(</span><span class="n">ds</span><span class="o">.</span><span class="n">copy</span><span class="p">()))</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>True
+</pre></div>
+</div>
+</div>
+</div>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.equals.html#annoray.Dataset.equals" title="annoray.Dataset.equals"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.equals</span></code></a>(other)</p></td>
+<td><p>Same variables (any order), each with the same dimensions, coordinates and values (units converted; NaN equals NaN).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Dataset.identical.html#annoray.Dataset.identical" title="annoray.Dataset.identical"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.identical</span></code></a>(other)</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">equals</span></code>, and the same units and attributes (global and per variable).</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.isin.html#annoray.Dataset.isin" title="annoray.Dataset.isin"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.isin</span></code></a>(test_elements)</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">DataArray.isin</span></code> of every data variable.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="aggregation">
+<h2>Aggregation<a class="headerlink" href="#aggregation" title="Link to this heading">#</a></h2>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">means</span> <span class="o">=</span> <span class="n">ds</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="s2">"time"</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">means</span><span class="p">[</span><span class="s2">"temperature"</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">,</span> <span class="n">means</span><span class="p">[</span><span class="s2">"pressure"</span><span class="p">]</span><span class="o">.</span><span class="n">item</span><span class="p">())</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>[284.5 285.5 286.5] 1008.375 hPa
+</pre></div>
+</div>
+</div>
+</div>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.all.html#annoray.Dataset.all" title="annoray.Dataset.all"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.all</span></code></a>([dim, axis, skipna, ddof, ...])</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">all</span></code> over <code class="code docutils literal notranslate"><span class="pre">dim</span></code> (all dimensions by default).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Dataset.any.html#annoray.Dataset.any" title="annoray.Dataset.any"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.any</span></code></a>([dim, axis, skipna, ddof, ...])</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">any</span></code> over <code class="code docutils literal notranslate"><span class="pre">dim</span></code> (all dimensions by default).</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.argmax.html#annoray.Dataset.argmax" title="annoray.Dataset.argmax"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.argmax</span></code></a>([dim, axis, skipna, ddof, ...])</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">argmax</span></code> over <code class="code docutils literal notranslate"><span class="pre">dim</span></code> (all dimensions by default).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Dataset.argmin.html#annoray.Dataset.argmin" title="annoray.Dataset.argmin"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.argmin</span></code></a>([dim, axis, skipna, ddof, ...])</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">argmin</span></code> over <code class="code docutils literal notranslate"><span class="pre">dim</span></code> (all dimensions by default).</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.count.html#annoray.Dataset.count" title="annoray.Dataset.count"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.count</span></code></a>([dim, axis, skipna, ddof, ...])</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">count</span></code> over <code class="code docutils literal notranslate"><span class="pre">dim</span></code> (all dimensions by default).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Dataset.max.html#annoray.Dataset.max" title="annoray.Dataset.max"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.max</span></code></a>([dim, axis, skipna, ddof, ...])</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">max</span></code> over <code class="code docutils literal notranslate"><span class="pre">dim</span></code> (all dimensions by default).</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.mean.html#annoray.Dataset.mean" title="annoray.Dataset.mean"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.mean</span></code></a>([dim, axis, skipna, ddof, ...])</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">mean</span></code> over <code class="code docutils literal notranslate"><span class="pre">dim</span></code> (all dimensions by default).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Dataset.median.html#annoray.Dataset.median" title="annoray.Dataset.median"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.median</span></code></a>([dim, axis, skipna, ddof, ...])</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">median</span></code> over <code class="code docutils literal notranslate"><span class="pre">dim</span></code> (all dimensions by default).</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.min.html#annoray.Dataset.min" title="annoray.Dataset.min"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.min</span></code></a>([dim, axis, skipna, ddof, ...])</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">min</span></code> over <code class="code docutils literal notranslate"><span class="pre">dim</span></code> (all dimensions by default).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Dataset.prod.html#annoray.Dataset.prod" title="annoray.Dataset.prod"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.prod</span></code></a>([dim, axis, skipna, ddof, ...])</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">prod</span></code> over <code class="code docutils literal notranslate"><span class="pre">dim</span></code> (all dimensions by default).</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.std.html#annoray.Dataset.std" title="annoray.Dataset.std"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.std</span></code></a>([dim, axis, skipna, ddof, ...])</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">std</span></code> over <code class="code docutils literal notranslate"><span class="pre">dim</span></code> (all dimensions by default).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Dataset.sum.html#annoray.Dataset.sum" title="annoray.Dataset.sum"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.sum</span></code></a>([dim, axis, skipna, ddof, ...])</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">sum</span></code> over <code class="code docutils literal notranslate"><span class="pre">dim</span></code> (all dimensions by default).</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.var.html#annoray.Dataset.var" title="annoray.Dataset.var"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.var</span></code></a>([dim, axis, skipna, ddof, ...])</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">var</span></code> over <code class="code docutils literal notranslate"><span class="pre">dim</span></code> (all dimensions by default).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Dataset.quantile.html#annoray.Dataset.quantile" title="annoray.Dataset.quantile"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.quantile</span></code></a>(q[, dim, method, skipna])</p></td>
+<td><p>Quantiles of every numeric variable over <code class="code docutils literal notranslate"><span class="pre">dim</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.idxmax.html#annoray.Dataset.idxmax" title="annoray.Dataset.idxmax"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.idxmax</span></code></a>(dim[, skipna])</p></td>
+<td><p>The coordinate label of each variable's maximum along <code class="code docutils literal notranslate"><span class="pre">dim</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Dataset.idxmin.html#annoray.Dataset.idxmin" title="annoray.Dataset.idxmin"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.idxmin</span></code></a>(dim[, skipna])</p></td>
+<td><p>The coordinate label of each variable's minimum along <code class="code docutils literal notranslate"><span class="pre">dim</span></code>.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="cumulative">
+<h2>Cumulative<a class="headerlink" href="#cumulative" title="Link to this heading">#</a></h2>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="nb">print</span><span class="p">(</span><span class="n">ds</span><span class="o">.</span><span class="n">cumsum</span><span class="p">(</span><span class="s2">"time"</span><span class="p">)[</span><span class="s2">"pressure"</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>[1012.  2021.5 3025.7 4033.5]
+</pre></div>
+</div>
+</div>
+</div>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.cumsum.html#annoray.Dataset.cumsum" title="annoray.Dataset.cumsum"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.cumsum</span></code></a>(dim)</p></td>
+<td><p>Running sums along <code class="code docutils literal notranslate"><span class="pre">dim</span></code>, skipping NaN.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Dataset.cumprod.html#annoray.Dataset.cumprod" title="annoray.Dataset.cumprod"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.cumprod</span></code></a>(dim)</p></td>
+<td><p>Running products along <code class="code docutils literal notranslate"><span class="pre">dim</span></code>, skipping NaN.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.cumulative_integrate.html#annoray.Dataset.cumulative_integrate" title="annoray.Dataset.cumulative_integrate"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.cumulative_integrate</span></code></a>(coord[, ...])</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">DataArray.cumulative_integrate</span></code> of every data variable (same <code class="code docutils literal notranslate"><span class="pre">datetime_unit</span></code>).</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="computation">
+<h2>Computation<a class="headerlink" href="#computation" title="Link to this heading">#</a></h2>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="nb">print</span><span class="p">(</span><span class="n">ds</span><span class="o">.</span><span class="n">diff</span><span class="p">(</span><span class="s2">"time"</span><span class="p">)[</span><span class="s2">"pressure"</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">ds</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">v</span><span class="p">:</span> <span class="n">v</span><span class="o">.</span><span class="n">max</span><span class="p">())[</span><span class="s2">"pressure"</span><span class="p">]</span><span class="o">.</span><span class="n">item</span><span class="p">())</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>[-2.5 -5.3  3.6]
+1012.0 hPa
+</pre></div>
+</div>
+</div>
+</div>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.clip.html#annoray.Dataset.clip" title="annoray.Dataset.clip"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.clip</span></code></a>([min, max, keep_attrs])</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">DataArray.clip</span></code> of every numeric data variable.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Dataset.round.html#annoray.Dataset.round" title="annoray.Dataset.round"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.round</span></code></a>([decimals])</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">DataArray.round</span></code> of every numeric data variable.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.conj.html#annoray.Dataset.conj" title="annoray.Dataset.conj"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.conj</span></code></a>()</p></td>
+<td><p>The complex conjugate (of real data: the data itself).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Dataset.conjugate.html#annoray.Dataset.conjugate" title="annoray.Dataset.conjugate"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.conjugate</span></code></a>()</p></td>
+<td><p>The complex conjugate (of real data: the data itself).</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.real.html#annoray.Dataset.real" title="annoray.Dataset.real"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.real</span></code></a></p></td>
+<td><p>The real part (annoray data is real: the data itself).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Dataset.imag.html#annoray.Dataset.imag" title="annoray.Dataset.imag"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.imag</span></code></a></p></td>
+<td><p>The imaginary part (zeros).</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.diff.html#annoray.Dataset.diff" title="annoray.Dataset.diff"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.diff</span></code></a>(dim[, n, label])</p></td>
+<td><p>The <code class="code docutils literal notranslate"><span class="pre">n</span></code>-th difference of every variable along <code class="code docutils literal notranslate"><span class="pre">dim</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Dataset.differentiate.html#annoray.Dataset.differentiate" title="annoray.Dataset.differentiate"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.differentiate</span></code></a>(coord[, edge_order, ...])</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">DataArray.differentiate</span></code> of every data variable along the coordinate's dimension (same <code class="code docutils literal notranslate"><span class="pre">datetime_unit</span></code>).</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.integrate.html#annoray.Dataset.integrate" title="annoray.Dataset.integrate"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.integrate</span></code></a>(coord[, datetime_unit])</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">DataArray.integrate</span></code> of every data variable along the coordinates' dimensions (same <code class="code docutils literal notranslate"><span class="pre">datetime_unit</span></code>).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Dataset.shift.html#annoray.Dataset.shift" title="annoray.Dataset.shift"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.shift</span></code></a>([shifts])</p></td>
+<td><p>Shift every variable's values, filling with NaN.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.roll.html#annoray.Dataset.roll" title="annoray.Dataset.roll"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.roll</span></code></a>([shifts, roll_coords])</p></td>
+<td><p>Rotate every variable's values (coordinates too with <code class="code docutils literal notranslate"><span class="pre">roll_coords=True</span></code>).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Dataset.rank.html#annoray.Dataset.rank" title="annoray.Dataset.rank"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.rank</span></code></a>(dim, *[, pct, keep_attrs])</p></td>
+<td><p>Ranks along a dimension, for the variables that have it.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.polyfit.html#annoray.Dataset.polyfit" title="annoray.Dataset.polyfit"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.polyfit</span></code></a>(dim, deg[, skipna, rcond, ...])</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">DataArray.polyfit</span></code> of every data variable along <code class="code docutils literal notranslate"><span class="pre">dim</span></code>, as <code class="code docutils literal notranslate"><span class="pre">&lt;name&gt;_polyfit_coefficients</span></code> (and the rest).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Dataset.pipe.html#annoray.Dataset.pipe" title="annoray.Dataset.pipe"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.pipe</span></code></a>(func, *args, **kwargs)</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">func(self,</span> <span class="pre">*args,</span> <span class="pre">**kwargs)</span></code>; see <code class="code docutils literal notranslate"><span class="pre">DataArray.pipe</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.reduce.html#annoray.Dataset.reduce" title="annoray.Dataset.reduce"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.reduce</span></code></a>(func[, dim, axis, ...])</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">func(values,</span> <span class="pre">axis=…)</span></code> over dimensions, variable by variable.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Dataset.map.html#annoray.Dataset.map" title="annoray.Dataset.map"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.map</span></code></a>(func[, keep_attrs, args])</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">func(variable,</span> <span class="pre">*args,</span> <span class="pre">**kwargs)</span></code> for every data variable (a DataArray in, a DataArray out), as xarray's <code class="code docutils literal notranslate"><span class="pre">Dataset.map</span></code>; attributes kept unless <code class="code docutils literal notranslate"><span class="pre">keep_attrs=False</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.map_blocks.html#annoray.Dataset.map_blocks" title="annoray.Dataset.map_blocks"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.map_blocks</span></code></a>(func[, args, kwargs, ...])</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">func(self,</span> <span class="pre">*args,</span> <span class="pre">**kwargs)</span></code>: one block without dask.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="grouped-and-windowed">
+<h2>Grouped and windowed<a class="headerlink" href="#grouped-and-windowed" title="Link to this heading">#</a></h2>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="nb">print</span><span class="p">(</span><span class="n">ds</span><span class="o">.</span><span class="n">resample</span><span class="p">(</span><span class="n">time</span><span class="o">=</span><span class="s2">"2D"</span><span class="p">)</span><span class="o">.</span><span class="n">mean</span><span class="p">()[</span><span class="s2">"pressure"</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">ds</span><span class="o">.</span><span class="n">rolling</span><span class="p">(</span><span class="n">time</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">mean</span><span class="p">()[</span><span class="s2">"pressure"</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>[1010.75 1006.  ]
+[    nan 1010.75 1006.85 1006.  ]
+</pre></div>
+</div>
+</div>
+</div>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.groupby.html#annoray.Dataset.groupby" title="annoray.Dataset.groupby"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.groupby</span></code></a>(group)</p></td>
+<td><p>Group by the values of a coordinate or variable (<code class="code docutils literal notranslate"><span class="pre">&quot;time.month&quot;</span></code> for a datetime component): reductions give one value per group, arithmetic with a per-group object broadcasts back (<code class="code docutils literal notranslate"><span class="pre">ds.groupby(&quot;time.month&quot;)</span> <span class="pre">-</span> <span class="pre">clim</span></code>).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Dataset.groupby_bins.html#annoray.Dataset.groupby_bins" title="annoray.Dataset.groupby_bins"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.groupby_bins</span></code></a>(group, bins[, right, ...])</p></td>
+<td><p>Group into bins of a coordinate's values: <code class="code docutils literal notranslate"><span class="pre">bins</span></code> is a number of equal-width bins or their edges; <code class="code docutils literal notranslate"><span class="pre">right</span></code> closes bins on the right, <code class="code docutils literal notranslate"><span class="pre">include_lowest</span></code> closes the first on the left.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.resample.html#annoray.Dataset.resample" title="annoray.Dataset.resample"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.resample</span></code></a>([indexer])</p></td>
+<td><p>Resample along a datetime dimension: <code class="code docutils literal notranslate"><span class="pre">ds.resample(time=&quot;1D&quot;).mean()</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Dataset.rolling.html#annoray.Dataset.rolling" title="annoray.Dataset.rolling"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.rolling</span></code></a>([dim, center, min_periods])</p></td>
+<td><p>A moving window along one or more dimensions: <code class="code docutils literal notranslate"><span class="pre">ds.rolling(time=24).mean()</span></code>; <code class="code docutils literal notranslate"><span class="pre">center</span></code> labels windows at their centre, <code class="code docutils literal notranslate"><span class="pre">min_periods</span></code> sets the number of valid values a window needs.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.rolling_exp.html#annoray.Dataset.rolling_exp" title="annoray.Dataset.rolling_exp"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.rolling_exp</span></code></a>([window, window_type, ...])</p></td>
+<td><p>Exponentially weighted moving statistics of every variable along the dimension.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Dataset.coarsen.html#annoray.Dataset.coarsen" title="annoray.Dataset.coarsen"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.coarsen</span></code></a>([dim, boundary, side, ...])</p></td>
+<td><p>Block reductions of every variable: <code class="code docutils literal notranslate"><span class="pre">ds.coarsen(time=4).mean()</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.weighted.html#annoray.Dataset.weighted" title="annoray.Dataset.weighted"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.weighted</span></code></a>(weights)</p></td>
+<td><p>Weighted reductions of every numeric variable: <code class="code docutils literal notranslate"><span class="pre">ds.weighted(w).mean(&quot;lat&quot;)</span></code>.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="reshaping-and-renaming">
+<h2>Reshaping and renaming<a class="headerlink" href="#reshaping-and-renaming" title="Link to this heading">#</a></h2>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="nb">print</span><span class="p">(</span><span class="n">ds</span><span class="o">.</span><span class="n">rename_vars</span><span class="p">(</span><span class="n">pressure</span><span class="o">=</span><span class="s2">"p"</span><span class="p">)</span><span class="o">.</span><span class="n">data_vars</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">ds</span><span class="o">.</span><span class="n">drop_vars</span><span class="p">(</span><span class="s2">"pressure"</span><span class="p">)</span><span class="o">.</span><span class="n">data_vars</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">ds</span><span class="o">.</span><span class="n">expand_dims</span><span class="p">(</span><span class="s2">"run"</span><span class="p">)</span><span class="o">.</span><span class="n">sizes</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>dict_keys(['temperature', 'p'])
+dict_keys(['temperature'])
+{'time': 4, 'station': 3, 'run': 1}
+</pre></div>
+</div>
+</div>
+</div>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.transpose.html#annoray.Dataset.transpose" title="annoray.Dataset.transpose"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.transpose</span></code></a>(*dims)</p></td>
+<td><p>Reorder dimensions of every variable: <code class="code docutils literal notranslate"><span class="pre">ds.transpose(&quot;time&quot;,</span> <span class="pre">...)</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Dataset.expand_dims.html#annoray.Dataset.expand_dims" title="annoray.Dataset.expand_dims"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.expand_dims</span></code></a>([dim, axis])</p></td>
+<td><p>New dimensions in every data variable: a name, names, or <code class="code docutils literal notranslate"><span class="pre">{name:</span> <span class="pre">size</span> <span class="pre">or</span> <span class="pre">labels}</span></code> (also as keywords), at <code class="code docutils literal notranslate"><span class="pre">axis</span></code> (0 by default).</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.squeeze.html#annoray.Dataset.squeeze" title="annoray.Dataset.squeeze"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.squeeze</span></code></a>([dim])</p></td>
+<td><p>Drop length-1 dimensions (all, or <code class="code docutils literal notranslate"><span class="pre">dim</span></code>), keeping their coordinates as scalars.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Dataset.stack.html#annoray.Dataset.stack" title="annoray.Dataset.stack"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.stack</span></code></a>([dim, create_index])</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">DataArray.stack</span></code> of every variable.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.unstack.html#annoray.Dataset.unstack" title="annoray.Dataset.unstack"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.unstack</span></code></a>([dim, fill_value, sparse])</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">DataArray.unstack</span></code> of every variable.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Dataset.to_stacked_array.html#annoray.Dataset.to_stacked_array" title="annoray.Dataset.to_stacked_array"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.to_stacked_array</span></code></a>(*args, **kwargs)</p></td>
+<td><p>Not supported (the result needs a MultiIndex).</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.pad.html#annoray.Dataset.pad" title="annoray.Dataset.pad"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.pad</span></code></a>([pad_width, mode, ...])</p></td>
+<td><p>Pad along dimensions (every variable and coordinate).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Dataset.rename.html#annoray.Dataset.rename" title="annoray.Dataset.rename"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.rename</span></code></a>([name_dict])</p></td>
+<td><p>Variables and dimensions renamed: <code class="code docutils literal notranslate"><span class="pre">ds.rename({&quot;t&quot;:</span> <span class="pre">&quot;temp&quot;})</span></code>, <code class="code docutils literal notranslate"><span class="pre">ds.rename(x=&quot;lon&quot;)</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.rename_dims.html#annoray.Dataset.rename_dims" title="annoray.Dataset.rename_dims"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.rename_dims</span></code></a>([dims_dict])</p></td>
+<td><p>Dimensions renamed; variable names kept.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Dataset.rename_vars.html#annoray.Dataset.rename_vars" title="annoray.Dataset.rename_vars"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.rename_vars</span></code></a>([name_dict])</p></td>
+<td><p>Variables (data variables and coordinates) renamed; dimensions kept.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.drop_vars.html#annoray.Dataset.drop_vars" title="annoray.Dataset.drop_vars"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.drop_vars</span></code></a>(names, *[, errors])</p></td>
+<td><p>A copy without the named variables; <code class="code docutils literal notranslate"><span class="pre">errors=&quot;ignore&quot;</span></code> skips names that are not variables.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Dataset.drop_dims.html#annoray.Dataset.drop_dims" title="annoray.Dataset.drop_dims"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.drop_dims</span></code></a>(drop_dims, *[, errors])</p></td>
+<td><p>Drop every variable along the named dimensions.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.assign_coords.html#annoray.Dataset.assign_coords" title="annoray.Dataset.assign_coords"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.assign_coords</span></code></a>([coords])</p></td>
+<td><p>Add or replace coordinates: <code class="code docutils literal notranslate"><span class="pre">ds.assign_coords(x=[...])</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Dataset.assign_attrs.html#annoray.Dataset.assign_attrs" title="annoray.Dataset.assign_attrs"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.assign_attrs</span></code></a>(*args, **kwargs)</p></td>
+<td><p>A copy with dataset attributes added or replaced.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.reset_coords.html#annoray.Dataset.reset_coords" title="annoray.Dataset.reset_coords"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.reset_coords</span></code></a>([names, drop])</p></td>
+<td><p>Non-index coordinates as data variables (or dropped, <code class="code docutils literal notranslate"><span class="pre">drop=True</span></code>).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Dataset.merge.html#annoray.Dataset.merge" title="annoray.Dataset.merge"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.merge</span></code></a>(other, *[, join, compat])</p></td>
+<td><p>This dataset merged with <code class="code docutils literal notranslate"><span class="pre">other</span></code> (a dataset, or a named data array); see <code class="code docutils literal notranslate"><span class="pre">merge</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.filter_by_attrs.html#annoray.Dataset.filter_by_attrs" title="annoray.Dataset.filter_by_attrs"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.filter_by_attrs</span></code></a>(**kwargs)</p></td>
+<td><p>The data variables whose attributes match: <code class="code docutils literal notranslate"><span class="pre">ds.filter_by_attrs(units=&quot;m&quot;)</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Dataset.info.html#annoray.Dataset.info" title="annoray.Dataset.info"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.info</span></code></a>([buf])</p></td>
+<td><p>A netCDF CDL-like summary, written to <code class="code docutils literal notranslate"><span class="pre">buf</span></code> (standard output by default).</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="time-and-text">
+<h2>Time and text<a class="headerlink" href="#time-and-text" title="Link to this heading">#</a></h2>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">noleap</span> <span class="o">=</span> <span class="n">ds</span><span class="o">.</span><span class="n">convert_calendar</span><span class="p">(</span><span class="s2">"noleap"</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">noleap</span><span class="p">[</span><span class="s2">"time"</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>2026-07-01 00:00:00
+</pre></div>
+</div>
+</div>
+</div>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.convert_calendar.html#annoray.Dataset.convert_calendar" title="annoray.Dataset.convert_calendar"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.convert_calendar</span></code></a>(calendar[, dim, ...])</p></td>
+<td><p>Every variable along the time dimension in another CF calendar; see <code class="code docutils literal notranslate"><span class="pre">DataArray.convert_calendar</span></code>.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="plotting">
+<h2>Plotting<a class="headerlink" href="#plotting" title="Link to this heading">#</a></h2>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">ds</span><span class="o">.</span><span class="n">isel</span><span class="p">(</span><span class="n">station</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">plot</span><span class="o">.</span><span class="n">scatter</span><span class="p">(</span><span class="n">x</span><span class="o">=</span><span class="s2">"pressure"</span><span class="p">,</span> <span class="n">y</span><span class="o">=</span><span class="s2">"temperature"</span><span class="p">);</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<img alt="../_images/b295d17c625d7e55702f294806ede91c1fd1fbc01ff9e63bd11000c30d5f3ea2.png" src="../_images/b295d17c625d7e55702f294806ede91c1fd1fbc01ff9e63bd11000c30d5f3ea2.png" />
+</div>
+</div>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.plot.html#annoray.Dataset.plot" title="annoray.Dataset.plot"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.plot</span></code></a></p></td>
+<td><p>Data variables, as data arrays.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="input-and-output">
+<h2>Input and output<a class="headerlink" href="#input-and-output" title="Link to this heading">#</a></h2>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">os</span><span class="o">,</span><span class="w"> </span><span class="nn">tempfile</span>
+
+<span class="n">path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">tempfile</span><span class="o">.</span><span class="n">mkdtemp</span><span class="p">(),</span> <span class="s2">"obs.nc"</span><span class="p">)</span>
+<span class="n">ds</span><span class="o">.</span><span class="n">to_netcdf</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+<span class="n">back</span> <span class="o">=</span> <span class="n">ar</span><span class="o">.</span><span class="n">open_dataset</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">back</span><span class="p">[</span><span class="s2">"pressure"</span><span class="p">]</span><span class="o">.</span><span class="n">units</span><span class="p">,</span> <span class="n">back</span><span class="p">[</span><span class="s2">"temperature"</span><span class="p">]</span><span class="o">.</span><span class="n">is_lazy</span><span class="p">)</span>
+<span class="k">try</span><span class="p">:</span>
+    <span class="n">ds</span><span class="o">.</span><span class="n">to_dataarray</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="s2">"variable"</span><span class="p">)</span>  <span class="c1"># one array needs one unit</span>
+<span class="k">except</span> <span class="n">ar</span><span class="o">.</span><span class="n">UnitError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">"UnitError:"</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>hPa True
+UnitError: incompatible units: hPa and K
+</pre></div>
+</div>
+</div>
+</div>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.to_netcdf.html#annoray.Dataset.to_netcdf" title="annoray.Dataset.to_netcdf"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.to_netcdf</span></code></a>(path[, format, encoding, ...])</p></td>
+<td><p>Write to netCDF (<code class="code docutils literal notranslate"><span class="pre">format</span></code> as in xarray; netCDF-4 by default), with the GIL released.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Dataset.to_zarr.html#annoray.Dataset.to_zarr" title="annoray.Dataset.to_zarr"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.to_zarr</span></code></a>(store[, mode, group, ...])</p></td>
+<td><p>Write a Zarr store.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.to_dataarray.html#annoray.Dataset.to_dataarray" title="annoray.Dataset.to_dataarray"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.to_dataarray</span></code></a>([dim, name])</p></td>
+<td><p>The data variables stacked along a new dimension <code class="code docutils literal notranslate"><span class="pre">&quot;variable&quot;</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Dataset.to_array.html#annoray.Dataset.to_array" title="annoray.Dataset.to_array"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.to_array</span></code></a>([dim, name])</p></td>
+<td><p>Same as <code class="code docutils literal notranslate"><span class="pre">to_dataarray</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.to_dataframe.html#annoray.Dataset.to_dataframe" title="annoray.Dataset.to_dataframe"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.to_dataframe</span></code></a>(*args, **kwargs)</p></td>
+<td><p>A DataFrame indexed by the dimensions, with every variable broadcast to them as a column (non-index coordinates included; units in <code class="code docutils literal notranslate"><span class="pre">.attrs[&quot;units&quot;]</span></code>).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Dataset.to_pandas.html#annoray.Dataset.to_pandas" title="annoray.Dataset.to_pandas"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.to_pandas</span></code></a>()</p></td>
+<td><p>A DataFrame for a one-dimensional dataset (a Series for a 0-d one).</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.to_dict.html#annoray.Dataset.to_dict" title="annoray.Dataset.to_dict"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.to_dict</span></code></a>([data, encoding])</p></td>
+<td><p>A dict of plain Python data; see <code class="code docutils literal notranslate"><span class="pre">DataArray.to_dict</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Dataset.to_xarray.html#annoray.Dataset.to_xarray" title="annoray.Dataset.to_xarray"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.to_xarray</span></code></a>()</p></td>
+<td><p>As an <code class="code docutils literal notranslate"><span class="pre">xarray.Dataset</span></code> (units as <code class="code docutils literal notranslate"><span class="pre">&quot;units&quot;</span></code> attributes).</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dataset.from_dict.html#annoray.Dataset.from_dict" title="annoray.Dataset.from_dict"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.from_dict</span></code></a>(d)</p></td>
+<td><p>A Dataset from a dict as <code class="code docutils literal notranslate"><span class="pre">to_dict</span></code> makes (or xarray's).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Dataset.from_dataframe.html#annoray.Dataset.from_dataframe" title="annoray.Dataset.from_dataframe"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dataset.from_dataframe</span></code></a>(df[, sparse])</p></td>
+<td><p>A Dataset from a pandas DataFrame: the index becomes the dimensions, columns the variables; units from <code class="code docutils literal notranslate"><span class="pre">.attrs[&quot;units&quot;]</span></code>.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+</section>
+
+
+                </article>
+              
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="generated/annoray.DataArray.from_series.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">annoray.DataArray.from_series</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="generated/annoray.Dataset.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">annoray.Dataset</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <dialog id="pst-secondary-sidebar-modal"></dialog>
+                <div id="pst-secondary-sidebar" class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+<div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> On this page
+  </div>
+  <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#attributes">Attributes</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#contents">Contents</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#memory-and-copying">Memory and copying</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#indexing">Indexing</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#missing-values">Missing values</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#comparisons">Comparisons</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#aggregation">Aggregation</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#cumulative">Cumulative</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#computation">Computation</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#grouped-and-windowed">Grouped and windowed</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#reshaping-and-renaming">Reshaping and renaming</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#time-and-text">Time and text</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#plotting">Plotting</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#input-and-output">Input and output</a></li>
+</ul>
+  </nav></div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="../_static/scripts/bootstrap.js?digest=18bd87630a240e9c25be"></script>
+<script defer src="../_static/scripts/pydata-sphinx-theme.js?digest=18bd87630a240e9c25be"></script>
+
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item">
+
+  <p class="copyright">
+    
+      © Copyright 2026, Sunip K. Mukherjee.
+      <br/>
+    
+  </p>
+</div>
+      
+        <div class="footer-item">
+
+  <p class="sphinx-version">
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 9.1.1.
+  </p>
+</div>
+      
+    </div>
+  
+  
+  
+    <div class="footer-items__end">
+      
+        <div class="footer-item">
+<p class="theme-version">
+  <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.23.0.
+</p></div>
+      
+    </div>
+  
+</div>
+
+  </footer>
+  </body>
+</html>
