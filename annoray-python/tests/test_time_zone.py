@@ -69,7 +69,9 @@ def test_whenever_inputs():
     np.testing.assert_array_equal(instant.values, utc("2024-05-11T07:00"))
     assert instant.dt.tz is None
 
-    offset = ar.DataArray([w.OffsetDateTime(2024, 5, 11, 3, offset=-4)], dims="t")
+    offset = ar.DataArray(
+        [w.OffsetDateTime(2024, 5, 11, 3, offset=w.TimeDelta(hours=-4))], dims="t"
+    )
     np.testing.assert_array_equal(offset.values, utc("2024-05-11T07:00"))
     assert offset.dt.tz == "-04:00"
 

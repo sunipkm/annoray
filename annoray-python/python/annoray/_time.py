@@ -11,6 +11,7 @@ is the caller's to choose (``.assume_utc()``, ``.assume_tz(...)``).
 from __future__ import annotations
 
 import datetime as _dt
+import functools
 from typing import Any
 
 import numpy as np
@@ -60,6 +61,31 @@ def _is_whenever(x: Any) -> bool:
     return type(x).__module__.split(".")[0] == "whenever"
 
 
+@functools.cache
+def _whenever_011() -> bool:
+    """Whether whenever has its 0.11 spellings (`timestamp(unit=...)`, `tz_id`); 0.10's are
+    deprecated there."""
+    import whenever
+
+    major, minor = (int(p) for p in whenever.__version__.split(".")[:2])
+    return (major, minor) >= (0, 11)
+
+
+def _nanos(x: Any) -> int:
+    """Nanoseconds since the epoch of a whenever instant or exact date-time."""
+    return x.timestamp(unit="nanosecond") if _whenever_011() else x.timestamp_nanos()
+
+
+def _from_nanos(n: int) -> Any:
+    import whenever
+
+    # Typed as Any: the installed version's stubs know only one of the two spellings.
+    instant: Any = whenever.Instant
+    if _whenever_011():
+        return instant.from_timestamp(n, unit="nanosecond")
+    return instant.from_timestamp_nanos(n)
+
+
 def _is_missing(x: Any) -> bool:
     """``None``, NaN, numpy's NaT or pandas' ``NaT``."""
     if x is None:
@@ -81,11 +107,11 @@ def _one(x: Any) -> tuple[int, str | None, bool] | None:
                 "(.assume_utc(), .assume_tz('Europe/Paris'), .assume_fixed_offset(...))"
             )
         if kind == "Instant":
-            return x.timestamp_nanos(), None, True
+            return _nanos(x), None, True
         if kind == "ZonedDateTime":
-            return x.timestamp_nanos(), x.tz, True
+            return _nanos(x), x.tz_id if _whenever_011() else x.tz, True
         if kind == "OffsetDateTime":
-            return x.timestamp_nanos(), _offset_name(_seconds(x.offset)), True
+            return _nanos(x), _offset_name(_seconds(x.offset)), True
         return None
     if isinstance(x, _dt.datetime) and x.tzinfo is not None and x.utcoffset() is not None:
         zone = zone_name(getattr(x, "tz", None) or x.tzinfo)
@@ -163,7 +189,7 @@ def to_whenever(values: np.ndarray, zone: str | None) -> np.ndarray:
         if n == _NAT:
             out[i] = None
             continue
-        t = whenever.Instant.from_timestamp_nanos(int(n))
+        t = _from_nanos(int(n))
         if offset is not None:
             out[i] = t.to_fixed_offset(offset)
         elif zone is not None and zone != "UTC":
