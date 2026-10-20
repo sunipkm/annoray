@@ -90,7 +90,7 @@ def dump(path):
             attrs(obj, p)
 
         f.visititems(visit)
-    with open(path.replace(".h5", ".dump"), "w") as out:
+    with open(path.replace(".h5", ".dump"), "w", encoding="utf-8") as out:
         out.write("\n".join(sorted(lines)) + "\n")
 
 

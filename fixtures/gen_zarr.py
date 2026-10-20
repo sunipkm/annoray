@@ -198,7 +198,7 @@ def main():
     record(3, "sub/inner", np.array([1, 2, 3], dtype="i2"))
     root.attrs["title"] = "v3 fixtures"
 
-    (HERE / "expected.json").write_text(json.dumps(expected, indent=1, ensure_ascii=False))
+    (HERE / "expected.json").write_text(json.dumps(expected, indent=1, ensure_ascii=False), encoding="utf-8")
     print(f"wrote {len(expected)} arrays to {HERE}")
     write_xarray()
 

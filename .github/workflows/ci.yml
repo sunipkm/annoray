@@ -84,7 +84,11 @@ jobs:
       - name: Reference for rolling_exp
         if: matrix.os == 'ubuntu-latest'
         run: pip install --no-cache-dir numbagg
+      # Text read or written without an encoding takes the locale's (cp1252 on Windows): the
+      # warning makes it an error in annoray and its tests on every platform (pyproject.toml).
       - run: pytest annoray-python/tests
+        env:
+          PYTHONWARNDEFAULTENCODING: "1"
       - name: Lint and type-check the Python package
         if: matrix.os == 'ubuntu-latest'
         working-directory: annoray-python

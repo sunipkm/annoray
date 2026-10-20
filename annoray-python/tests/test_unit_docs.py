@@ -19,7 +19,7 @@ def table_rows() -> list[tuple[str, str, str]]:
     if not PAGE.is_file():
         return []
     rows = []
-    for line in PAGE.read_text().splitlines():
+    for line in PAGE.read_text(encoding="utf-8").splitlines():
         m = ROW.match(line.strip())
         if not m or m.group(1).strip() in ("Unit", "Form", "Written") or "---" in line:
             continue
@@ -50,7 +50,11 @@ def test_documented_unit(name: str, symbol: str, value: str) -> None:
 
 @pytest.mark.skipif(not PAGE.is_file(), reason="documentation sources not present")
 def test_symbols_to_read_carefully_parse() -> None:
-    text = PAGE.read_text().split("### Symbols to read carefully", 1)[1].split("\n## ", 1)[0]
+    text = (
+        PAGE.read_text(encoding="utf-8")
+        .split("### Symbols to read carefully", 1)[1]
+        .split("\n## ", 1)[0]
+    )
     for line in text.splitlines():
         m = ROW.match(line.strip())
         if not m or "---" in line or m.group(1).strip() == "Written":

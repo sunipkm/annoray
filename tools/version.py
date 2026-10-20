@@ -38,7 +38,7 @@ TAG = re.compile(r"v(\d+)\.(\d+)\.(\d+)(?:-pre(\d+))?")
 
 def git(*args: str) -> str:
     return subprocess.run(
-        ["git", *args], cwd=ROOT, check=True, capture_output=True, text=True
+        ["git", *args], cwd=ROOT, check=True, capture_output=True, encoding="utf-8"
     ).stdout.strip()
 
 
@@ -65,7 +65,7 @@ def derive() -> tuple[str, bool]:
 
 
 def stamp(version: str) -> None:
-    text = CARGO.read_text()
+    text = CARGO.read_text(encoding="utf-8")
     text, n = re.subn(
         r'(\[workspace\.package\][^\[]*?\nversion = )"[^"]*"',
         rf'\g<1>"{version}"',
@@ -83,7 +83,7 @@ def stamp(version: str) -> None:
         )
         if n != 1:
             sys.exit(f"no workspace dependency {name!r} with a version")
-    CARGO.write_text(text)
+    CARGO.write_text(text, encoding="utf-8")
 
 
 def main() -> None:

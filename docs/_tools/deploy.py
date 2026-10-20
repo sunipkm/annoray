@@ -115,7 +115,7 @@ def main() -> None:
     if a.stable and finals and finals[0] == a.version:
         replace_dir(a.html, a.site / "stable")
     (a.site / "switcher.json").write_text(
-        json.dumps(switcher(a.site, base), indent=2) + "\n"
+        json.dumps(switcher(a.site, base), indent=2) + "\n", encoding="utf-8"
     )
     if (a.site / "stable").is_dir():
         target = "stable/"
@@ -123,8 +123,8 @@ def main() -> None:
         target = f"{releases(a.site)[0]}/"
     else:
         target = "dev/"
-    (a.site / "index.html").write_text(redirect(target))
-    (a.site / ".nojekyll").write_text("")
+    (a.site / "index.html").write_text(redirect(target), encoding="utf-8")
+    (a.site / ".nojekyll").write_text("", encoding="utf-8")
     print(f"deployed {a.version} to {a.site} (root -> {target})")
 
 

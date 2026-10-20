@@ -35,7 +35,7 @@ def _signature(
 
 
 def _load() -> dict[str, tuple[str, str]]:
-    tree = ast.parse(STUB.read_text())
+    tree = ast.parse(STUB.read_text(encoding="utf-8"))
     out: dict[str, tuple[str, str]] = {}
     for node in tree.body:
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):

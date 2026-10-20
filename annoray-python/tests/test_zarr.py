@@ -70,4 +70,8 @@ def test_modes_and_data_arrays(tmp_path):
         xr.open_zarr(da_out)["temp"].values, ds["temp"].values, equal_nan=True
     )
     ds.to_zarr(tmp_path / "plain.zarr", consolidated=False)
-    assert not (tmp_path / "plain.zarr" / "zarr.json").read_text().count("consolidated_metadata")
+    assert (
+        not (tmp_path / "plain.zarr" / "zarr.json")
+        .read_text(encoding="utf-8")
+        .count("consolidated_metadata")
+    )

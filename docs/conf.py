@@ -58,7 +58,7 @@ def _newest_release() -> str:
             cwd=_ROOT,
             check=True,
             capture_output=True,
-            text=True,
+            encoding="utf-8",
         ).stdout.strip()
     except (OSError, subprocess.CalledProcessError) as e:
         raise RuntimeError(
@@ -68,8 +68,12 @@ def _newest_release() -> str:
     return tag.removeprefix("v")
 
 
-_workspace = tomllib.loads((_ROOT / "Cargo.toml").read_text())["workspace"]["package"]
-_pyproject = tomllib.loads((_ROOT / "annoray-python" / "pyproject.toml").read_text())
+def _toml(path: Path) -> dict:
+    return tomllib.loads(path.read_text(encoding="utf-8"))
+
+
+_workspace = _toml(_ROOT / "Cargo.toml")["workspace"]["package"]
+_pyproject = _toml(_ROOT / "annoray-python" / "pyproject.toml")
 PAGE_VERSIONS = {
     "@RUST_VERSION@": _workspace["rust-version"],
     "@PYTHON_VERSION@": _pyproject["project"]["requires-python"].removeprefix(">="),
@@ -135,7 +139,8 @@ _kernels.mkdir(parents=True)
             "display_name": "Python 3 (annoray docs)",
             "language": "python",
         }
-    )
+    ),
+    encoding="utf-8",
 )
 os.environ["JUPYTER_PATH"] = os.pathsep.join(
     p for p in (str(_kernels.parent.parent), os.environ.get("JUPYTER_PATH", "")) if p

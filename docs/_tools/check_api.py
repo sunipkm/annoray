@@ -22,7 +22,7 @@ def listed() -> set[str]:
     names: set[str] = set()
     for page in API.glob("*.md"):
         module = "annoray"
-        for line in page.read_text().splitlines():
+        for line in page.read_text(encoding="utf-8").splitlines():
             m = re.match(r"\.\. currentmodule:: (\S+)", line.strip())
             if m:
                 module = m.group(1)

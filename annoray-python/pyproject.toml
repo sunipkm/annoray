@@ -79,6 +79,9 @@ features = []
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Text read or written without an encoding is the locale's (cp1252 on Windows): an error in
+# annoray and its tests when Python reports it (PYTHONWARNDEFAULTENCODING=1, as in CI).
+filterwarnings = ["error::EncodingWarning:(annoray|test_|conftest)"]
 
 [tool.ruff]
 line-length = 100

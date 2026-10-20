@@ -157,7 +157,7 @@ def isolated(body: str, repeat: int, **params) -> dict:
     r = subprocess.run(
         [sys.executable, "-c", code, json.dumps(p)],
         capture_output=True,
-        text=True,
+        encoding="utf-8",
         timeout=3600,
         check=False,
     )
@@ -379,7 +379,7 @@ def main() -> None:
             sys.stdout.flush()
 
     if args.json:
-        Path(args.json).write_text(json.dumps(out, indent=1))
+        Path(args.json).write_text(json.dumps(out, indent=1), encoding="utf-8")
 
 
 if __name__ == "__main__":

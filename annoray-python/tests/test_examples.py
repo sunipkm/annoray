@@ -23,12 +23,17 @@ BLOCKED = (
 )
 
 
+# The examples print UTF-8 (`°C`, `µm`), as their Rust twins do, on every platform.
+UTF8 = {**os.environ, "PYTHONIOENCODING": "utf-8"}
+
+
 def run_python(name: str) -> str:
     out = subprocess.run(
         [sys.executable, "-c", BLOCKED, str(EXAMPLES / f"{name}.py")],
         capture_output=True,
-        text=True,
+        encoding="utf-8",
         check=False,
+        env=UTF8,
     )
     assert out.returncode == 0, out.stderr
     return out.stdout
@@ -36,7 +41,9 @@ def run_python(name: str) -> str:
 
 def test_import_does_not_load_xarray():
     code = "import sys, annoray; print('xarray' in sys.modules, 'pandas' in sys.modules)"
-    out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)
+    out = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, encoding="utf-8", check=True
+    )
     assert out.stdout.strip() == "False False"
 
 
@@ -52,7 +59,7 @@ def test_examples_match_rust(name):
         ["cargo", "run", "-q", "--release", "-p", "annoray", "--example", name],
         cwd=REPO,
         capture_output=True,
-        text=True,
+        encoding="utf-8",
         check=False,
         env={**os.environ, "CARGO_TERM_COLOR": "never"},
     )

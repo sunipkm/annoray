@@ -285,7 +285,7 @@ def main():
         print(f"| {ds} | {op} | {tx * 1000:.2f} | {tr * 1000:.2f} | {tx / tr:.2f}× |")
         out["workflows"].append({"dataset": ds, "op": op, "xarray": tx, "annoray": tr})
     if args.json:
-        with open(args.json, "w") as f:
+        with open(args.json, "w", encoding="utf-8") as f:
             json.dump(out, f, indent=1)
 
 

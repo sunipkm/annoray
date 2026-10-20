@@ -42,7 +42,7 @@ def workspace_order() -> list[tuple[str, str]]:
             cwd=ROOT,
             check=True,
             capture_output=True,
-            text=True,
+            encoding="utf-8",
         ).stdout
     )
     members = {
@@ -96,7 +96,7 @@ def publish(name: str) -> None:
             ["cargo", "publish", "-p", name, "--allow-dirty"],
             cwd=ROOT,
             capture_output=True,
-            text=True,
+            encoding="utf-8",
             check=False,
         )
         sys.stdout.write(r.stdout)

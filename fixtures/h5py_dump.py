@@ -14,5 +14,5 @@ tmp = path + ".h5"
 os.replace(path, tmp) if not path.endswith(".h5") else None
 target = tmp if not path.endswith(".h5") else path
 gen_hdf5.dump(target)
-with open(target.replace(".h5", ".dump")) as f:
+with open(target.replace(".h5", ".dump"), encoding="utf-8") as f:
     sys.stdout.write(f.read())
