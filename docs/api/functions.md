@@ -31,6 +31,14 @@
    :toctree: generated/
 
    NetcdfWriter
+   NetcdfWriter.create
+   NetcdfWriter.write
+   NetcdfWriter.append
+   NetcdfWriter.dim_len
+   NetcdfWriter.dataset
+   NetcdfWriter.flush
+   NetcdfWriter.close
+   NetcdfWriter.closed
 ```
 
 ## Combining
