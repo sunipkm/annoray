@@ -48,7 +48,7 @@ astropy = ["astropy>=6"]
 cftime = ["cftime"]
 # Date-times as whenever objects (`.dt.to_whenever()`); whenever's date-times are read
 # without it.
-whenever = ["whenever>=0.10"]
+whenever = ["whenever>=0.11"]
 # Everything the test suite uses (tests skip what is missing).
 test = [
     "pytest",
@@ -65,7 +65,7 @@ test = [
     "cf_xarray",
     "pint",
     "dask",
-    "whenever>=0.10",
+    "whenever>=0.11",
 ]
 
 # xr.open_dataset(path, engine="annoray") (used only when xarray is installed)

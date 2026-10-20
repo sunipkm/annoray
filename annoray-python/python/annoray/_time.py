@@ -32,8 +32,7 @@ def _seconds(delta: Any) -> int:
     """Whole seconds of a ``datetime.timedelta`` or ``whenever.TimeDelta``."""
     if isinstance(delta, _dt.timedelta):
         return int(delta.total_seconds())
-    total = getattr(delta, "total", None)
-    return int(total("seconds") if total is not None else delta.in_seconds())
+    return int(delta.total("seconds"))
 
 
 def zone_name(tz: Any) -> str | None:
@@ -62,28 +61,26 @@ def _is_whenever(x: Any) -> bool:
 
 
 @functools.cache
-def _whenever_011() -> bool:
-    """Whether whenever has its 0.11 spellings (`timestamp(unit=...)`, `tz_id`); 0.10's are
-    deprecated there."""
+def _check_whenever() -> None:
+    """whenever 0.11 or later (its `timestamp(unit=...)` and `tz_id`), or a clear error."""
     import whenever
 
     major, minor = (int(p) for p in whenever.__version__.split(".")[:2])
-    return (major, minor) >= (0, 11)
+    if (major, minor) < (0, 11):
+        raise ImportError(f"annoray needs whenever 0.11 or later, not {whenever.__version__}")
 
 
 def _nanos(x: Any) -> int:
     """Nanoseconds since the epoch of a whenever instant or exact date-time."""
-    return x.timestamp(unit="nanosecond") if _whenever_011() else x.timestamp_nanos()
+    _check_whenever()
+    return x.timestamp(unit="nanosecond")
 
 
 def _from_nanos(n: int) -> Any:
     import whenever
 
-    # Typed as Any: the installed version's stubs know only one of the two spellings.
-    instant: Any = whenever.Instant
-    if _whenever_011():
-        return instant.from_timestamp(n, unit="nanosecond")
-    return instant.from_timestamp_nanos(n)
+    _check_whenever()
+    return whenever.Instant.from_timestamp(n, unit="nanosecond")
 
 
 def _is_missing(x: Any) -> bool:
@@ -109,7 +106,7 @@ def _one(x: Any) -> tuple[int, str | None, bool] | None:
         if kind == "Instant":
             return _nanos(x), None, True
         if kind == "ZonedDateTime":
-            return _nanos(x), x.tz_id if _whenever_011() else x.tz, True
+            return _nanos(x), x.tz_id, True
         if kind == "OffsetDateTime":
             return _nanos(x), _offset_name(_seconds(x.offset)), True
         return None

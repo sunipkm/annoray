@@ -7,7 +7,7 @@ sphinx-copybutton>=0.5
 matplotlib>=3.8
 xarray>=2025.1
 ipykernel>=6.29
-whenever>=0.10
+whenever>=0.11
 pandas
 # CF-calendar dates (noleap, 360_day) in the examples are cftime objects.
 cftime
