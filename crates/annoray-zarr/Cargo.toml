@@ -16,6 +16,7 @@ categories = ["science", "encoding", "parser-implementations"]
 [dependencies]
 annoray-codecs.workspace = true
 ndarray.workspace = true
+num-complex.workspace = true
 rayon = { workspace = true, optional = true }
 serde_json.workspace = true
 thiserror.workspace = true

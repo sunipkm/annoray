@@ -270,7 +270,12 @@ astronomical unit and the Julian year.
 | torr | `Torr` | `atm/760` |
 | millimetre of mercury | `mmHg` | `133.322387415 Pa` |
 | hectare | `hectare` | `1e4 m2` |
-| ångström | `angstrom` | `1e-10 m` |
+| ångström | `angstrom`, `Å`, `AA` | `1e-10 m` |
+| degree (of arc) | `deg`, `degree`, `°` | `pi/180 rad` |
+| arcminute | `arcmin` | `deg/60` |
+| arcsecond | `arcsec` | `arcmin/60` |
+| milliarcsecond | `mas` | `1e-3 arcsec` |
+| microarcsecond | `uas`, `µas` | `1e-6 arcsec` |
 | barn | `barn` | `1e-28 m2` |
 | watt-hour | `Wh` | `3600 J` |
 | calorie (international table) | `cal` | `4.1868 J` |

@@ -10,7 +10,10 @@
 //!   unit), but not in °C or `days since …`, where a bare number has no meaning (pint's rule).
 //! - Text, dates, CF dates (same calendar) and durations compare with their own kind; booleans
 //!   with booleans; integers exactly.
-//! - NaN and NaT compare false, except `!=`, which is true (numpy).
+//! - Complex numbers compare for equality (`==`, `!=`) with complex and real numbers; they
+//!   have no order, so `<`, `<=`, `>`, `>=` are errors.
+//! - NaN and NaT compare false, except `!=`, which is true (numpy). A complex number is NaN
+//!   when either part is.
 //! - The result has no unit; attributes and coordinates as in arithmetic. Comparing lazy
 //!   data with a scalar stays lazy; two lazy arrays are read.
 //! - Logical operations take booleans without units.
@@ -19,7 +22,7 @@ use annoray_units::{Converter, Unit, UnitKind, UnitPolicy};
 use ndarray::{ArrayD, ArrayViewD, IxDyn};
 
 use crate::align::{Join, Obj, apply_array, plan};
-use crate::ops::{broadcast_to_dims, out_dims, to_f64, variables_equal};
+use crate::ops::{broadcast_to_dims, out_dims, to_c128, to_f64, variables_equal};
 use crate::{
     CoreError, DType, DataArray, DataArrayBase, NaT, Name, Owned, Repr, Result, TypedArray,
     Variable, View,
@@ -239,6 +242,35 @@ fn compute(
 ) -> Result<ArrayD<bool>> {
     let (adt, bdt) = (a.dtype(), b.dtype());
     let numeric = |d: DType| is_int(d) || matches!(d, DType::F32 | DType::F64);
+    let complex = |d: DType| matches!(d, DType::C64 | DType::C128);
+    if complex(adt) || complex(bdt) {
+        let dtype = if complex(adt) { adt } else { bdt };
+        let comparable = |d: DType| numeric(d) || complex(d);
+        if !matches!(op, CmpOp::Eq | CmpOp::Ne) || !comparable(adt) || !comparable(bdt) {
+            return Err(CoreError::UnsupportedDType {
+                op: "an ordering comparison or one with a non-number",
+                dtype,
+            });
+        }
+        let (x, y) = (to_c128(a, ac)?, to_c128(b, bc)?);
+        let (x, y) = (
+            broadcast_to_dims(x.view(), ad, od)?,
+            broadcast_to_dims(y.view(), bd, od)?,
+        );
+        let no = || CoreError::InvalidReduction("operands do not broadcast".into());
+        let (xb, yb) = (
+            x.broadcast(IxDyn(shape)).ok_or_else(no)?,
+            y.broadcast(IxDyn(shape)).ok_or_else(no)?,
+        );
+        let nan = |z: &num_complex::Complex<f64>| z.re.is_nan() || z.im.is_nan();
+        return Ok(ndarray::Zip::from(&xb).and(&yb).map_collect(|p, q| {
+            if nan(p) || nan(q) {
+                op == CmpOp::Ne
+            } else {
+                (p == q) == (op == CmpOp::Eq)
+            }
+        }));
+    }
     if is_int(adt) && is_int(bdt) && ac.is_none() && bc.is_none() {
         let (Some(x), Some(y)) = (ints(a), ints(b)) else {
             return Err(CoreError::InvalidReduction("integers".into()));

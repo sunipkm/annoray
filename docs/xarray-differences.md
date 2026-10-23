@@ -242,7 +242,8 @@ attribute is decoded into it when a file is opened.
     chunks are read but not written.
 - **Zarr.**
   - Local directory stores only.
-  - Appending, region writes and complex types are not supported.
+  - Appending and region writes are not supported. Complex numbers are `<c8`/`<c16` (v2) and
+    `complex64`/`complex128` (v3), with `[re, im]` fill values.
   - Arrays without dimension names are skipped with a warning.
 
 ## DataTree

@@ -3,4 +3,5 @@ allow-expect-in-tests = true
 allow-panic-in-tests = true
 allow-indexing-slicing-in-tests = true
 # Checked-integer wrapper: its operators propagate overflow as `None` instead of panicking.
-arithmetic-side-effects-allowed = ["ck::Ck", "io::netcdf3::ck::Ck"]
+# Complex numbers: IEEE arithmetic on their parts, which never panics (as for f32/f64).
+arithmetic-side-effects-allowed = ["ck::Ck", "io::netcdf3::ck::Ck", "num_complex::Complex"]

@@ -33,6 +33,10 @@ pub enum DType {
     CfDate,
     /// [`Duration`](annoray_units::Duration): nanoseconds, numpy's `timedelta64[ns]`.
     TimeDelta,
+    /// A complex number of two `f32` parts, numpy's `complex64`.
+    C64,
+    /// A complex number of two `f64` parts, numpy's `complex128`.
+    C128,
 }
 
 impl fmt::Display for DType {
@@ -53,6 +57,8 @@ impl fmt::Display for DType {
             Self::DateTime => "datetime",
             Self::CfDate => "cftime",
             Self::TimeDelta => "timedelta",
+            Self::C64 => "complex64",
+            Self::C128 => "complex128",
         })
     }
 }
@@ -97,6 +103,8 @@ pub enum TypedArray<S: Repr> {
     DateTime(Arr<S, annoray_units::Instant>),
     CfDate(Arr<S, annoray_units::CfDate>),
     TimeDelta(Arr<S, annoray_units::Duration>),
+    C64(Arr<S, num_complex::Complex<f32>>),
+    C128(Arr<S, num_complex::Complex<f64>>),
 }
 
 /// Run `$body` with `$a` bound to the inner array, whatever its element type.
@@ -118,6 +126,8 @@ macro_rules! typed_dispatch {
             $crate::TypedArray::DateTime($a) => $body,
             $crate::TypedArray::CfDate($a) => $body,
             $crate::TypedArray::TimeDelta($a) => $body,
+            $crate::TypedArray::C64($a) => $body,
+            $crate::TypedArray::C128($a) => $body,
         }
     };
 }
@@ -141,6 +151,8 @@ macro_rules! typed_map {
             $crate::TypedArray::DateTime($a) => $crate::TypedArray::DateTime($body),
             $crate::TypedArray::CfDate($a) => $crate::TypedArray::CfDate($body),
             $crate::TypedArray::TimeDelta($a) => $crate::TypedArray::TimeDelta($body),
+            $crate::TypedArray::C64($a) => $crate::TypedArray::C64($body),
+            $crate::TypedArray::C128($a) => $crate::TypedArray::C128($body),
         }
     };
 }
@@ -188,6 +200,7 @@ impl_element!(
     F32 f32, F64 f64, I8 i8, I16 i16, I32 i32, I64 i64,
     U8 u8, U16 u16, U32 u32, U64 u64, Bool bool, Str String,
     DateTime annoray_units::Instant, CfDate annoray_units::CfDate, TimeDelta annoray_units::Duration,
+    C64 num_complex::Complex<f32>, C128 num_complex::Complex<f64>,
 );
 
 impl TypedArray<Owned> {
@@ -206,7 +219,8 @@ impl TypedArray<Owned> {
             };
         }
         Some(e!(
-            F32, F64, I8, I16, I32, I64, U8, U16, U32, U64, Bool, Str, DateTime, CfDate, TimeDelta
+            F32, F64, I8, I16, I32, I64, U8, U16, U32, U64, Bool, Str, DateTime, CfDate, TimeDelta,
+            C64, C128
         ))
     }
 }
@@ -231,6 +245,8 @@ impl<S: Repr> TypedArray<S> {
             Self::DateTime(_) => DType::DateTime,
             Self::CfDate(_) => DType::CfDate,
             Self::TimeDelta(_) => DType::TimeDelta,
+            Self::C64(_) => DType::C64,
+            Self::C128(_) => DType::C128,
         }
     }
 

@@ -202,7 +202,8 @@ fn numbers_from(arr: &Bound<'_, PyAny>) -> PyResult<TypedArray<Owned>> {
         };
     }
     try_as!(f64 => F64, f32 => F32, i64 => I64, i32 => I32, i16 => I16, i8 => I8,
-        u64 => U64, u32 => U32, u16 => U16, u8 => U8, bool => Bool);
+        u64 => U64, u32 => U32, u16 => U16, u8 => U8, bool => Bool,
+        annoray::num_complex::Complex<f64> => C128, annoray::num_complex::Complex<f32> => C64);
     Err(PyTypeError::new_err(format!(
         "unsupported array type {}",
         dtype_attr(arr, "str")?
@@ -321,7 +322,7 @@ fn typed_of_array(np: &Bound<'_, PyModule>, obj: Bound<'_, PyAny>) -> PyResult<T
     let mut arr = np.call_method1("asarray", (&obj,))?;
     let kind = dtype_attr(&arr, "kind")?;
     match kind.as_str() {
-        "f" | "i" | "u" | "b" => {
+        "f" | "i" | "u" | "b" | "c" => {
             // Native byte order, and float16 widened (annoray has no half floats).
             if dtype_attr(&arr, "str")? == "<f2" || dtype_attr(&arr, "str")? == ">f2" {
                 arr = arr.call_method1("astype", ("float32",))?;
@@ -434,6 +435,8 @@ pub(crate) fn typed_to_py(py: Python<'_>, t: TypedArray<Owned>) -> PyResult<Boun
         TypedArray::U32(a) => np!(a),
         TypedArray::U64(a) => np!(a),
         TypedArray::Bool(a) => np!(a),
+        TypedArray::C64(a) => np!(a),
+        TypedArray::C128(a) => np!(a),
         TypedArray::Str(a) => text_to_py(py, &a.view()),
         TypedArray::DateTime(a) => ns_to_numpy(py, a.mapv(Instant::unix_nanos), "datetime64[ns]"),
         TypedArray::TimeDelta(a) => ns_to_numpy(py, a.mapv(Duration::nanos), "timedelta64[ns]"),
@@ -468,6 +471,8 @@ pub(crate) fn numpy_dtype_name(d: DType) -> &'static str {
         DType::Bool => "bool",
         DType::DateTime => "datetime64[ns]",
         DType::TimeDelta => "timedelta64[ns]",
+        DType::C64 => "complex64",
+        DType::C128 => "complex128",
         _ => "object",
     }
 }

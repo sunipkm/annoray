@@ -56,6 +56,14 @@ impl PyDataArray {
         new_da(py, py.detach(|| self.inner.math(MathFn::Abs)).py_err()?)
     }
 
+    /// A unit-aware function by its numpy name, for those numpy spells as attributes or
+    /// plain functions rather than ufuncs (`"real"`, `"imag"`, `"angle"`).
+    fn _math(&self, py: Python<'_>, name: &str) -> PyResult<Py<PyDataArray>> {
+        let f = MathFn::from_numpy(name)
+            .ok_or_else(|| PyTypeError::new_err(format!("unknown function {name:?}")))?;
+        new_da(py, py.detach(|| self.inner.math(f)).py_err()?)
+    }
+
     /// `da ** e` for a number `e`: the unit is raised (or rooted for `1/n`).
     fn __pow__(
         &self,

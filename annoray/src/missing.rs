@@ -33,6 +33,9 @@ fn null_mask(t: &TypedArray<View<'_>>) -> ArrayD<bool> {
         TypedArray::DateTime(a) => a.map(NaT::is_nat),
         TypedArray::TimeDelta(a) => a.map(NaT::is_nat),
         TypedArray::CfDate(a) => a.map(NaT::is_nat),
+        // Missing when either part is NaN.
+        TypedArray::C64(a) => a.mapv(|z| z.re.is_nan() || z.im.is_nan()),
+        TypedArray::C128(a) => a.mapv(|z| z.re.is_nan() || z.im.is_nan()),
         other => ArrayD::from_elem(IxDyn(other.shape()), false),
     }
 }
@@ -151,6 +154,16 @@ fn filled(t: &TypedArray<View<'_>>, value: f64) -> TypedArray<Owned> {
             TypedArray::F32(a.mapv(|x| if x.is_nan() { v } else { x }))
         }
         TypedArray::F64(a) => TypedArray::F64(a.mapv(|x| if x.is_nan() { value } else { x })),
+        // A complex value is missing when either part is NaN; the fill is real.
+        #[allow(clippy::cast_possible_truncation)] // the fill value in the data's type
+        TypedArray::C64(a) => {
+            let v = num_complex::Complex::new(value as f32, 0.0);
+            TypedArray::C64(a.mapv(|z| if z.re.is_nan() || z.im.is_nan() { v } else { z }))
+        }
+        TypedArray::C128(a) => {
+            let v = num_complex::Complex::new(value, 0.0);
+            TypedArray::C128(a.mapv(|z| if z.re.is_nan() || z.im.is_nan() { v } else { z }))
+        }
         other => other.to_owned(),
     }
 }
@@ -167,6 +180,28 @@ fn where_data(
         TypedArray::F32(a) => {
             let o = other.map_or(f32::NAN, |o| o as f32);
             TypedArray::F32(
+                ndarray::Zip::from(&a)
+                    .and(cond)
+                    .map_collect(|x, c| if *c { *x } else { o }),
+            )
+        }
+        // The replacement is real: `other`, or NaN in both parts.
+        #[allow(clippy::cast_possible_truncation)] // `other` in the data's type
+        TypedArray::C64(a) => {
+            let o = other.map_or(num_complex::Complex::new(f32::NAN, f32::NAN), |o| {
+                num_complex::Complex::new(o as f32, 0.0)
+            });
+            TypedArray::C64(
+                ndarray::Zip::from(&a)
+                    .and(cond)
+                    .map_collect(|x, c| if *c { *x } else { o }),
+            )
+        }
+        TypedArray::C128(a) => {
+            let o = other.map_or(num_complex::Complex::new(f64::NAN, f64::NAN), |o| {
+                num_complex::Complex::new(o, 0.0)
+            });
+            TypedArray::C128(
                 ndarray::Zip::from(&a)
                     .and(cond)
                     .map_collect(|x, c| if *c { *x } else { o }),

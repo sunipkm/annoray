@@ -44,6 +44,8 @@ fn array_to_py(py: Python<'_>, t: TypedArray<Owned>) -> PyResult<Py<PyAny>> {
         TypedArray::U32(a) => np!(a),
         TypedArray::U64(a) => np!(a),
         TypedArray::Bool(a) => np!(a),
+        TypedArray::C64(a) => np!(a),
+        TypedArray::C128(a) => np!(a),
         TypedArray::Str(a) => {
             let objs = a.mapv(|s| PyString::new(py, &s).into_any().unbind());
             PyArrayDyn::from_owned_object_array(py, objs)
@@ -74,6 +76,8 @@ fn numpy_dtype(d: DType, is_char: bool) -> &'static str {
         DType::U32 => "uint32",
         DType::U64 => "uint64",
         DType::Bool => "bool",
+        DType::C64 => "complex64",
+        DType::C128 => "complex128",
         _ => "object",
     }
 }
@@ -238,7 +242,8 @@ fn numeric_from_py(data: &Bound<'_, PyAny>) -> PyResult<TypedArray<Owned>> {
         };
     }
     try_as!(f64 => F64, f32 => F32, i64 => I64, i32 => I32, i16 => I16, i8 => I8,
-        u64 => U64, u32 => U32, u16 => U16, u8 => U8, bool => Bool);
+        u64 => U64, u32 => U32, u16 => U16, u8 => U8, bool => Bool,
+        annoray::num_complex::Complex<f64> => C128, annoray::num_complex::Complex<f32> => C64);
     Err(value_error(
         "unsupported array type (expected numbers or booleans)",
     ))
@@ -322,6 +327,8 @@ pub(crate) fn dtype_from_name(name: &str) -> Option<DType> {
         "uint32" => DType::U32,
         "uint64" => DType::U64,
         "bool" => DType::Bool,
+        "complex64" => DType::C64,
+        "complex128" => DType::C128,
         "str" | "object" => DType::Str,
         // numpy's fixed-width text (`<U3` is named "str96").
         t if t.starts_with("str") => DType::Str,

@@ -1,6 +1,7 @@
 //! Element types ([`DType`]) and values ([`ArrayData`]).
 
 use ndarray::{ArrayD, IxDyn};
+use num_complex::Complex;
 use serde_json::Value;
 
 use crate::{Error, bad};
@@ -31,6 +32,10 @@ pub enum DType {
     F32,
     #[allow(missing_docs)]
     F64,
+    /// IEEE complex numbers: two `f32` parts (v2 `<c8`, v3 `complex64`), real part first.
+    C64,
+    /// Two `f64` parts (v2 `<c16`, v3 `complex128`).
+    C128,
     /// Fixed-width bytes (v2 `|S<n>`), read as text (trailing NULs dropped).
     FixedBytes(usize),
     /// Fixed-width UCS-4 text of `n` characters (v2 `<U<n>`, v3 `fixed_length_utf32`).
@@ -56,7 +61,8 @@ impl DType {
             Self::Bool | Self::I8 | Self::U8 => 1,
             Self::I16 | Self::U16 => 2,
             Self::I32 | Self::U32 | Self::F32 => 4,
-            Self::I64 | Self::U64 | Self::F64 => 8,
+            Self::I64 | Self::U64 | Self::F64 | Self::C64 => 8,
+            Self::C128 => 16,
             Self::FixedBytes(n) => n,
             Self::FixedUnicode(n) => n.checked_mul(4)?,
             Self::String => return None,
@@ -66,7 +72,7 @@ impl DType {
     /// Parse a v2 `dtype` (`"<f8"`, `"|b1"`, `"|S5"`, `"<U3"`, `"|O"`), with its byte order.
     ///
     /// # Errors
-    /// [`Error::Unsupported`] for other types (structured, complex, datetimes).
+    /// [`Error::Unsupported`] for other types (structured, datetimes).
     pub fn from_v2(s: &str) -> Result<(Self, Endian), Error> {
         let unsupported = || Error::Unsupported(format!("zarr v2 dtype {s:?}"));
         let mut chars = s.chars();
@@ -94,6 +100,8 @@ impl DType {
             ('u', 8) => Self::U64,
             ('f', 4) => Self::F32,
             ('f', 8) => Self::F64,
+            ('c', 8) => Self::C64,
+            ('c', 16) => Self::C128,
             ('S', n) => Self::FixedBytes(n),
             ('U', n) => Self::FixedUnicode(n),
             ('O', _) => Self::String,
@@ -117,6 +125,8 @@ impl DType {
             Self::U64 => "<u8".into(),
             Self::F32 => "<f4".into(),
             Self::F64 => "<f8".into(),
+            Self::C64 => "<c8".into(),
+            Self::C128 => "<c16".into(),
             Self::FixedBytes(n) => format!("|S{n}"),
             Self::FixedUnicode(n) => format!("<U{n}"),
             Self::String => "|O".into(),
@@ -152,6 +162,8 @@ impl DType {
             "uint64" => Self::U64,
             "float32" => Self::F32,
             "float64" => Self::F64,
+            "complex64" => Self::C64,
+            "complex128" => Self::C128,
             "string" | "variable_length_utf8" => Self::String,
             "fixed_length_utf32" => {
                 let bytes = conf
@@ -188,6 +200,8 @@ impl DType {
             Self::U64 => "uint64",
             Self::F32 => "float32",
             Self::F64 => "float64",
+            Self::C64 => "complex64",
+            Self::C128 => "complex128",
             Self::String => "string",
             Self::FixedUnicode(n) => {
                 return serde_json::json!({
@@ -223,6 +237,8 @@ pub enum ArrayData {
     U64(ArrayD<u64>),
     F32(ArrayD<f32>),
     F64(ArrayD<f64>),
+    C64(ArrayD<Complex<f32>>),
+    C128(ArrayD<Complex<f64>>),
     Str(ArrayD<String>),
 }
 
@@ -241,6 +257,8 @@ macro_rules! each {
             ArrayData::U64($a) => $body,
             ArrayData::F32($a) => $body,
             ArrayData::F64($a) => $body,
+            ArrayData::C64($a) => $body,
+            ArrayData::C128($a) => $body,
             ArrayData::Str($a) => $body,
         }
     };
@@ -261,6 +279,8 @@ macro_rules! map_each {
             ArrayData::U64($a) => ArrayData::U64($body),
             ArrayData::F32($a) => ArrayData::F32($body),
             ArrayData::F64($a) => ArrayData::F64($body),
+            ArrayData::C64($a) => ArrayData::C64($body),
+            ArrayData::C128($a) => ArrayData::C128($body),
             ArrayData::Str($a) => ArrayData::Str($body),
         }
     };
@@ -290,6 +310,8 @@ impl ArrayData {
             Self::U64(_) => DType::U64,
             Self::F32(_) => DType::F32,
             Self::F64(_) => DType::F64,
+            Self::C64(_) => DType::C64,
+            Self::C128(_) => DType::C128,
             Self::Str(_) => DType::String,
         }
     }
@@ -310,6 +332,13 @@ impl ArrayData {
             #[allow(clippy::cast_possible_truncation)]
             (DType::F32, Fill::Float(v)) => Self::F32(ArrayD::from_elem(sh, *v as f32)),
             (DType::F64, Fill::Float(v)) => Self::F64(ArrayD::from_elem(sh, *v)),
+            #[allow(clippy::cast_possible_truncation)]
+            (DType::C64, Fill::Complex(re, im)) => {
+                Self::C64(ArrayD::from_elem(sh, Complex::new(*re as f32, *im as f32)))
+            }
+            (DType::C128, Fill::Complex(re, im)) => {
+                Self::C128(ArrayD::from_elem(sh, Complex::new(*re, *im)))
+            }
             (DType::FixedBytes(_) | DType::FixedUnicode(_) | DType::String, Fill::Str(v)) => {
                 Self::Str(ArrayD::from_elem(sh, v.clone()))
             }
@@ -332,6 +361,8 @@ pub enum Fill {
     Int(i128),
     /// For floats (NaN and infinities included).
     Float(f64),
+    /// For complex numbers: the real and imaginary parts.
+    Complex(f64, f64),
     /// For text.
     Str(String),
 }
@@ -343,6 +374,7 @@ impl Fill {
         match dtype {
             DType::Bool => Self::Bool(false),
             DType::F32 | DType::F64 => Self::Float(0.0),
+            DType::C64 | DType::C128 => Self::Complex(0.0, 0.0),
             DType::FixedBytes(_) | DType::FixedUnicode(_) | DType::String => {
                 Self::Str(String::new())
             }
@@ -351,7 +383,8 @@ impl Fill {
     }
 
     /// Parse a JSON fill value (`null` gives `None`). Floats may be `"NaN"`, `"Infinity"`,
-    /// `"-Infinity"` or a hexadecimal bit pattern `"0x7fc00000"`.
+    /// `"-Infinity"` or a hexadecimal bit pattern `"0x7fc00000"`; complex numbers are the
+    /// two-element array `[real, imaginary]` of such floats (both Zarr specs).
     ///
     /// # Errors
     /// [`Error::Invalid`] for a value that does not fit the type.
@@ -366,25 +399,26 @@ impl Fill {
                 Value::Number(n) => n.as_i64().ok_or_else(wrong)? != 0,
                 _ => return Err(wrong()),
             }),
-            DType::F32 | DType::F64 => Self::Float(match v {
-                Value::Number(n) => n.as_f64().ok_or_else(wrong)?,
-                Value::String(s) => match s.as_str() {
-                    "NaN" => f64::NAN,
-                    "Infinity" => f64::INFINITY,
-                    "-Infinity" => f64::NEG_INFINITY,
-                    hex if hex.starts_with("0x") => {
-                        let bits = u64::from_str_radix(hex.get(2..).unwrap_or(""), 16)
-                            .map_err(|_| wrong())?;
-                        if dtype == DType::F32 {
-                            f64::from(f32::from_bits(u32::try_from(bits).map_err(|_| wrong())?))
-                        } else {
-                            f64::from_bits(bits)
-                        }
+            DType::F32 | DType::F64 => {
+                Self::Float(float_fill(v, dtype == DType::F32).ok_or_else(wrong)?)
+            }
+            DType::C64 | DType::C128 => match v {
+                Value::Array(parts) => match parts.as_slice() {
+                    [re, im] => {
+                        let narrow = dtype == DType::C64;
+                        Self::Complex(
+                            float_fill(re, narrow).ok_or_else(wrong)?,
+                            float_fill(im, narrow).ok_or_else(wrong)?,
+                        )
                     }
                     _ => return Err(wrong()),
                 },
-                _ => return Err(wrong()),
-            }),
+                // A real number: zero imaginary part.
+                real => Self::Complex(
+                    float_fill(real, dtype == DType::C64).ok_or_else(wrong)?,
+                    0.0,
+                ),
+            },
             DType::FixedBytes(_) | DType::FixedUnicode(_) | DType::String => Self::Str(match v {
                 Value::String(s) => s.clone(),
                 Value::Number(n) if n.as_i64() == Some(0) => String::new(),
@@ -410,12 +444,43 @@ impl Fill {
                 .map(Value::from)
                 .or_else(|_| u64::try_from(*v).map(Value::from))
                 .unwrap_or(Value::Null),
-            Self::Float(f) if f.is_nan() => Value::String("NaN".into()),
-            Self::Float(f) if f.is_infinite() => {
-                Value::String(if *f > 0.0 { "Infinity" } else { "-Infinity" }.into())
-            }
-            Self::Float(f) => serde_json::Number::from_f64(*f).map_or(Value::Null, Value::Number),
+            Self::Float(f) => float_json(*f),
+            Self::Complex(re, im) => Value::Array(vec![float_json(*re), float_json(*im)]),
             Self::Str(s) => Value::String(s.clone()),
         }
+    }
+}
+
+/// A float fill value: a number, `"NaN"`, `"Infinity"`, `"-Infinity"` or a hexadecimal bit
+/// pattern (of an `f32` when `narrow`).
+fn float_fill(v: &Value, narrow: bool) -> Option<f64> {
+    Some(match v {
+        Value::Number(n) => n.as_f64()?,
+        Value::String(s) => match s.as_str() {
+            "NaN" => f64::NAN,
+            "Infinity" => f64::INFINITY,
+            "-Infinity" => f64::NEG_INFINITY,
+            hex if hex.starts_with("0x") => {
+                let bits = u64::from_str_radix(hex.get(2..).unwrap_or(""), 16).ok()?;
+                if narrow {
+                    f64::from(f32::from_bits(u32::try_from(bits).ok()?))
+                } else {
+                    f64::from_bits(bits)
+                }
+            }
+            _ => return None,
+        },
+        _ => return None,
+    })
+}
+
+/// A float as the Zarr specs write it: NaN and infinities as strings.
+fn float_json(f: f64) -> Value {
+    if f.is_nan() {
+        Value::String("NaN".into())
+    } else if f.is_infinite() {
+        Value::String(if f > 0.0 { "Infinity" } else { "-Infinity" }.into())
+    } else {
+        serde_json::Number::from_f64(f).map_or(Value::Null, Value::Number)
     }
 }

@@ -9,7 +9,11 @@
 //! - **Element types**: integer and boolean sums and products are exact (checked) and give
 //!   `i64` (`u64` for unsigned input); means, medians and spreads of integers are `f64`;
 //!   `f32` stays `f32`. `count`, `argmin` and `argmax` give `i64`; `any` and `all` give `bool`.
-//!   Dates support `min`, `max`, `mean`, `median`; durations also `sum`.
+//!   Dates support `min`, `max`, `mean`, `median`; durations also `sum`. Complex numbers
+//!   support `sum`, `prod` and `mean` (complex, accumulated in `f64`, `complex64` staying
+//!   `complex64`), `var` and `std` (real: the mean squared modulus of the deviations, as
+//!   numpy's) and `count`; they have no order, so `min`, `max`, `median`, `argmin`, `argmax`,
+//!   `any` and `all` are errors. A complex value is missing when either part is NaN.
 //! - **Units**: kept by `sum`, `mean`, `median`, `min`, `max`; `std` of an affine unit (°C)
 //!   becomes its difference unit; `var` squares the unit; `prod` raises it to the number of
 //!   elements; `count`, `argmin`, `argmax`, `any`, `all` drop it. Summing °C is an error.
@@ -23,6 +27,7 @@ use std::ops::RangeFull;
 use annoray_units::{CfDate, Unit, UnitPolicy};
 use annoray_units::{Duration, Instant};
 use ndarray::{ArrayD, ArrayView1, ArrayViewD, ArrayViewMutD, Axis, Dimension, IxDyn};
+use num_complex::Complex;
 
 use crate::dataarray::DataArrayBase;
 use crate::ops::{td_from_ns, td_ns};
@@ -315,6 +320,22 @@ impl RedElem for CfDate {
             .map_or(Ordering::Equal, |d| d.cmp(&0))
     }
 }
+
+/// Complex numbers have no order: reductions that need one are refused before they get here
+/// (see `complex_stats`), so `order` is never called on them.
+macro_rules! red_complex {
+    ($($t:ty),*) => {$(
+        impl RedElem for Complex<$t> {
+            fn missing(&self) -> bool {
+                self.re.is_nan() || self.im.is_nan()
+            }
+            fn order(&self, _: &Self) -> Ordering {
+                Ordering::Equal
+            }
+        }
+    )*};
+}
+red_complex!(f32, f64);
 
 // ----- lanes -----
 
@@ -1448,6 +1469,116 @@ fn stats(
     })
 }
 
+/// A complex part type: `f32` or `f64`, accumulated in `f64`.
+trait ComplexPart: Copy + Send + Sync + 'static {
+    fn to_f64(self) -> f64;
+    fn from_f64(x: f64) -> Self;
+}
+
+impl ComplexPart for f32 {
+    fn to_f64(self) -> f64 {
+        f64::from(self)
+    }
+    #[allow(clippy::cast_possible_truncation)] // complex64 data stays complex64, as in numpy
+    fn from_f64(x: f64) -> Self {
+        x as f32
+    }
+}
+
+impl ComplexPart for f64 {
+    fn to_f64(self) -> f64 {
+        self
+    }
+    fn from_f64(x: f64) -> Self {
+        x
+    }
+}
+
+/// Reductions of complex numbers (see the module documentation).
+fn complex_stats<P: ComplexPart>(
+    a: &ArrayViewD<'_, Complex<P>>,
+    op: Reduction,
+    axes: &[usize],
+    skipna: bool,
+    opts: &ReduceOptions,
+) -> Result<TypedArray<Owned>>
+where
+    Complex<P>: RedElem,
+{
+    let nan = Complex::new(f64::NAN, f64::NAN);
+    let lane_values = |lane: &ArrayView1<'_, Complex<P>>| -> Option<Vec<Complex<f64>>> {
+        let mut values = Vec::with_capacity(lane.len());
+        for v in lane {
+            if v.missing() {
+                if !skipna {
+                    return None;
+                }
+                continue;
+            }
+            values.push(Complex::new(v.re.to_f64(), v.im.to_f64()));
+        }
+        Some(values)
+    };
+    let narrow = |out: ArrayD<Complex<f64>>| -> TypedArray<Owned> {
+        Complex::<P>::wrap(out.mapv(|z| Complex::new(P::from_f64(z.re), P::from_f64(z.im))))
+    };
+    match op {
+        Reduction::Count => count(a, axes),
+        Reduction::Sum | Reduction::Prod | Reduction::Mean => {
+            let out = map_lanes(a, axes, |lane| {
+                let Some(values) = lane_values(&lane) else {
+                    return Ok(nan);
+                };
+                let n = values.len();
+                if op != Reduction::Mean && opts.min_count.is_some_and(|m| n < m) {
+                    return Ok(nan);
+                }
+                Ok(match op {
+                    Reduction::Prod => values.iter().fold(Complex::new(1.0, 0.0), |a, b| a * b),
+                    Reduction::Mean if n == 0 => nan,
+                    Reduction::Mean => {
+                        values.iter().fold(Complex::new(0.0, 0.0), |a, b| a + b) / as_count(n)
+                    }
+                    _ => values.iter().fold(Complex::new(0.0, 0.0), |a, b| a + b),
+                })
+            })?;
+            Ok(narrow(out))
+        }
+        Reduction::Var | Reduction::Std => {
+            let out = map_lanes(a, axes, |lane| {
+                let Some(values) = lane_values(&lane) else {
+                    return Ok(f64::NAN);
+                };
+                let n = values.len();
+                let Some(dof) = n.checked_sub(opts.ddof).filter(|d| *d > 0) else {
+                    return Ok(f64::NAN);
+                };
+                let m = values.iter().fold(Complex::new(0.0, 0.0), |a, b| a + b) / as_count(n);
+                let var = values.iter().map(|v| (v - m).norm_sqr()).sum::<f64>() / as_count(dof);
+                Ok(if op == Reduction::Std {
+                    var.sqrt()
+                } else {
+                    var
+                })
+            })?;
+            Ok(if Complex::<P>::DTYPE == DType::C64 {
+                TypedArray::F32(out.mapv(f32_of))
+            } else {
+                TypedArray::F64(out)
+            })
+        }
+        _ => Err(CoreError::UnsupportedDType {
+            op: op.name(),
+            dtype: Complex::<P>::DTYPE,
+        }),
+    }
+}
+
+#[allow(clippy::cast_possible_truncation)] // the variance of complex64 data is float32
+fn f32_of(v: f64) -> f32 {
+    v as f32
+}
+
 /// Reduce raw data over `axes`.
 fn reduce_typed(
     a: &TypedArray<View<'_>>,
@@ -1456,6 +1587,11 @@ fn reduce_typed(
     opts: &ReduceOptions,
 ) -> Result<TypedArray<Owned>> {
     let skipna = opts.skipna.unwrap_or(true);
+    match a {
+        TypedArray::C64(x) => return complex_stats(x, op, axes, skipna, opts),
+        TypedArray::C128(x) => return complex_stats(x, op, axes, skipna, opts),
+        _ => {}
+    }
     match op {
         Reduction::Min | Reduction::Max => {
             crate::array::typed_dispatch!(a, x => min_max(x, axes, op, skipna))

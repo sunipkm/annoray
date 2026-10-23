@@ -15,6 +15,82 @@ pub struct Rational {
     den: i128,
 }
 
+/// `num / den` correctly rounded to `f64` (ties to even), for `den > 0`.
+///
+/// Dividing the two integers as floats rounds each of them first when it exceeds 2^53, so
+/// the quotient can be off by an ulp or more. Instead, long division gives the first 54
+/// significant bits of the quotient exactly (53 for the significand and a rounding bit) and
+/// the remainder says whether anything lies beyond them.
+fn ratio_to_f64(num: i128, den: i128) -> f64 {
+    let (n, d) = (num.unsigned_abs(), den.unsigned_abs());
+    if d == 0 {
+        return f64::NAN;
+    }
+    if n == 0 {
+        return 0.0;
+    }
+    // Align the operands so that b <= a < 2b, with n/d = (a/b) · 2^e. Each shift moves the
+    // smaller operand up to the other's bit length, so nothing overflows 128 bits.
+    let (ln, ld) = (n.ilog2(), d.ilog2());
+    let (mut a, b, mut e) = if ln >= ld {
+        let shift = ln.wrapping_sub(ld);
+        (n, d.wrapping_shl(shift), i64::from(shift))
+    } else {
+        let shift = ld.wrapping_sub(ln);
+        (
+            n.wrapping_shl(shift),
+            d,
+            0i64.wrapping_sub(i64::from(shift)),
+        )
+    };
+    if a < b {
+        // a < b <= 2^127, so doubling a cannot overflow.
+        a = a.wrapping_shl(1);
+        e = e.wrapping_sub(1);
+    }
+    // 54 quotient bits; a stays below 2b, so a < 2^128 throughout.
+    let mut q: u64 = 0;
+    for _ in 0..54 {
+        q = q.wrapping_shl(1);
+        if a >= b {
+            a = a.wrapping_sub(b);
+            q |= 1;
+        }
+        a = a.wrapping_shl(1);
+    }
+    let round = q & 1 == 1;
+    let sticky = a != 0;
+    let mut significand = q.wrapping_shr(1);
+    if round && (sticky || significand & 1 == 1) {
+        significand = significand.wrapping_add(1);
+        if significand == 1u64.wrapping_shl(53) {
+            significand = significand.wrapping_shr(1);
+            e = e.wrapping_add(1);
+        }
+    }
+    // The significand has at most 53 bits, so it converts exactly.
+    #[allow(clippy::cast_precision_loss)]
+    let value = ldexp(significand as f64, e.wrapping_sub(52));
+    if num < 0 { -value } else { value }
+}
+
+/// `x · 2^k`, exact while the result is a normal number (it only changes the exponent).
+fn ldexp(mut x: f64, k: i64) -> f64 {
+    let mut k = k;
+    // 2^±1000 are themselves normal, so each step is exact.
+    while k != 0 {
+        let step = k.clamp(-1000, 1000);
+        #[allow(clippy::cast_possible_truncation)] // |step| <= 1000
+        let step32 = step as i32;
+        x *= 2f64.powi(step32);
+        k = k.wrapping_sub(step);
+        if x == 0.0 || x.is_infinite() {
+            break;
+        }
+    }
+    x
+}
+
 fn gcd(a: i128, b: i128) -> i128 {
     let (mut a, mut b) = (a.unsigned_abs(), b.unsigned_abs());
     while b != 0 {
@@ -72,11 +148,11 @@ impl Rational {
         self.num == 0
     }
 
-    /// Nearest `f64`.
+    /// Nearest `f64` (correctly rounded, ties to even), however large the numerator and
+    /// denominator.
     #[must_use]
-    #[allow(clippy::cast_precision_loss)] // conversion to float is the point
     pub fn to_f64(&self) -> f64 {
-        self.num as f64 / self.den as f64
+        ratio_to_f64(self.num, self.den)
     }
 
     /// `mantissa · 10^exp10`.
@@ -389,9 +465,31 @@ impl Scale {
             .ok()
     }
 
-    /// Nearest `f64`.
+    /// Nearest `f64`: correctly rounded (ties to even) unless the scale involves π, which
+    /// adds the rounding of `π^n` and one multiplication.
     #[must_use]
     pub fn to_f64(&self) -> f64 {
+        // The odd part (3s, 5s and the residual) is an exact rational rounded once; the
+        // powers of two then only change the exponent.
+        let pow = |b: i128, e: i16| Rational::from_int(b).powi(i32::from(e)).ok();
+        let odd = pow(3, self.p3)
+            .zip(pow(5, self.p5))
+            .and_then(|(t, f)| t.checked_mul(f).ok())
+            .and_then(|t| t.checked_mul(self.residual).ok());
+        let rational = match odd {
+            Some(r) => ldexp(r.to_f64(), i64::from(self.p2)),
+            None => self.product_of_rounded_factors(),
+        };
+        if self.ppi == 0 {
+            rational
+        } else {
+            rational * std::f64::consts::PI.powi(i32::from(self.ppi))
+        }
+    }
+
+    /// The scale without π as a product of separately rounded factors: the fallback for
+    /// exponents of 3 or 5 too large for an exact `i128` rational.
+    fn product_of_rounded_factors(self) -> f64 {
         // Pair 2s with 5s into a power of ten, which parses exactly-rounded.
         let m = i32::from(self.p2.unsigned_abs().min(self.p5.unsigned_abs()));
         let k = match (self.p2.signum(), self.p5.signum()) {
@@ -405,7 +503,6 @@ impl Scale {
             * 2f64.powi(rest2)
             * 5f64.powi(rest5)
             * 3f64.powi(i32::from(self.p3))
-            * std::f64::consts::PI.powi(i32::from(self.ppi))
             * self.residual.to_f64()
     }
 }
@@ -436,9 +533,62 @@ mod tests {
         let inch = Scale::from_decimal(254, -4).unwrap();
         assert_eq!(inch.residual(), Rational::from_int(127));
         assert_eq!(inch.to_rational(), Some(Rational::new(127, 5000).unwrap()));
-        assert!((inch.to_f64() - 0.0254).abs() < 1e-17);
+        assert_eq!(inch.to_f64(), 0.0254);
         assert_eq!(Scale::from_decimal(1, -3).unwrap().to_f64(), 0.001);
         assert_eq!(Scale::from_decimal(1, 24).unwrap().to_f64(), 1e24);
+        // mil = 0.001 inch; the yard and the mile also have the inch's residual 127.
+        assert_eq!(Scale::from_decimal(254, -7).unwrap().to_f64(), 2.54e-5);
+        assert_eq!(Scale::from_decimal(9144, -4).unwrap().to_f64(), 0.9144);
+        assert_eq!(
+            Scale::from_decimal(1_609_344, -3).unwrap().to_f64(),
+            1609.344
+        );
+    }
+
+    #[test]
+    fn rationals_round_correctly() {
+        // Both operands below 2^53: IEEE division is itself correctly rounded.
+        for (n, d) in [
+            (1, 3),
+            (2, 3),
+            (127, 5000),
+            (-7, 10),
+            (1, 7),
+            (22, 7),
+            (5463, 20),
+        ] {
+            assert_eq!(
+                Rational::new(n, d).unwrap().to_f64(),
+                n as f64 / d as f64,
+                "{n}/{d}"
+            );
+        }
+        // Operands beyond 2^53, against Rust's correctly rounded decimal parser: with a
+        // denominator of 5^k the quotient n·2^k / 10^k is a terminating decimal.
+        let five20 = 5i128.pow(20);
+        for n in [
+            (1i128 << 100) + 1,
+            (1i128 << 90) - 3,
+            123_456_789_012_345_678_901_234_567,
+        ] {
+            let decimal = format!("{}e-20", n * (1i128 << 20));
+            assert_eq!(
+                Rational::new(n, five20).unwrap().to_f64(),
+                decimal.parse::<f64>().unwrap(),
+                "{n}/5^20"
+            );
+        }
+        // A tie at the 54th bit goes to even: (2^53 + 1) / 1 rounds down to 2^53,
+        // (2^53 + 3) / 1 up to 2^53 + 4.
+        assert_eq!(
+            Rational::from_int((1 << 53) + 1).to_f64(),
+            9_007_199_254_740_992.0
+        );
+        assert_eq!(
+            Rational::from_int((1 << 53) + 3).to_f64(),
+            9_007_199_254_740_996.0
+        );
+        assert_eq!(Rational::ZERO.to_f64(), 0.0);
     }
 
     #[test]

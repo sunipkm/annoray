@@ -89,6 +89,16 @@ fn carry<S: Repr>(
             TypedArray::DateTime(a) => push(a, axis, limit, backward, NaT::is_nat),
             TypedArray::CfDate(a) => push(a, axis, limit, backward, NaT::is_nat),
             TypedArray::TimeDelta(a) => push(a, axis, limit, backward, NaT::is_nat),
+            TypedArray::C64(a) => {
+                push(a, axis, limit, backward, |z: &num_complex::Complex<f32>| {
+                    z.re.is_nan() || z.im.is_nan()
+                })
+            }
+            TypedArray::C128(a) => {
+                push(a, axis, limit, backward, |z: &num_complex::Complex<f64>| {
+                    z.re.is_nan() || z.im.is_nan()
+                })
+            }
             _ => {}
         }
         Ok(DataArrayBase::from_parts(

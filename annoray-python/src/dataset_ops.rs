@@ -91,6 +91,14 @@ impl PyDataset {
 
 #[pymethods]
 impl PyDataset {
+    /// A unit-aware function by its numpy name, variable by variable (see
+    /// `DataArray._math`).
+    fn _math(&self, py: Python<'_>, name: &str) -> PyResult<Py<PyDataset>> {
+        let f = MathFn::from_numpy(name)
+            .ok_or_else(|| PyTypeError::new_err(format!("unknown function {name:?}")))?;
+        self.unary(py, f)
+    }
+
     fn __add__(&self, py: Python<'_>, o: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
         self.arith(py, BinOp::Add, o, false)
     }

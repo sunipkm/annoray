@@ -61,7 +61,7 @@ def _values(var: xr.Variable) -> dict[str, Any]:
         return {"kind": "datetime", "data": data.astype("datetime64[ns]").view(np.int64)}
     if kind == "m":
         return {"kind": "timedelta", "data": data.astype("timedelta64[ns]").view(np.int64)}
-    if kind in "biuf":
+    if kind in "biufc":
         return {"kind": "num", "data": np.ascontiguousarray(data)}
     if kind in "US":
         flat = [x.decode() if isinstance(x, bytes) else str(x) for x in data.ravel()]

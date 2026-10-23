@@ -9,6 +9,9 @@
 //!   policy, equal scales; `*`/`/` combine units. A missing unit counts as dimensionless.
 //! - **Element types**: two `f32` operands stay `f32`; integers of the same type stay integers
 //!   (checked, so overflow is an error) except for division; everything else is `f64`.
+//!   Complex numbers support `+`, `-`, `*` and `/` with any numeric operand: `complex64`
+//!   when both operands are `complex64` or `float32`, else `complex128`. They have no order
+//!   (no `maximum`/`minimum`), and an affine unit (°C) cannot convert them.
 //!   Datetimes and durations support the usual differences and offsets.
 //! - **Operators** return `Result<DataArray>` and accept a `Result` on either side of a data
 //!   array, so `(&a + &b * &c)?` works with a single `?`. (Rust's orphan rules forbid
@@ -20,6 +23,7 @@ use annoray_units::{CfDate, Converter, Unit, UnitPolicy};
 use annoray_units::{Duration, Instant};
 use indexmap::IndexMap;
 use ndarray::{ArrayD, ArrayViewD, Axis, IxDyn};
+use num_complex::Complex;
 
 use crate::array::typed_dispatch;
 use crate::dataarray::DataArrayBase;
@@ -258,6 +262,9 @@ fn compute(
     if is_time(adt) || is_time(bdt) {
         return time_op(op, (a, ad), (b, bd), od, shape);
     }
+    if is_complex(adt) || is_complex(bdt) {
+        return complex_op(op, (a, ad, ac), (b, bd, bc), od, shape);
+    }
     if !matches!(adt, DType::F32 | DType::F64) && !is_int(adt) {
         return Err(unsupported(adt));
     }
@@ -293,6 +300,82 @@ fn compute(
         broadcast_to_dims(y.view(), bd, od)?,
     );
     Ok(TypedArray::F64(float_zip(&x, &y, shape, op)?))
+}
+
+fn is_complex(d: DType) -> bool {
+    matches!(d, DType::C64 | DType::C128)
+}
+
+/// `a op b` where either operand is complex.
+fn complex_op(
+    op: BinOp,
+    (a, ad, ac): (&TypedArray<View<'_>>, &[Name], Option<&Converter>),
+    (b, bd, bc): (&TypedArray<View<'_>>, &[Name], Option<&Converter>),
+    od: &[Name],
+    shape: &[usize],
+) -> Result<TypedArray<crate::Owned>> {
+    let unsupported = |dtype| CoreError::UnsupportedDType {
+        op: op.name(),
+        dtype,
+    };
+    if matches!(op, BinOp::Max | BinOp::Min) {
+        return Err(unsupported(if is_complex(a.dtype()) {
+            a.dtype()
+        } else {
+            b.dtype()
+        }));
+    }
+    let narrow = |d: DType| matches!(d, DType::C64 | DType::F32);
+    if ac.is_none() && bc.is_none() && narrow(a.dtype()) && narrow(b.dtype()) {
+        let (x, y) = (to_c64(a)?, to_c64(b)?);
+        let (x, y) = (
+            broadcast_to_dims(x.view(), ad, od)?,
+            broadcast_to_dims(y.view(), bd, od)?,
+        );
+        return Ok(TypedArray::C64(float_zip(&x, &y, shape, op)?));
+    }
+    let (x, y) = (to_c128(a, ac)?, to_c128(b, bc)?);
+    let (x, y) = (
+        broadcast_to_dims(x.view(), ad, od)?,
+        broadcast_to_dims(y.view(), bd, od)?,
+    );
+    Ok(TypedArray::C128(float_zip(&x, &y, shape, op)?))
+}
+
+/// `complex64` or `float32` data as `complex64`.
+fn to_c64(a: &TypedArray<View<'_>>) -> Result<ArrayD<Complex<f32>>> {
+    match a {
+        TypedArray::C64(x) => Ok(x.to_owned()),
+        TypedArray::F32(x) => Ok(x.mapv(|v| Complex::new(v, 0.0))),
+        other => Err(CoreError::UnsupportedDType {
+            op: "complex arithmetic",
+            dtype: other.dtype(),
+        }),
+    }
+}
+
+/// Numeric data as `complex128`, in the unit `conv` converts to.
+pub(crate) fn to_c128(
+    a: &TypedArray<View<'_>>,
+    conv: Option<&Converter>,
+) -> Result<ArrayD<Complex<f64>>> {
+    let widen = |z: Complex<f32>| Complex::new(f64::from(z.re), f64::from(z.im));
+    let complex = match a {
+        TypedArray::C64(x) => x.mapv(widen),
+        TypedArray::C128(x) => x.to_owned(),
+        real => return Ok(to_f64(real, conv)?.mapv(|v| Complex::new(v, 0.0))),
+    };
+    Ok(match conv {
+        // Scaling applies to both parts; an offset has no meaning for a complex number.
+        Some(c) if c.offset() != 0.0 => {
+            return Err(CoreError::UnsupportedDType {
+                op: "conversion to an affine unit",
+                dtype: a.dtype(),
+            });
+        }
+        Some(c) => complex.mapv(|z| Complex::new(c.apply(z.re), c.apply(z.im))),
+        None => complex,
+    })
 }
 
 /// `y = x op y`, elementwise in place (same shapes).
@@ -418,6 +501,26 @@ mod num_like {
         )*};
     }
     float!(f32, f64);
+
+    /// Complex numbers have no order: `maximum`/`minimum` are refused before any arithmetic
+    /// (see `complex_op`), so `max_nan`/`min_nan` only exist to share the kernels.
+    macro_rules! complex {
+        ($($t:ty),*) => {$(
+            impl Float for num_complex::Complex<$t> {
+                fn add(self, q: Self) -> Self { self + q }
+                fn sub(self, q: Self) -> Self { self - q }
+                fn mul(self, q: Self) -> Self { self * q }
+                fn div(self, q: Self) -> Self { self / q }
+                fn max_nan(self, _: Self) -> Self {
+                    num_complex::Complex::new(<$t>::NAN, <$t>::NAN)
+                }
+                fn min_nan(self, _: Self) -> Self {
+                    num_complex::Complex::new(<$t>::NAN, <$t>::NAN)
+                }
+            }
+        )*};
+    }
+    complex!(f32, f64);
 }
 
 fn time_op(

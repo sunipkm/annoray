@@ -646,7 +646,9 @@ pub(crate) fn copy(
             return Err(bad("block out of range"));
         }
     }
-    go!(Bool, I8, I16, I32, I64, U8, U16, U32, U64, F32, F64, Str)
+    go!(
+        Bool, I8, I16, I32, I64, U8, U16, U32, U64, F32, F64, C64, C128, Str
+    )
 }
 
 /// `dst[start .. + src.shape] = src`.
@@ -685,6 +687,12 @@ pub(crate) fn all_fill(data: &ArrayData, fill: &Fill) -> bool {
         (ArrayData::F64(a), Fill::Float(f)) => {
             a.iter().all(|v| (v.is_nan() && f.is_nan()) || v == f)
         }
+        (ArrayData::C64(a), Fill::Complex(re, im)) => a
+            .iter()
+            .all(|z| same_part(f64::from(z.re), *re) && same_part(f64::from(z.im), *im)),
+        (ArrayData::C128(a), Fill::Complex(re, im)) => a
+            .iter()
+            .all(|z| same_part(z.re, *re) && same_part(z.im, *im)),
         (ArrayData::Str(a), Fill::Str(f)) => a.iter().all(|v| v == f),
         (ArrayData::I8(a), Fill::Int(f)) => a.iter().all(|v| i128::from(*v) == *f),
         (ArrayData::I16(a), Fill::Int(f)) => a.iter().all(|v| i128::from(*v) == *f),
@@ -696,6 +704,11 @@ pub(crate) fn all_fill(data: &ArrayData, fill: &Fill) -> bool {
         (ArrayData::U64(a), Fill::Int(f)) => a.iter().all(|v| i128::from(*v) == *f),
         _ => false,
     }
+}
+
+/// Equal, with NaN equal to NaN.
+fn same_part(v: f64, f: f64) -> bool {
+    (v.is_nan() && f.is_nan()) || v == f
 }
 
 /// `data` as stored (text for the text types; others must match exactly).

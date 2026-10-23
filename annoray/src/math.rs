@@ -9,13 +9,21 @@
 //!   ones such as percent are converted to plain numbers first) and give a dimensionless
 //!   result. `Sin`, `Cos`, `Tan` take angles (converted to radians) or plain numbers; the
 //!   inverse functions take plain numbers and give radians. `Sign` gives plain numbers.
-//! - Types as numpy: `f32` stays `f32`; integers stay integers for `Neg`, `Abs` and `Square`
-//!   (checked; overflow is an error), and become `f64` otherwise; booleans and non-numeric
-//!   data are refused. NaN propagates.
+//! - Types as numpy: `f32` stays `f32`; integers stay integers for `Neg`, `Abs`, `Square`,
+//!   `Conj`, `Real` and `Imag` (checked; overflow is an error), and become `f64` otherwise;
+//!   booleans and non-numeric data are refused. NaN propagates.
+//! - Complex numbers: `Conj`, `Real`, `Imag` and `Angle` (radians) take any numeric data
+//!   (for real data the conjugate and real part are the data, the imaginary part zero, the
+//!   angle 0 or π). `Abs`, `Real`, `Imag` and `Angle` of complex data are real (`float32` for
+//!   `complex64`); `Neg`, `Square`, `Reciprocal`, `Sqrt`, the exponential and logarithms, and
+//!   the trigonometric and hyperbolic functions and their inverses stay complex (principal
+//!   branches). Rounding, `Sign`, `Cbrt`, `Exp2`, `Expm1` and `Log1p` are refused for complex
+//!   data, as are units with an offset (°C).
 //! - Lazy data stays lazy (applied block by block when read).
 
 use annoray_units::{Converter, Unit, UnitError, UnitKind};
 use ndarray::ArrayD;
+use num_complex::Complex;
 
 use crate::{
     CoreError, DType, DataArray, DataArrayBase, Repr, Result, TypedArray, Variable, VariableBase,
@@ -56,6 +64,14 @@ pub enum MathFn {
     Trunc,
     Rint,
     Sign,
+    /// The complex conjugate.
+    Conj,
+    /// The real part.
+    Real,
+    /// The imaginary part.
+    Imag,
+    /// The argument (phase angle) of a complex number, in radians.
+    Angle,
 }
 
 impl MathFn {
@@ -93,6 +109,10 @@ impl MathFn {
             "trunc" => Self::Trunc,
             "rint" => Self::Rint,
             "sign" => Self::Sign,
+            "conjugate" | "conj" => Self::Conj,
+            "real" => Self::Real,
+            "imag" => Self::Imag,
+            "angle" => Self::Angle,
             _ => return None,
         })
     }
@@ -129,6 +149,10 @@ impl MathFn {
             Self::Trunc => "trunc",
             Self::Rint => "rint",
             Self::Sign => "sign",
+            Self::Conj => "conjugate",
+            Self::Real => "real",
+            Self::Imag => "imag",
+            Self::Angle => "angle",
         }
     }
 
@@ -163,6 +187,10 @@ impl MathFn {
             Self::Ceil => x.ceil(),
             Self::Trunc => x.trunc(),
             Self::Rint => x.round_ties_even(),
+            Self::Conj | Self::Real => x,
+            Self::Imag => 0.0,
+            // 0 for positive numbers, π for negative ones (and for -0.0), as numpy's `angle`.
+            Self::Angle => 0f64.atan2(x),
             Self::Sign => {
                 if x.is_nan() {
                     f64::NAN
@@ -213,7 +241,14 @@ fn plan(f: MathFn, unit: Option<&Unit>) -> Result<(Option<Converter>, Option<Uni
             UnitKind::Linear | UnitKind::Log(_) => (None, Some(u.clone())),
             _ => return Err(refuse(u)),
         },
-        MathFn::Floor | MathFn::Ceil | MathFn::Trunc | MathFn::Rint => (None, Some(u.clone())),
+        MathFn::Floor
+        | MathFn::Ceil
+        | MathFn::Trunc
+        | MathFn::Rint
+        | MathFn::Conj
+        | MathFn::Real
+        | MathFn::Imag => (None, Some(u.clone())),
+        MathFn::Angle => (None, Some("rad".parse()?)),
         MathFn::Sqrt => (None, Some(u.root(2)?)),
         MathFn::Cbrt => (None, Some(u.root(3)?)),
         MathFn::Square => (None, Some(u.powi(2)?)),
@@ -240,7 +275,10 @@ fn compute(
         op: f.name(),
         dtype: d,
     };
-    let keeps_int = matches!(f, MathFn::Neg | MathFn::Abs | MathFn::Square);
+    let keeps_int = matches!(
+        f,
+        MathFn::Neg | MathFn::Abs | MathFn::Square | MathFn::Conj | MathFn::Real | MathFn::Imag
+    );
     macro_rules! int {
         ($a:expr, $t:ty, $var:ident) => {{
             if keeps_int && conv.is_none() {
@@ -249,6 +287,8 @@ fn compute(
                     let v: Option<$t> = match f {
                         MathFn::Neg => (0 as $t).checked_sub(*x),
                         MathFn::Abs => int_abs(*x),
+                        MathFn::Conj | MathFn::Real => Some(*x),
+                        MathFn::Imag => Some(0 as $t),
                         _ => x.checked_mul(*x),
                     };
                     *x = v.ok_or(CoreError::ArithmeticOverflow("integer math"))?;
@@ -258,6 +298,12 @@ fn compute(
         }};
     }
     match t {
+        TypedArray::C64(a) => {
+            return complex_math(f, a, conv, TypedArray::C64, TypedArray::F32);
+        }
+        TypedArray::C128(a) => {
+            return complex_math(f, a, conv, TypedArray::C128, TypedArray::F64);
+        }
         TypedArray::I8(a) => int!(a, i8, I8),
         TypedArray::I16(a) => int!(a, i16, I16),
         TypedArray::I32(a) => int!(a, i32, I32),
@@ -285,6 +331,110 @@ fn compute(
             } else {
                 TypedArray::F64(x.mapv(|v| f.apply(v)))
             })
+        }
+    }
+}
+
+/// `f` of complex data with parts of type `P`: complex results wrapped by `complex`, real
+/// ones (`Abs`, `Real`, `Imag`, `Angle`) by `real`.
+fn complex_math<P: num_traits_float::Part>(
+    f: MathFn,
+    a: &ArrayD<Complex<P>>,
+    conv: Option<&Converter>,
+    complex: fn(ArrayD<Complex<P>>) -> TypedArray<crate::Owned>,
+    real: fn(ArrayD<P>) -> TypedArray<crate::Owned>,
+) -> Result<TypedArray<crate::Owned>> {
+    let unsupported = || CoreError::UnsupportedDType {
+        op: f.name(),
+        dtype: P::COMPLEX,
+    };
+    let scaled = complex_scaled(a, conv).map_err(|_| unsupported())?;
+    Ok(match f {
+        MathFn::Abs => real(scaled.mapv(Complex::norm)),
+        MathFn::Real => real(scaled.mapv(|z| z.re)),
+        MathFn::Imag => real(scaled.mapv(|z| z.im)),
+        MathFn::Angle => real(scaled.mapv(Complex::arg)),
+        MathFn::Conj => complex(scaled.mapv(|z| z.conj())),
+        MathFn::Neg => complex(scaled.mapv(|z| -z)),
+        MathFn::Square => complex(scaled.mapv(|z| z * z)),
+        MathFn::Reciprocal => complex(scaled.mapv(|z| z.inv())),
+        MathFn::Sqrt => complex(scaled.mapv(Complex::sqrt)),
+        MathFn::Exp => complex(scaled.mapv(Complex::exp)),
+        MathFn::Log => complex(scaled.mapv(Complex::ln)),
+        MathFn::Log2 => complex(scaled.mapv(Complex::log2)),
+        MathFn::Log10 => complex(scaled.mapv(Complex::log10)),
+        MathFn::Sin => complex(scaled.mapv(Complex::sin)),
+        MathFn::Cos => complex(scaled.mapv(Complex::cos)),
+        MathFn::Tan => complex(scaled.mapv(Complex::tan)),
+        MathFn::Arcsin => complex(scaled.mapv(Complex::asin)),
+        MathFn::Arccos => complex(scaled.mapv(Complex::acos)),
+        MathFn::Arctan => complex(scaled.mapv(Complex::atan)),
+        MathFn::Sinh => complex(scaled.mapv(Complex::sinh)),
+        MathFn::Cosh => complex(scaled.mapv(Complex::cosh)),
+        MathFn::Tanh => complex(scaled.mapv(Complex::tanh)),
+        MathFn::Arcsinh => complex(scaled.mapv(Complex::asinh)),
+        MathFn::Arccosh => complex(scaled.mapv(Complex::acosh)),
+        MathFn::Arctanh => complex(scaled.mapv(Complex::atanh)),
+        MathFn::Cbrt
+        | MathFn::Exp2
+        | MathFn::Expm1
+        | MathFn::Log1p
+        | MathFn::Floor
+        | MathFn::Ceil
+        | MathFn::Trunc
+        | MathFn::Rint
+        | MathFn::Sign => return Err(unsupported()),
+    })
+}
+
+/// Complex data in the unit `conv` converts to. Scaling (percent to plain numbers, degrees to
+/// radians) applies to both parts; an offset (°C) has no meaning for a complex number.
+fn complex_scaled<P: num_traits_float::Part>(
+    a: &ArrayD<Complex<P>>,
+    conv: Option<&Converter>,
+) -> Result<ArrayD<Complex<P>>> {
+    Ok(match conv {
+        Some(c) if c.offset() != 0.0 => {
+            return Err(CoreError::UnsupportedDType {
+                op: "conversion to an affine unit",
+                dtype: P::COMPLEX,
+            });
+        }
+        Some(c) if !c.is_identity() => {
+            a.mapv(|z| Complex::new(P::scaled(z.re, c), P::scaled(z.im, c)))
+        }
+        _ => a.clone(),
+    })
+}
+
+/// The part types of complex numbers.
+mod num_traits_float {
+    use annoray_units::Converter;
+
+    use crate::DType;
+
+    /// `f32` or `f64`, the parts of `complex64` and `complex128`.
+    pub(crate) trait Part:
+        num_traits::Float + num_traits::FloatConst + Send + Sync + 'static
+    {
+        /// The complex element type with these parts.
+        const COMPLEX: DType;
+        /// `c` applied to `x` (a scaling: the caller has refused offsets).
+        fn scaled(x: Self, c: &Converter) -> Self;
+    }
+
+    impl Part for f32 {
+        const COMPLEX: DType = DType::C64;
+        #[allow(clippy::cast_possible_truncation)] // complex64 data stays complex64
+        fn scaled(x: Self, c: &Converter) -> Self {
+            c.apply(f64::from(x)) as f32
+        }
+    }
+
+    impl Part for f64 {
+        const COMPLEX: DType = DType::C128;
+        fn scaled(x: Self, c: &Converter) -> Self {
+            c.apply(x)
         }
     }
 }
@@ -342,6 +492,17 @@ fn pow_values(
             let e32 = e as f32;
             Ok(TypedArray::F32(a.mapv(|x| x.powf(e32))))
         }
+        // The principal value, as numpy's `power` of a complex base.
+        TypedArray::C64(a) => {
+            #[allow(clippy::cast_possible_truncation)]
+            let e32 = e as f32;
+            Ok(TypedArray::C64(
+                complex_scaled(a, conv)?.mapv(|z| z.powf(e32)),
+            ))
+        }
+        TypedArray::C128(a) => Ok(TypedArray::C128(
+            complex_scaled(a, conv)?.mapv(|z| z.powf(e)),
+        )),
         TypedArray::Bool(_)
         | TypedArray::Str(_)
         | TypedArray::DateTime(_)

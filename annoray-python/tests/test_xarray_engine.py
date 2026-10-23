@@ -244,9 +244,15 @@ def test_annoray_reads_xarray_written_files(tmp_path):
         xr.testing.assert_identical(xr.open_dataset(path, engine="annoray").load(), sub)
 
 
+def test_complex_values_round_trip(tmp_path):
+    ds = xr.Dataset({"v": ("x", np.array([1 + 2j, np.nan - 1j]))})
+    annoray.to_netcdf(ds, tmp_path / "c.nc")
+    xr.testing.assert_identical(xr.open_dataset(tmp_path / "c.nc", engine="annoray").load(), ds)
+
+
 def test_unwritable_values_are_rejected(tmp_path):
-    ds = xr.Dataset({"v": ("x", np.array([1 + 2j]))})
+    ds = xr.Dataset({"v": ("x", np.array([{"a": 1}], dtype=object))})
     with pytest.raises(TypeError):
-        annoray.to_netcdf(ds, tmp_path / "c.nc")
+        annoray.to_netcdf(ds, tmp_path / "o.nc")
     with pytest.raises(OSError):
         annoray.to_netcdf(_sample(), tmp_path / "missing-dir" / "x.nc")

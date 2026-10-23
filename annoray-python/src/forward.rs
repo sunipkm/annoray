@@ -298,9 +298,9 @@ macro_rules! common_extras {
             _repr_html_ => "repr_html",
         );
         getters!($ty:
-            /// The real part (annoray data is real: the data itself).
+            /// The real part (of real data: the data itself).
             real => "real",
-            /// The imaginary part (zeros).
+            /// The imaginary part (of real data: zeros).
             imag => "imag",
             /// Dimension → pandas index, as `indexes`.
             xindexes => "indexes",

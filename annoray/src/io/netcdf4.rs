@@ -130,6 +130,13 @@ pub(crate) fn hdf5_array(a: TypedArray<Owned>) -> Result<Array> {
         TypedArray::F32(x) => Array::F32(x),
         TypedArray::F64(x) => Array::F64(x),
         TypedArray::Str(x) => Array::Str(x),
+        // Complex variables are compounds, written with the whole dataset.
+        TypedArray::C64(_) | TypedArray::C128(_) => {
+            return Err(IoError::Unsupported(
+                "complex values are written with the whole dataset, not into an existing file"
+                    .into(),
+            ));
+        }
         other => {
             return Err(IoError::Unsupported(format!(
                 "element type {} must be CF-encoded before writing",
@@ -437,6 +444,122 @@ fn fresh(ds: &RawDataset<'_>, base: &str) -> Name {
         .map_or_else(|| Name::from(base), |n| Name::from(n.as_str()))
 }
 
+/// The member names of a complex number stored as a compound: h5py's and nc-complex's
+/// `r`/`i`, and `real`/`imag`.
+const COMPLEX_NAMES: [(&str, &str); 2] = [("r", "i"), ("real", "imag")];
+
+/// The size of each part (4 or 8 bytes) when `t` is a complex number: a compound of exactly
+/// two floats of one size and byte order, real part first, named as [`COMPLEX_NAMES`].
+fn complex_part_size(t: &Datatype) -> Option<usize> {
+    let Datatype::Compound { size, members } = t else {
+        return None;
+    };
+    let [re, im] = members.as_slice() else {
+        return None;
+    };
+    let (
+        Datatype::Float {
+            size: a,
+            big_endian: ea,
+        },
+        Datatype::Float {
+            size: b,
+            big_endian: eb,
+        },
+    ) = (&re.dtype, &im.dtype)
+    else {
+        return None;
+    };
+    let part = usize::from(*a);
+    let named = COMPLEX_NAMES
+        .iter()
+        .any(|(r, i)| re.name.eq_ignore_ascii_case(r) && im.name.eq_ignore_ascii_case(i));
+    (named
+        && a == b
+        && ea == eb
+        && matches!(part, 4 | 8)
+        && re.offset == 0
+        && im.offset == part
+        && *size == part.saturating_mul(2))
+    .then_some(part)
+}
+
+/// A complex compound dataset (see [`complex_part_size`]) as `complex64` or `complex128`.
+fn read_complex(d: &Dataset, part: usize) -> Result<TypedArray<Owned>> {
+    let fields = d.read_compound()?;
+    let mut fields = fields.into_iter();
+    let (Some((_, re)), Some((_, im))) = (fields.next(), fields.next()) else {
+        return Err(bad("complex compound without two parts"));
+    };
+    let shape = IxDyn(&d.shape());
+    let shaped = |e: ndarray::ShapeError| bad(format!("complex compound: {e}"));
+    Ok(match (part, re, im) {
+        (4, Array::F32(re), Array::F32(im)) => {
+            let v = re
+                .iter()
+                .zip(im.iter())
+                .map(|(r, i)| num_complex::Complex::new(*r, *i))
+                .collect();
+            TypedArray::C64(ArrayD::from_shape_vec(shape, v).map_err(shaped)?)
+        }
+        (8, Array::F64(re), Array::F64(im)) => {
+            let v = re
+                .iter()
+                .zip(im.iter())
+                .map(|(r, i)| num_complex::Complex::new(*r, *i))
+                .collect();
+            TypedArray::C128(ArrayD::from_shape_vec(shape, v).map_err(shaped)?)
+        }
+        _ => return Err(bad("complex compound parts of unexpected types")),
+    })
+}
+
+/// A complex variable as an HDF5 compound of two floats `r` and `i` (h5py's layout, which
+/// netCDF4-python and nc-complex read as complex numbers).
+fn complex_compound(v: &RawVariable<'_>) -> Result<Option<annoray_hdf5::WCompound>> {
+    let values = v.data.values()?;
+    let big_endian = v.storage.big_endian;
+    let compound = |part: u8, re: Array, im: Array| {
+        let float = Datatype::Float {
+            size: part,
+            big_endian,
+        };
+        let size = usize::from(part);
+        annoray_hdf5::WCompound {
+            dtype: Datatype::Compound {
+                size: size.saturating_mul(2),
+                members: vec![
+                    annoray_hdf5::Member {
+                        name: "r".into(),
+                        offset: 0,
+                        dtype: float.clone(),
+                    },
+                    annoray_hdf5::Member {
+                        name: "i".into(),
+                        offset: size,
+                        dtype: float,
+                    },
+                ],
+            },
+            shape: values.shape().to_vec(),
+            fields: vec![("r".into(), re), ("i".into(), im)],
+        }
+    };
+    Ok(match values.as_ref() {
+        TypedArray::C64(a) => Some(compound(
+            4,
+            Array::F32(a.mapv(|z| z.re)),
+            Array::F32(a.mapv(|z| z.im)),
+        )),
+        TypedArray::C128(a) => Some(compound(
+            8,
+            Array::F64(a.mapv(|z| z.re)),
+            Array::F64(a.mapv(|z| z.im)),
+        )),
+        _ => None,
+    })
+}
+
 /// A compound (record) variable as one variable per leaf field, `name.field` (dotted for
 /// nested members), on the variable's dimensions plus `name.field_dimK` for array members.
 /// Every field carries the variable's attributes, and in its storage the record type.
@@ -652,6 +775,37 @@ fn read_group(g: &Group, parent: &Scope, lazy: bool) -> Result<RawDataset<'stati
                         });
                         dims.push(n);
                     }
+                }
+                if let Some(part) = complex_part_size(d.dtype()) {
+                    let data = match read_complex(&d, part) {
+                        Ok(t) => t,
+                        Err(e) => {
+                            ds.skipped.push((var_name, e.to_string()));
+                            continue;
+                        }
+                    };
+                    let (deflate, shuffle) = d.compression();
+                    let storage = Storage {
+                        chunks: d.chunks(),
+                        deflate,
+                        shuffle,
+                        compression: d.codec(),
+                        fletcher32: d.fletcher32(),
+                        contiguous: d.contiguous(),
+                        ..Storage::default()
+                    };
+                    let attrs = user_attrs(attrs, &mut ds.skipped, d.path());
+                    ds.vars.insert(
+                        var_name,
+                        RawVariable {
+                            dims,
+                            data: data.into(),
+                            is_char: false,
+                            attrs,
+                            storage,
+                        },
+                    );
+                    continue;
                 }
                 if matches!(d.dtype(), Datatype::Compound { .. }) {
                     let user = user_attrs(attrs, &mut ds.skipped, d.path());
@@ -903,7 +1057,11 @@ struct Merged {
 fn merge<'a>(ds: &RawDataset<'a>) -> Result<Option<(RawDataset<'a>, Merged)>> {
     let ragged = ds.vars.values().any(|v| v.storage.ragged.is_some());
     let compound = ds.vars.values().any(|v| v.storage.compound.is_some());
-    if !ragged && !compound {
+    let complex = ds
+        .vars
+        .values()
+        .any(|v| matches!(v.data.dtype(), DType::C64 | DType::C128));
+    if !ragged && !compound && !complex {
         return Ok(None);
     }
     let mut out = ds.clone();
@@ -913,6 +1071,13 @@ fn merge<'a>(ds: &RawDataset<'a>) -> Result<Option<(RawDataset<'a>, Merged)>> {
     }
     if compound {
         merged.compounds = merge_compounds(&mut out)?;
+    }
+    if complex {
+        for (name, v) in &out.vars {
+            if let Some(c) = complex_compound(v)? {
+                merged.compounds.insert(name.clone(), c);
+            }
+        }
     }
     Ok(Some((out, merged)))
 }

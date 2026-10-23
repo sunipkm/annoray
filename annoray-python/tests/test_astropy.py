@@ -49,7 +49,9 @@ def test_units_round_trip(text):
 def test_names_kept_where_they_agree():
     assert str(ar.Unit("km / s").to_astropy()) == "km / s"
     assert ar.Unit("degree").to_astropy() == u.deg
-    assert str(ar.Unit(u.deg)) == "degree"  # astropy's deg is UDUNITS' degree, exactly
+    # astropy's deg is annoray's deg (UDUNITS' degree, exactly), so its name is kept.
+    assert str(ar.Unit(u.deg)) == "deg"
+    assert ar.Unit(u.deg) == ar.Unit("degree")
     assert str(ar.Unit(u.AU)) == "au"
 
 

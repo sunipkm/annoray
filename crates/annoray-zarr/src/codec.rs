@@ -335,6 +335,25 @@ macro_rules! numeric {
                     out
                 })*
                 ArrayData::Bool(a) => a.iter().map(|b| u8::from(*b)).collect(),
+                // numpy's layout: the real part, then the imaginary part, each in `endian`.
+                ArrayData::C64(a) => {
+                    let mut out = Vec::with_capacity(a.len().saturating_mul(8));
+                    for z in a.iter() {
+                        for v in [z.re, z.im] {
+                            out.extend_from_slice(&if big { v.to_be_bytes() } else { v.to_le_bytes() });
+                        }
+                    }
+                    out
+                }
+                ArrayData::C128(a) => {
+                    let mut out = Vec::with_capacity(a.len().saturating_mul(16));
+                    for z in a.iter() {
+                        for v in [z.re, z.im] {
+                            out.extend_from_slice(&if big { v.to_be_bytes() } else { v.to_le_bytes() });
+                        }
+                    }
+                    out
+                }
                 ArrayData::Str(a) => match dtype {
                     DType::FixedBytes(n) => {
                         let mut out = Vec::with_capacity(a.len().saturating_mul(n));
@@ -388,6 +407,28 @@ macro_rules! numeric {
                     ArrayData::$var(ArrayD::from_shape_vec(sh, v).map_err(shaped)?)
                 })*
                 DType::Bool => ArrayData::Bool(ArrayD::from_shape_vec(sh, bytes.iter().map(|b| *b != 0).collect()).map_err(shaped)?),
+                DType::C64 => {
+                    let part = |c: &[u8]| {
+                        let a: [u8; 4] = c.try_into().unwrap_or_default();
+                        if big { f32::from_be_bytes(a) } else { f32::from_le_bytes(a) }
+                    };
+                    let v = bytes
+                        .chunks_exact(8)
+                        .map(|c| num_complex::Complex::new(part(c.get(..4).unwrap_or_default()), part(c.get(4..).unwrap_or_default())))
+                        .collect();
+                    ArrayData::C64(ArrayD::from_shape_vec(sh, v).map_err(shaped)?)
+                }
+                DType::C128 => {
+                    let part = |c: &[u8]| {
+                        let a: [u8; 8] = c.try_into().unwrap_or_default();
+                        if big { f64::from_be_bytes(a) } else { f64::from_le_bytes(a) }
+                    };
+                    let v = bytes
+                        .chunks_exact(16)
+                        .map(|c| num_complex::Complex::new(part(c.get(..8).unwrap_or_default()), part(c.get(8..).unwrap_or_default())))
+                        .collect();
+                    ArrayData::C128(ArrayD::from_shape_vec(sh, v).map_err(shaped)?)
+                }
                 DType::FixedBytes(w) => {
                     let v = bytes
                         .chunks(w.max(1))

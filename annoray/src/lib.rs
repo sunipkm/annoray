@@ -143,6 +143,9 @@ pub use tree::DataTree;
 pub use variable::{Variable, VariableBase, VariableView, VariableViewMut};
 
 pub use ndarray;
+/// The complex element types of [`DType::C64`] and [`DType::C128`]: `Complex<f32>` and
+/// `Complex<f64>`.
+pub use num_complex;
 
 /// Runtime support for the `annoray-macros` procedural macros. Not public API.
 #[doc(hidden)]

@@ -237,6 +237,9 @@ fn membership(t: &TypedArray<crate::Owned>, w: &Wanted) -> ArrayD<bool> {
         TypedArray::DateTime(a) => a.mapv(|x| !x.is_nat() && w.times.contains(&x)),
         TypedArray::CfDate(a) => a.mapv(|x| !x.is_nat() && w.cf.contains(&x)),
         TypedArray::TimeDelta(a) => a.mapv(|x| !x.is_nat() && w.deltas.contains(&x)),
+        // A complex value equals a real one when its imaginary part is zero, as in numpy.
+        TypedArray::C64(a) => a.mapv(|z| z.im == 0.0 && num(f64::from(z.re))),
+        TypedArray::C128(a) => a.mapv(|z| z.im == 0.0 && num(z.re)),
     }
 }
 

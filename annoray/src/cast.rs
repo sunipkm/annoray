@@ -10,12 +10,16 @@
 //! - `f64` → `f32` rounds; a finite value beyond `f32`'s range is an error (numpy gives ∞).
 //! - integer → float rounds to the nearest representable value, as numpy does.
 //! - → `bool` is "nonzero" (NaN is true, as in numpy); `bool` → number is 0 or 1.
+//! - number → complex has a zero imaginary part; `complex128` → `complex64` rounds each part,
+//!   as `f64` → `f32` does. Complex → real or integer needs a zero imaginary part (numpy
+//!   drops it with a warning); complex → `bool` is "nonzero".
 //!
 //! The unit is kept, except for a boolean result, which has none. Converting to the current
 //! type returns a copy. Lazy data stays lazy: it is converted block by block when read.
 //! Strings, dates and durations do not convert.
 
 use ndarray::ArrayD;
+use num_complex::Complex;
 
 use crate::{
     CoreError, DType, DataArray, DataArrayBase, Dataset, DatasetBase, Element, Owned, Repr, Result,
@@ -27,6 +31,8 @@ use crate::{
 enum Wide {
     Int(i128),
     Float(f64),
+    /// Real and imaginary parts.
+    Complex(f64, f64),
 }
 
 impl std::fmt::Display for Wide {
@@ -34,6 +40,7 @@ impl std::fmt::Display for Wide {
         match self {
             Self::Int(v) => write!(f, "{v}"),
             Self::Float(v) => write!(f, "{v}"),
+            Self::Complex(re, im) => write!(f, "{}", Complex::new(*re, *im)),
         }
     }
 }
@@ -42,6 +49,15 @@ impl std::fmt::Display for Wide {
 trait CastTo: Element + Copy {
     /// The value as `Self`, or why it has none.
     fn cast(v: Wide) -> std::result::Result<Self, &'static str>;
+}
+
+/// A real value: the real part of a complex one whose imaginary part is zero.
+fn real(v: Wide) -> std::result::Result<Wide, &'static str> {
+    match v {
+        Wide::Complex(re, 0.0) => Ok(Wide::Float(re)),
+        Wide::Complex(..) => Err("the imaginary part is not zero"),
+        real => Ok(real),
+    }
 }
 
 /// `x` truncated toward zero, as an integer, if it is finite and within `i128`.
@@ -66,9 +82,9 @@ macro_rules! cast_int {
     ($($t:ty),*) => {$(
         impl CastTo for $t {
             fn cast(v: Wide) -> std::result::Result<Self, &'static str> {
-                let i = match v {
+                let i = match real(v)? {
                     Wide::Int(i) => i,
-                    Wide::Float(x) => trunc_int(x)?,
+                    Wide::Float(x) | Wide::Complex(x, _) => trunc_int(x)?,
                 };
                 <$t>::try_from(i).map_err(|_| "out of range")
             }
@@ -80,9 +96,9 @@ cast_int!(i8, i16, i32, i64, u8, u16, u32, u64);
 impl CastTo for f64 {
     #[allow(clippy::cast_precision_loss)] // rounds to nearest, as numpy
     fn cast(v: Wide) -> std::result::Result<Self, &'static str> {
-        Ok(match v {
+        Ok(match real(v)? {
             Wide::Int(i) => i as f64,
-            Wide::Float(x) => x,
+            Wide::Float(x) | Wide::Complex(x, _) => x,
         })
     }
 }
@@ -90,9 +106,9 @@ impl CastTo for f64 {
 impl CastTo for f32 {
     #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)] // range checked
     fn cast(v: Wide) -> std::result::Result<Self, &'static str> {
-        let x = match v {
+        let x = match real(v)? {
             Wide::Int(i) => return Ok(i as f32),
-            Wide::Float(x) => x,
+            Wide::Float(x) | Wide::Complex(x, _) => x,
         };
         if x.is_finite() && x.abs() > f64::from(f32::MAX) {
             return Err("out of range");
@@ -106,7 +122,35 @@ impl CastTo for bool {
         Ok(match v {
             Wide::Int(i) => i != 0,
             Wide::Float(x) => x != 0.0,
+            Wide::Complex(re, im) => re != 0.0 || im != 0.0,
         })
+    }
+}
+
+/// A value's real and imaginary parts.
+#[allow(clippy::cast_precision_loss)] // rounds to nearest, as numpy
+fn parts(v: Wide) -> (f64, f64) {
+    match v {
+        Wide::Int(i) => (i as f64, 0.0),
+        Wide::Float(x) => (x, 0.0),
+        Wide::Complex(re, im) => (re, im),
+    }
+}
+
+impl CastTo for Complex<f64> {
+    fn cast(v: Wide) -> std::result::Result<Self, &'static str> {
+        let (re, im) = parts(v);
+        Ok(Complex::new(re, im))
+    }
+}
+
+impl CastTo for Complex<f32> {
+    fn cast(v: Wide) -> std::result::Result<Self, &'static str> {
+        let (re, im) = parts(v);
+        Ok(Complex::new(
+            f32::cast(Wide::Float(re))?,
+            f32::cast(Wide::Float(im))?,
+        ))
     }
 }
 
@@ -129,6 +173,11 @@ fn widened<'a>(t: &'a TypedArray<View<'_>>) -> Option<Box<dyn Iterator<Item = Wi
         TypedArray::U32(a) => int!(a),
         TypedArray::U64(a) => int!(a),
         TypedArray::Bool(a) => int!(a),
+        TypedArray::C64(a) => Some(Box::new(
+            a.iter()
+                .map(|z| Wide::Complex(f64::from(z.re), f64::from(z.im))),
+        )),
+        TypedArray::C128(a) => Some(Box::new(a.iter().map(|z| Wide::Complex(z.re, z.im)))),
         _ => None,
     }
 }
@@ -227,6 +276,8 @@ pub(crate) fn cast(t: &TypedArray<View<'_>>, dtype: DType) -> Result<TypedArray<
         DType::U32 => cast_as::<u32>(t),
         DType::U64 => cast_as::<u64>(t),
         DType::Bool => cast_as::<bool>(t),
+        DType::C64 => cast_as::<Complex<f32>>(t),
+        DType::C128 => cast_as::<Complex<f64>>(t),
         other => Err(CoreError::UnsupportedDType {
             op: "astype (to this type)",
             dtype: other,
@@ -338,7 +389,7 @@ impl<S: Repr> DatasetBase<S> {
 /// An array of `shape` holding `value` as `dtype`. Integer and boolean targets need the value
 /// exactly (`0.5` is not an integer; a boolean is 0 or 1); floats round.
 fn filled(dtype: DType, shape: &[usize], value: f64) -> Result<TypedArray<Owned>> {
-    let exact = !matches!(dtype, DType::F32 | DType::F64);
+    let exact = !matches!(dtype, DType::F32 | DType::F64 | DType::C64 | DType::C128);
     let reject = |reason| CoreError::Cast {
         value: value.to_string(),
         dtype,
@@ -369,7 +420,9 @@ fn filled(dtype: DType, shape: &[usize], value: f64) -> Result<TypedArray<Owned>
             }
         };
     }
-    Ok(fill!(F32, F64, I8, I16, I32, I64, U8, U16, U32, U64, Bool))
+    Ok(fill!(
+        F32, F64, I8, I16, I32, I64, U8, U16, U32, U64, Bool, C64, C128
+    ))
 }
 
 impl<S: Repr> VariableBase<S> {

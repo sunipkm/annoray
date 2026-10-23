@@ -211,6 +211,9 @@ fn keys_of<S: Repr>(coord: &VariableBase<S>, ctx: &Ctx<'_>) -> Result<Keys> {
                 .ok_or_else(|| ctx.overflow())?,
             TimeKind::Delta,
         ),
+        TypedArray::C64(_) | TypedArray::C128(_) => {
+            return Err(ctx.invalid("complex coordinates cannot be indexed by label"));
+        }
         TypedArray::Bool(_) => {
             return Err(ctx.invalid("boolean coordinates cannot be indexed by label"));
         }

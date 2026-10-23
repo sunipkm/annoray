@@ -16,6 +16,10 @@
 //!   `nmi` is the nautical mile (not a nano-mile), `mph` miles per hour and `kph` kilometres
 //!   per hour (not milli- and kilo-phot), `oz` the avoirdupois ounce (UDUNITS: the US fluid
 //!   ounce, which keeps `fl_oz` and `floz`).
+//! - **Symbols UDUNITS lacks but astropy, FITS and optics files use:** `deg` for the arc
+//!   degree (UDUNITS spells it `degree`, `arcdeg` or `°`), `arcmin` and `arcsec` as symbols
+//!   (UDUNITS has them only as names, so they did not take SI prefixes: `marcsec`), `mas` and
+//!   `uas`/`µas` for the milli- and micro-arcsecond, and `AA` for the ångström.
 //! - **Physical constants** are the 2019 SI's exact values (UDUNITS predates them: its
 //!   electronvolt is CODATA 1986's) or, where not exact, CODATA 2022's; the parsec and light
 //!   year follow from the exact astronomical unit and the Julian year (IAU).
@@ -168,6 +172,11 @@ pub(crate) static AMENDMENTS: &[Amend] = &[
     amend("light_year", Some("9460730472580800 m"), &[], &["ly"]),
     amend("parsec", Some("648000/pi astronomical_unit"), &[], &["pc"]),
     amend("watthour", None, &[], &["Wh"]),
+    // ----- astronomy and optics symbols -----
+    amend("arc_degree", None, &[], &["deg"]),
+    amend("arc_minute", None, &[], &["arcmin"]),
+    amend("arc_second", None, &[], &["arcsec"]),
+    amend("angstrom", None, &[], &["AA"]),
 ];
 
 /// Units UDUNITS does not have.
@@ -203,5 +212,17 @@ pub(crate) static EXTRA_UNITS: &[UnitEntry] = &[
         def: Def::Expr("km/hour"),
         names: &["kilometer_per_hour", "kilometers_per_hour"],
         symbols: &["kph"],
+    },
+    // Astronomy's milli- and micro-arcsecond (astropy, FITS): symbols of their own, since
+    // `mas` would otherwise not parse and `uas` is no prefixed symbol.
+    UnitEntry {
+        def: Def::Expr("1e-3 arc_second"),
+        names: &["milliarcsecond", "milliarcseconds"],
+        symbols: &["mas"],
+    },
+    UnitEntry {
+        def: Def::Expr("1e-6 arc_second"),
+        names: &["microarcsecond", "microarcseconds"],
+        symbols: &["uas", "µas", "μas"],
     },
 ];

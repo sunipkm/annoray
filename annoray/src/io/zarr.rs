@@ -243,6 +243,8 @@ fn fill_of(a: &AttrValue, d: ZType) -> Option<Fill> {
     };
     Some(match d {
         ZType::F32 | ZType::F64 => Fill::Float(first_f()?),
+        // A real fill value (attributes have no complex type).
+        ZType::C64 | ZType::C128 => Fill::Complex(first_f()?, 0.0),
         ZType::Bool => Fill::Bool(first_f()? != 0.0),
         ZType::String | ZType::FixedBytes(_) | ZType::FixedUnicode(_) => match a {
             AttrValue::Str(s) => Fill::Str(s.clone()),
@@ -275,6 +277,8 @@ fn dtype_of(t: ZType) -> DType {
         ZType::U64 => DType::U64,
         ZType::F32 => DType::F32,
         ZType::F64 => DType::F64,
+        ZType::C64 => DType::C64,
+        ZType::C128 => DType::C128,
         _ => DType::Str,
     }
 }
@@ -292,6 +296,8 @@ fn typed(d: ArrayData) -> crate::Result<TypedArray<Owned>> {
         ArrayData::U64(a) => TypedArray::U64(a),
         ArrayData::F32(a) => TypedArray::F32(a),
         ArrayData::F64(a) => TypedArray::F64(a),
+        ArrayData::C64(a) => TypedArray::C64(a),
+        ArrayData::C128(a) => TypedArray::C128(a),
         ArrayData::Str(a) => TypedArray::Str(a),
         other => {
             return Err(CoreError::Read(format!(
@@ -498,6 +504,8 @@ fn ztype(d: DType) -> Result<ZType> {
         DType::U64 => ZType::U64,
         DType::F32 => ZType::F32,
         DType::F64 => ZType::F64,
+        DType::C64 => ZType::C64,
+        DType::C128 => ZType::C128,
         DType::Str => ZType::String,
         other => {
             return Err(IoError::Unsupported(format!(
@@ -520,6 +528,8 @@ fn zdata(t: TypedArray<Owned>) -> Result<ArrayData> {
         TypedArray::U64(a) => ArrayData::U64(a),
         TypedArray::F32(a) => ArrayData::F32(a),
         TypedArray::F64(a) => ArrayData::F64(a),
+        TypedArray::C64(a) => ArrayData::C64(a),
+        TypedArray::C128(a) => ArrayData::C128(a),
         TypedArray::Str(a) => ArrayData::Str(a),
         other => {
             return Err(IoError::Unsupported(format!(
@@ -578,9 +588,13 @@ fn write_var(store: &Store, path: &str, v: &RawVariable, opts: &ZarrOptions) -> 
             }
         }
         ZarrFormat::V3 => {
-            // The array's own fill: NaN for floats, as xarray (missing chunks read as NaN).
+            // The array's own fill: NaN for floats, as xarray (missing chunks read as NaN),
+            // and NaN in both parts for complex numbers.
             if matches!(ztype, ZType::F32 | ZType::F64) {
                 b = b.fill_value(Fill::Float(f64::NAN));
+            }
+            if matches!(ztype, ZType::C64 | ZType::C128) {
+                b = b.fill_value(Fill::Complex(f64::NAN, f64::NAN));
             }
             if let Some(a) = &fill_attr_v {
                 let encoded = match (ztype, fill_of(a, ztype)) {

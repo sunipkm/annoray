@@ -551,6 +551,43 @@ fn symbols_that_used_to_mean_something_else() {
 }
 
 #[test]
+fn astronomy_and_optics_symbols() {
+    assert_eq!(u("deg"), u("degree"));
+    assert_eq!(u("deg"), u("°"));
+    assert_eq!(u("mdeg"), u("1e-3 degree"));
+    assert_eq!(u("arcmin"), u("arc_minute"));
+    assert_eq!(u("arcsec"), u("arc_second"));
+    assert_eq!(u("60 arcsec"), u("arcmin"));
+    assert_eq!(u("marcsec"), u("1e-3 arcsec"));
+    assert_eq!(u("mas"), u("1e-3 arcsec"));
+    assert_eq!(u("mas"), u("milliarcsecond"));
+    assert_eq!(u("uas"), u("1e-6 arcsec"));
+    assert_eq!(u("µas"), u("uas"));
+    assert_eq!(u("3600 arcsec"), u("deg"));
+    assert_eq!(u("AA"), u("angstrom"));
+    assert_eq!(u("AA"), u("0.1 nm"));
+    // Temperatures keep their own symbols.
+    assert!(!u("degC").is_convertible(&u("deg")));
+}
+
+#[test]
+fn conversion_factors_are_correctly_rounded() {
+    // Each factor is the f64 nearest the exact rational, not a product of rounded parts.
+    for (from, to, expected) in [
+        ("in", "m", 0.0254),
+        ("mil", "m", 2.54e-5),
+        ("ft", "m", 0.3048),
+        ("yd", "m", 0.9144),
+        ("mile", "m", 1609.344),
+        ("in", "mm", 25.4),
+        ("um", "in", 1.0 / 25_400.0),
+        ("AA", "um", 1e-4),
+    ] {
+        assert_eq!(factor(from, to), expected, "{from} -> {to}");
+    }
+}
+
+#[test]
 fn physical_constants_are_current() {
     let exact = |a: &str, b: &str| u(a).converter_to(&u(b)).unwrap().exact_factor();
     let r = |n: i128, d: i128| Some(Rational::new(n, d).unwrap());

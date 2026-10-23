@@ -585,20 +585,18 @@ def variables(obj: Dataset) -> dict[str, DataArray]:
 
 
 def real(obj: Any) -> Any:
-    """The real part (annoray holds real numbers: the data itself)."""
-    return obj.copy()
+    """The real part (of real numbers: the data itself), in the data's unit."""
+    return obj._math("real")
 
 
 def imag(obj: Any) -> Any:
-    """The imaginary part (annoray holds real numbers: zeros, in the data's unit)."""
-    from annoray import zeros_like
-
-    return zeros_like(obj)
+    """The imaginary part (of real numbers: zeros), in the data's unit."""
+    return obj._math("imag")
 
 
 def conj(obj: Any) -> Any:
     """The complex conjugate (of real numbers: the data itself)."""
-    return obj.copy()
+    return obj._math("conjugate")
 
 
 def repr_html(obj: Any) -> str:

@@ -35,6 +35,15 @@ Selections return views; the `_mut` variants write in place under the borrow che
 `DataArray::put` returns a copy with values replaced, converted into the array's unit and
 element type.
 
+## Complex numbers
+
+`DType::C64` and `DType::C128` hold `num_complex::Complex<f32>` and `Complex<f64>` (re-exported
+as `annoray::num_complex`), numpy's `complex64` and `complex128`. They support `+ - * /` with
+any numeric operand, the complex functions of `MathFn` (with `Conj`, `Real`, `Imag` and
+`Angle`), `sum`/`prod`/`mean` (complex) and `var`/`std` (real), casts, `==`/`!=`, missing
+values (NaN in either part), and storage in netCDF-4/HDF5 and Zarr. They have no order:
+`min`, `max`, sorting and `<` are errors.
+
 ## Dates, times and time zones
 
 Date-times are `annoray::Instant`, durations `annoray::Duration`: 64-bit nanosecond counts
