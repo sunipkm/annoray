@@ -1,0 +1,997 @@
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../" data-theme="auto">
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Units &#8212; annoray</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "auto";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "auto";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../_static/styles/theme.css?digest=18bd87630a240e9c25be" rel="stylesheet" />
+<link href="../_static/styles/pydata-sphinx-theme.css?digest=18bd87630a240e9c25be" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../_static/mystnb.11b39860a7a0cbfd473a3ad8a317855267ff0bd372690045ca344a6b62be495e.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
+  
+  <!-- So that users can add custom icons -->
+  <script defer src="../_static/scripts/fontawesome.js?digest=18bd87630a240e9c25be"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=18bd87630a240e9c25be" />
+<link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=18bd87630a240e9c25be" />
+
+    <script src="../_static/documentation_options.js?v=e0892ab9"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../_static/copybutton.js?v=f281be69"></script>
+    <script src="../_static/design-tabs.js?v=f930bc37"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'api/units';</script>
+    <script>
+        DOCUMENTATION_OPTIONS.theme_version = '0.23.0';
+        DOCUMENTATION_OPTIONS.theme_switcher_json_url = 'https://sunipkm.github.io/annoray/switcher.json';
+        DOCUMENTATION_OPTIONS.theme_switcher_version_match = '0.0.1-pre2';
+        DOCUMENTATION_OPTIONS.show_version_warning_banner =
+            false;
+        </script>
+    <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="annoray.Unit" href="generated/annoray.Unit.html" />
+    <link rel="prev" title="annoray.register_dataset_accessor" href="generated/annoray.register_dataset_accessor.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="color-scheme" content="light dark"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="0.0.1-pre2" />
+  
+    
+    <script src="../_static/searchtools.js"></script>
+    <script src="../_static/language_data.js"></script>
+    <script src="../searchindex.js"></script>
+  
+  </head>
+  <body data-default-mode="auto">
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+  
+  
+  
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header id="pst-header" class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button type="button" class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-3 navbar-header-items__start">
+    
+      <div class="navbar-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../index.html">
+  
+  
+  
+  
+  
+  
+    <p class="title logo__title">annoray</p>
+  
+</a></div>
+    
+  </div>
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    <div class="me-auto navbar-header-items__center">
+      
+        <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../getting-started/installation.html">
+    Installation
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../getting-started/overview.html">
+    Overview
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../getting-started/examples.html">
+    Examples
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../xarray-differences.html">
+    Differences from xarray
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../user-guide/index.html">
+    User guide
+  </a>
+</li>
+
+            <li class="nav-item dropdown">
+                <button class="btn dropdown-toggle nav-item" type="button"
+                data-bs-toggle="dropdown" aria-expanded="false"
+                aria-controls="pst-nav-more-links">
+                    More
+                </button>
+                <ul id="pst-nav-more-links" class="dropdown-menu">
+                    
+<li class=" current active">
+  <a class="nav-link dropdown-item nav-internal" href="index.html">
+    API reference
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="../rust.html">
+    Rust crates
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="../performance.html">
+    Performance
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-external" href="https://docs.rs/annoray">
+    Rust API
+  </a>
+</li>
+
+                </ul>
+            </li>
+            
+  </ul>
+</nav></div>
+      
+    </div>
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button type="button" class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+        </div>
+      
+      
+        <div class="navbar-item">
+<div class="version-switcher__container dropdown pst-js-only">
+  <button id="pst-version-switcher-button-2"
+    type="button"
+    class="version-switcher__button btn btn-sm dropdown-toggle"
+    data-bs-toggle="dropdown"
+    aria-haspopup="listbox"
+    aria-controls="pst-version-switcher-list-2"
+    aria-label="Version switcher list"
+  >
+    Choose version  <!-- this text may get changed later by javascript -->
+    <span class="caret"></span>
+  </button>
+  <div id="pst-version-switcher-list-2"
+    class="version-switcher__menu dropdown-menu list-group-flush py-0"
+    role="listbox" aria-labelledby="pst-version-switcher-button-2">
+    <!-- dropdown will be populated by javascript on page load -->
+  </div>
+</div></div>
+      
+        <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button type="button" class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+      
+        <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/sunipkm/annoray" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-square-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
+        </li>
+</ul></div>
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button type="button" class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+    </div>
+  
+
+  
+    <button type="button" class="pst-navbar-icon sidebar-toggle secondary-toggle" aria-label="On this page">
+      <span class="fa-solid fa-outdent"></span>
+    </button>
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../getting-started/installation.html">
+    Installation
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../getting-started/overview.html">
+    Overview
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../getting-started/examples.html">
+    Examples
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../xarray-differences.html">
+    Differences from xarray
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../user-guide/index.html">
+    User guide
+  </a>
+</li>
+
+
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="index.html">
+    API reference
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../rust.html">
+    Rust crates
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../performance.html">
+    Performance
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-external" href="https://docs.rs/annoray">
+    Rust API
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+<div class="version-switcher__container dropdown pst-js-only">
+  <button id="pst-version-switcher-button-3"
+    type="button"
+    class="version-switcher__button btn btn-sm dropdown-toggle"
+    data-bs-toggle="dropdown"
+    aria-haspopup="listbox"
+    aria-controls="pst-version-switcher-list-3"
+    aria-label="Version switcher list"
+  >
+    Choose version  <!-- this text may get changed later by javascript -->
+    <span class="caret"></span>
+  </button>
+  <div id="pst-version-switcher-list-3"
+    class="version-switcher__menu dropdown-menu list-group-flush py-0"
+    role="listbox" aria-labelledby="pst-version-switcher-button-3">
+    <!-- dropdown will be populated by javascript on page load -->
+  </div>
+</div></div>
+        
+          <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button type="button" class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+        
+          <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/sunipkm/annoray" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-square-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
+        </li>
+</ul></div>
+        
+      </div>
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item pst-sidebar-collapse"><button type="button" id="pst-collapse-sidebar-button" aria-expanded="true" aria-controls="pst-primary-sidebar">
+  <svg class="pst-icon" role="img" aria-hidden="true" focusable="false" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+    <path fill="currentColor" d="M3 15.5C2.36232 15.5 1.74874 15.2564 1.28478 14.8189C0.820828 14.3815 0.541576 13.7832 0.504167 13.1467L0.5 13L0.5 3C0.499965 2.36232 0.743605 1.74874 1.18107 1.28478C1.61854 0.820828 2.21676 0.541576 2.85333 0.504167L3 0.5L13 0.5C13.6377 0.499965 14.2513 0.743605 14.7152 1.18107C15.1792 1.61854 15.4584 2.21676 15.4958 2.85333L15.5 3L15.5 13C15.5 13.6377 15.2564 14.2513 14.8189 14.7152C14.3815 15.1792 13.7832 15.4584 13.1467 15.4958L13 15.5L3 15.5ZM3 13.8333L10.5 13.8333L10.5 2.16667L3 2.16667C2.79589 2.16669 2.59889 2.24163 2.44636 2.37726C2.29383 2.5129 2.19638 2.69979 2.1725 2.9025L2.16667 3L2.16667 13C2.16669 13.2041 2.24163 13.4011 2.37726 13.5536C2.5129 13.7062 2.69979 13.8036 2.9025 13.8275L3 13.8333ZM6.65583 10.325L6.5775 10.2558L4.91083 8.58917C4.76735 8.44567 4.68116 8.25476 4.66843 8.05223C4.65569 7.84971 4.71729 7.6495 4.84167 7.48917L4.91083 7.41083L6.5775 5.74417C6.72747 5.59471 6.9287 5.50794 7.14032 5.50148C7.35194 5.49502 7.55809 5.56935 7.7169 5.70937C7.8757 5.8494 7.97525 6.04463 7.99533 6.25539C8.01541 6.46616 7.95451 6.67667 7.825 6.84417L7.75583 6.9225L6.67917 8L7.75583 9.0775C7.89931 9.22099 7.98551 9.41191 7.99824 9.61443C8.01097 9.81695 7.94938 10.0172 7.825 10.1775L7.75583 10.2558C7.61234 10.3993 7.42142 10.4855 7.2189 10.4982C7.01638 10.511 6.81617 10.4494 6.65583 10.325Z"/>
+  </svg>
+  <span class="pst-collapse-sidebar-label">Collapse Sidebar</span>
+  <span class="pst-expand-sidebar-label">Expand Sidebar</span>
+</button></div>
+        <div class="sidebar-primary-item">
+
+<nav class="bd-docs-nav bd-links"
+     aria-label="Section Navigation">
+  <p class="bd-links__title" role="heading" aria-level="1">Section Navigation</p>
+  <div class="bd-toc-item navbar-nav"><ul class="current nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="dataarray.html">DataArray</a></li>
+<li class="toctree-l1"><a class="reference internal" href="dataset.html">Dataset</a></li>
+<li class="toctree-l1"><a class="reference internal" href="datatree.html">DataTree</a></li>
+<li class="toctree-l1"><a class="reference internal" href="functions.html">Top-level functions</a></li>
+<li class="toctree-l1 current active has-children"><a aria-current="page" class="current reference internal" href="#">Units</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Unit.html">annoray.Unit</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Quantity.html">annoray.Quantity</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dimension.html">annoray.Dimension</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.UnitError.html">annoray.UnitError</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.dimension-function.html">annoray.dimension</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Unit.dimension.html">annoray.Unit.dimension</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Unit.dimensionless.html">annoray.Unit.dimensionless</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Unit.is_convertible.html">annoray.Unit.is_convertible</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Unit.kind.html">annoray.Unit.kind</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Unit.offset.html">annoray.Unit.offset</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Unit.si_factor.html">annoray.Unit.si_factor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Unit.canonical.html">annoray.Unit.canonical</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Unit.to_astropy.html">annoray.Unit.to_astropy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Quantity.magnitude.html">annoray.Quantity.magnitude</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Quantity.real.html">annoray.Quantity.real</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Quantity.imag.html">annoray.Quantity.imag</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Quantity.conjugate.html">annoray.Quantity.conjugate</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Quantity.conj.html">annoray.Quantity.conj</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Quantity.units.html">annoray.Quantity.units</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Quantity.unit.html">annoray.Quantity.unit</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Quantity.dimension.html">annoray.Quantity.dimension</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Quantity.to.html">annoray.Quantity.to</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Quantity.to_astropy.html">annoray.Quantity.to_astropy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dimension.exponents.html">annoray.Dimension.exponents</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Dimension.dimensionless.html">annoray.Dimension.dimensionless</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.dims.checked.html">annoray.dims.checked</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.dims.Dim.html">annoray.dims.Dim</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.dims.name_of.html">annoray.dims.name_of</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.dims.Dimensionless.html">annoray.dims.Dimensionless</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.dims.Length.html">annoray.dims.Length</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.dims.Mass.html">annoray.dims.Mass</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.dims.Time.html">annoray.dims.Time</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.dims.Current.html">annoray.dims.Current</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.dims.Temperature.html">annoray.dims.Temperature</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.dims.Amount.html">annoray.dims.Amount</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.dims.Luminosity.html">annoray.dims.Luminosity</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.dims.Angle.html">annoray.dims.Angle</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.dims.Area.html">annoray.dims.Area</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.dims.Volume.html">annoray.dims.Volume</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.dims.Velocity.html">annoray.dims.Velocity</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.dims.Acceleration.html">annoray.dims.Acceleration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.dims.Frequency.html">annoray.dims.Frequency</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.dims.AngularVelocity.html">annoray.dims.AngularVelocity</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.dims.Force.html">annoray.dims.Force</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.dims.Pressure.html">annoray.dims.Pressure</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.dims.Energy.html">annoray.dims.Energy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.dims.Power.html">annoray.dims.Power</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.dims.Momentum.html">annoray.dims.Momentum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.dims.Density.html">annoray.dims.Density</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.dims.Charge.html">annoray.dims.Charge</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.dims.Voltage.html">annoray.dims.Voltage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.dims.Resistance.html">annoray.dims.Resistance</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.dims.Concentration.html">annoray.dims.Concentration</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1"><a class="reference internal" href="helpers.html">GroupBy, windows and weights</a></li>
+<li class="toctree-l1"><a class="reference internal" href="testing.html">Testing</a></li>
+</ul>
+</div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+<nav aria-label="Breadcrumb" class="d-print-none">
+  <ul class="bd-breadcrumbs">
+    
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="../index.html" class="nav-link" aria-label="Home">
+        <i class="fa-solid fa-home"></i>
+      </a>
+    </li>
+    
+    <li class="breadcrumb-item"><a href="index.html" class="nav-link">API reference</a></li>
+    
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">Units</span></li>
+  </ul>
+</nav>
+</div>
+      
+    </div>
+  
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section id="units">
+<h1>Units<a class="headerlink" href="#units" title="Link to this heading">#</a></h1>
+<p>Units belong to the data: <code class="docutils literal notranslate"><span class="pre">da.units</span></code> is a <code class="xref py py-class docutils literal notranslate"><span class="pre">Unit</span></code>, scalars with units are
+<code class="xref py py-class docutils literal notranslate"><span class="pre">Quantity</span></code> values, and a CF <code class="docutils literal notranslate"><span class="pre">units</span></code> attribute is decoded into a unit when a file is
+opened. Dimensionally inconsistent operations raise <code class="xref py py-class docutils literal notranslate"><span class="pre">UnitError</span></code>.</p>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Unit.html#annoray.Unit" title="annoray.Unit"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Unit</span></code></a>(unit)</p></td>
+<td><p>A unit of measurement (<code class="code docutils literal notranslate"><span class="pre">Unit(&quot;m</span> <span class="pre">s-1&quot;)</span></code>, <code class="code docutils literal notranslate"><span class="pre">Unit(&quot;degC&quot;)</span></code>), parsed and checked when made.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Quantity.html#annoray.Quantity" title="annoray.Quantity"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Quantity</span></code></a>(magnitude[, units])</p></td>
+<td><p>A number with a unit (<code class="code docutils literal notranslate"><span class="pre">Quantity(2.5,</span> <span class="pre">&quot;km&quot;)</span></code>, <code class="code docutils literal notranslate"><span class="pre">Quantity(3+4j,</span> <span class="pre">&quot;V&quot;)</span></code>, or <code class="code docutils literal notranslate"><span class="pre">2.5</span> <span class="pre">*</span> <span class="pre">Unit(&quot;km&quot;)</span></code>): annoray's Rust <code class="code docutils literal notranslate"><span class="pre">Quantity</span></code>, with its dimension checked at run time; the number is a <code class="code docutils literal notranslate"><span class="pre">float</span></code> or a <code class="code docutils literal notranslate"><span class="pre">complex</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dimension.html#annoray.Dimension" title="annoray.Dimension"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dimension</span></code></a>(*[, mass, length, time, current, ...])</p></td>
+<td><p>A physical dimension: the exponents of the base quantities (the seven SI ones and angle).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.UnitError.html#annoray.UnitError" title="annoray.UnitError"><code class="xref py py-obj docutils literal notranslate"><span class="pre">UnitError</span></code></a></p></td>
+<td><p>Incompatible or unknown units (e.g. adding metres to seconds).</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.dimension-function.html#annoray.dimension" title="annoray.dimension"><code class="xref py py-obj docutils literal notranslate"><span class="pre">dimension</span></code></a>(name, dim[, doc])</p></td>
+<td><p>A named dimension made at run time.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Each section has a short example; the examples share this setup:</p>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">annoray</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">ar</span>
+</pre></div>
+</div>
+</div>
+</div>
+<section id="unit">
+<h2>Unit<a class="headerlink" href="#unit" title="Link to this heading">#</a></h2>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">u</span> <span class="o">=</span> <span class="n">ar</span><span class="o">.</span><span class="n">Unit</span><span class="p">(</span><span class="s2">"km/h"</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">u</span><span class="o">.</span><span class="n">dimension</span><span class="p">,</span> <span class="n">u</span><span class="o">.</span><span class="n">si_factor</span><span class="p">,</span> <span class="n">u</span><span class="o">.</span><span class="n">is_convertible</span><span class="p">(</span><span class="s2">"m/s"</span><span class="p">))</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">ar</span><span class="o">.</span><span class="n">Unit</span><span class="p">(</span><span class="s2">"degC"</span><span class="p">)</span><span class="o">.</span><span class="n">kind</span><span class="p">,</span> <span class="n">ar</span><span class="o">.</span><span class="n">Unit</span><span class="p">(</span><span class="s2">"degC"</span><span class="p">)</span><span class="o">.</span><span class="n">offset</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>m s-1 0.2777777777777778 True
+affine 273.15
+</pre></div>
+</div>
+</div>
+</div>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Unit.dimension.html#annoray.Unit.dimension" title="annoray.Unit.dimension"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Unit.dimension</span></code></a></p></td>
+<td><p>The unit's dimension.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Unit.dimensionless.html#annoray.Unit.dimensionless" title="annoray.Unit.dimensionless"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Unit.dimensionless</span></code></a></p></td>
+<td><p>Whether this unit has no dimension (<code class="code docutils literal notranslate"><span class="pre">1</span></code>, <code class="code docutils literal notranslate"><span class="pre">%</span></code>, <code class="code docutils literal notranslate"><span class="pre">rad</span></code> is an angle and is not).</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Unit.is_convertible.html#annoray.Unit.is_convertible" title="annoray.Unit.is_convertible"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Unit.is_convertible</span></code></a>(other)</p></td>
+<td><p>Whether values convert between this unit and <code class="code docutils literal notranslate"><span class="pre">other</span></code> (same dimension).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Unit.kind.html#annoray.Unit.kind" title="annoray.Unit.kind"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Unit.kind</span></code></a></p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">&quot;linear&quot;</span></code>, <code class="code docutils literal notranslate"><span class="pre">&quot;affine&quot;</span></code> (°C), <code class="code docutils literal notranslate"><span class="pre">&quot;epoch&quot;</span></code> (<code class="code docutils literal notranslate"><span class="pre">days</span> <span class="pre">since</span> <span class="pre">…</span></code>) or <code class="code docutils literal notranslate"><span class="pre">&quot;log&quot;</span></code> (dB).</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Unit.offset.html#annoray.Unit.offset" title="annoray.Unit.offset"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Unit.offset</span></code></a></p></td>
+<td><p>The zero offset of an affine unit, in its own scale (273.15 for °C); else <code class="code docutils literal notranslate"><span class="pre">None</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Unit.si_factor.html#annoray.Unit.si_factor" title="annoray.Unit.si_factor"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Unit.si_factor</span></code></a></p></td>
+<td><p>The factor to coherent SI base units (and radians): <code class="code docutils literal notranslate"><span class="pre">value_SI</span> <span class="pre">=</span> <span class="pre">(value</span> <span class="pre">+</span> <span class="pre">offset)</span> <span class="pre">·</span> <span class="pre">si_factor</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Unit.canonical.html#annoray.Unit.canonical" title="annoray.Unit.canonical"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Unit.canonical</span></code></a></p></td>
+<td><p>The unit in canonical form (prime-factorised scale, base dimensions).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Unit.to_astropy.html#annoray.Unit.to_astropy" title="annoray.Unit.to_astropy"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Unit.to_astropy</span></code></a>()</p></td>
+<td><p>As an <code class="code docutils literal notranslate"><span class="pre">astropy.units.UnitBase</span></code> (needs astropy).</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="quantity">
+<h2>Quantity<a class="headerlink" href="#quantity" title="Link to this heading">#</a></h2>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">q</span> <span class="o">=</span> <span class="n">ar</span><span class="o">.</span><span class="n">Quantity</span><span class="p">(</span><span class="mf">90.0</span><span class="p">,</span> <span class="s2">"km/h"</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">q</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="s2">"m/s"</span><span class="p">),</span> <span class="n">q</span><span class="o">.</span><span class="n">magnitude</span><span class="p">,</span> <span class="n">q</span><span class="o">.</span><span class="n">units</span><span class="p">)</span>
+<span class="k">try</span><span class="p">:</span>
+    <span class="n">q</span> <span class="o">+</span> <span class="n">ar</span><span class="o">.</span><span class="n">Quantity</span><span class="p">(</span><span class="mf">1.0</span><span class="p">,</span> <span class="s2">"kg"</span><span class="p">)</span>
+<span class="k">except</span> <span class="n">ar</span><span class="o">.</span><span class="n">UnitError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">"UnitError:"</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+<span class="c1"># A complex magnitude: the parts, the modulus and conversion work as for complex arrays.</span>
+<span class="n">v</span> <span class="o">=</span> <span class="n">ar</span><span class="o">.</span><span class="n">Quantity</span><span class="p">(</span><span class="mi">3</span> <span class="o">+</span> <span class="mi">4</span><span class="n">j</span><span class="p">,</span> <span class="s2">"V"</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">v</span><span class="o">.</span><span class="n">real</span><span class="p">,</span> <span class="n">v</span><span class="o">.</span><span class="n">imag</span><span class="p">,</span> <span class="nb">abs</span><span class="p">(</span><span class="n">v</span><span class="p">),</span> <span class="n">v</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="s2">"mV"</span><span class="p">),</span> <span class="n">v</span> <span class="o">/</span> <span class="n">ar</span><span class="o">.</span><span class="n">Quantity</span><span class="p">(</span><span class="mi">2</span><span class="n">j</span><span class="p">,</span> <span class="s2">"A"</span><span class="p">))</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>25.0 m/s 90.0 km/h
+UnitError: incompatible units: km/h and kg
+3.0 V 4.0 V 5.0 V (3000+4000j) mV (2-1.5j) V A-1
+</pre></div>
+</div>
+</div>
+</div>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Quantity.magnitude.html#annoray.Quantity.magnitude" title="annoray.Quantity.magnitude"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Quantity.magnitude</span></code></a></p></td>
+<td><p>The number, in this quantity's unit: a <code class="code docutils literal notranslate"><span class="pre">float</span></code>, or a <code class="code docutils literal notranslate"><span class="pre">complex</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Quantity.real.html#annoray.Quantity.real" title="annoray.Quantity.real"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Quantity.real</span></code></a></p></td>
+<td><p>The real part, in the same unit.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Quantity.imag.html#annoray.Quantity.imag" title="annoray.Quantity.imag"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Quantity.imag</span></code></a></p></td>
+<td><p>The imaginary part, in the same unit (0 for a real quantity).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Quantity.conjugate.html#annoray.Quantity.conjugate" title="annoray.Quantity.conjugate"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Quantity.conjugate</span></code></a>()</p></td>
+<td><p>The complex conjugate (a real quantity is its own).</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Quantity.conj.html#annoray.Quantity.conj" title="annoray.Quantity.conj"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Quantity.conj</span></code></a>()</p></td>
+<td><p>The complex conjugate, as <code class="code docutils literal notranslate"><span class="pre">conjugate()</span></code> (numpy's spelling).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Quantity.units.html#annoray.Quantity.units" title="annoray.Quantity.units"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Quantity.units</span></code></a></p></td>
+<td><p>The unit, as a string (as <code class="code docutils literal notranslate"><span class="pre">DataArray.units</span></code>).</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Quantity.unit.html#annoray.Quantity.unit" title="annoray.Quantity.unit"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Quantity.unit</span></code></a></p></td>
+<td><p>The unit.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Quantity.dimension.html#annoray.Quantity.dimension" title="annoray.Quantity.dimension"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Quantity.dimension</span></code></a></p></td>
+<td><p>The quantity's dimension.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Quantity.to.html#annoray.Quantity.to" title="annoray.Quantity.to"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Quantity.to</span></code></a>(units)</p></td>
+<td><p>The same quantity in another (compatible) unit; for a complex quantity, both parts scale, and a unit with an offset (°C) is an error.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Quantity.to_astropy.html#annoray.Quantity.to_astropy" title="annoray.Quantity.to_astropy"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Quantity.to_astropy</span></code></a>()</p></td>
+<td><p>As an <code class="code docutils literal notranslate"><span class="pre">astropy.units.Quantity</span></code> (needs astropy).</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="dimension">
+<h2>Dimension<a class="headerlink" href="#dimension" title="Link to this heading">#</a></h2>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="nb">print</span><span class="p">(</span><span class="n">ar</span><span class="o">.</span><span class="n">Unit</span><span class="p">(</span><span class="s2">"N"</span><span class="p">)</span><span class="o">.</span><span class="n">dimension</span><span class="o">.</span><span class="n">exponents</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">ar</span><span class="o">.</span><span class="n">Unit</span><span class="p">(</span><span class="s2">"m/m"</span><span class="p">)</span><span class="o">.</span><span class="n">dimension</span><span class="o">.</span><span class="n">dimensionless</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>{'length': 1, 'mass': 1, 'time': -2}
+True
+</pre></div>
+</div>
+</div>
+</div>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Dimension.exponents.html#annoray.Dimension.exponents" title="annoray.Dimension.exponents"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dimension.exponents</span></code></a></p></td>
+<td><p>Base quantity → exponent, for the non-zero ones.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Dimension.dimensionless.html#annoray.Dimension.dimensionless" title="annoray.Dimension.dimensionless"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dimension.dimensionless</span></code></a></p></td>
+<td><p>Whether every exponent is zero.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="dimension-annotations">
+<h2>Dimension annotations<a class="headerlink" href="#dimension-annotations" title="Link to this heading">#</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">annoray.dims</span></code> names dimensions as classes: they make checked quantities
+(<code class="docutils literal notranslate"><span class="pre">Length(2.5,</span> <span class="pre">&quot;km&quot;)</span></code>), annotate arrays and quantities (<code class="docutils literal notranslate"><span class="pre">DataArray[Velocity]</span></code>), and
+<a class="reference internal" href="generated/annoray.dims.checked.html#annoray.dims.checked" title="annoray.dims.checked"><code class="xref py py-func docutils literal notranslate"><span class="pre">annoray.dims.checked()</span></code></a> enforces the annotations at call time. Derived dimensions are
+declared as <a class="reference internal" href="generated/annoray.dims.Dim.html#annoray.dims.Dim" title="annoray.dims.Dim"><code class="xref py py-class docutils literal notranslate"><span class="pre">annoray.dims.Dim</span></code></a> subclasses.</p>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">annoray.dims</span><span class="w"> </span><span class="kn">import</span> <span class="n">Length</span><span class="p">,</span> <span class="n">Time</span><span class="p">,</span> <span class="n">Velocity</span><span class="p">,</span> <span class="n">checked</span>
+
+<span class="nd">@checked</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">speed</span><span class="p">(</span><span class="n">d</span><span class="p">:</span> <span class="n">Length</span><span class="p">,</span> <span class="n">t</span><span class="p">:</span> <span class="n">Time</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Velocity</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">d</span> <span class="o">/</span> <span class="n">t</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="n">speed</span><span class="p">(</span><span class="n">ar</span><span class="o">.</span><span class="n">Quantity</span><span class="p">(</span><span class="mf">5.0</span><span class="p">,</span> <span class="s2">"km"</span><span class="p">),</span> <span class="n">ar</span><span class="o">.</span><span class="n">Quantity</span><span class="p">(</span><span class="mf">30.0</span><span class="p">,</span> <span class="s2">"min"</span><span class="p">))</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="s2">"km/h"</span><span class="p">))</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>10.0 km/h
+</pre></div>
+</div>
+</div>
+</div>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.dims.checked.html#annoray.dims.checked" title="annoray.dims.checked"><code class="xref py py-obj docutils literal notranslate"><span class="pre">dims.checked</span></code></a>(func)</p></td>
+<td><p>Check dimension annotations of <code class="docutils literal notranslate"><span class="pre">func</span></code>'s arguments and result at each call: <code class="docutils literal notranslate"><span class="pre">def</span> <span class="pre">speed(d:</span> <span class="pre">Quantity[Length],</span> <span class="pre">t:</span> <span class="pre">Quantity[Time])</span> <span class="pre">-&gt;</span> <span class="pre">Quantity[Velocity]</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.dims.Dim.html#annoray.dims.Dim" title="annoray.dims.Dim"><code class="xref py py-obj docutils literal notranslate"><span class="pre">dims.Dim</span></code></a>(magnitude[, units])</p></td>
+<td><p>Base of named dimensions: <code class="docutils literal notranslate"><span class="pre">class</span> <span class="pre">Jerk(Dim,</span> <span class="pre">dimension=Length</span> <span class="pre">/</span> <span class="pre">Time**3):</span> <span class="pre">...</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.dims.name_of.html#annoray.dims.name_of" title="annoray.dims.name_of"><code class="xref py py-obj docutils literal notranslate"><span class="pre">dims.name_of</span></code></a>(d)</p></td>
+<td><p>The name given to a dimension (the first one, if several), or <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.dims.Dimensionless.html#annoray.dims.Dimensionless" title="annoray.dims.Dimensionless"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dimensionless</span></code></a>(magnitude[, units])</p></td>
+<td><p>No dimension (pure numbers, ratios).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.dims.Length.html#annoray.dims.Length" title="annoray.dims.Length"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Length</span></code></a>(magnitude[, units])</p></td>
+<td><p>Length (m).</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.dims.Mass.html#annoray.dims.Mass" title="annoray.dims.Mass"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Mass</span></code></a>(magnitude[, units])</p></td>
+<td><p>Mass (kg).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.dims.Time.html#annoray.dims.Time" title="annoray.dims.Time"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Time</span></code></a>(magnitude[, units])</p></td>
+<td><p>Time (s).</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.dims.Current.html#annoray.dims.Current" title="annoray.dims.Current"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Current</span></code></a>(magnitude[, units])</p></td>
+<td><p>Electric current (A).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.dims.Temperature.html#annoray.dims.Temperature" title="annoray.dims.Temperature"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Temperature</span></code></a>(magnitude[, units])</p></td>
+<td><p>Thermodynamic temperature (K).</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.dims.Amount.html#annoray.dims.Amount" title="annoray.dims.Amount"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Amount</span></code></a>(magnitude[, units])</p></td>
+<td><p>Amount of substance (mol).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.dims.Luminosity.html#annoray.dims.Luminosity" title="annoray.dims.Luminosity"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Luminosity</span></code></a>(magnitude[, units])</p></td>
+<td><p>Luminous intensity (cd).</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.dims.Angle.html#annoray.dims.Angle" title="annoray.dims.Angle"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Angle</span></code></a>(magnitude[, units])</p></td>
+<td><p>Plane angle (rad): a dimension of its own here, as in whippyunits.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.dims.Area.html#annoray.dims.Area" title="annoray.dims.Area"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Area</span></code></a>(magnitude[, units])</p></td>
+<td><p>Area (m2).</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.dims.Volume.html#annoray.dims.Volume" title="annoray.dims.Volume"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Volume</span></code></a>(magnitude[, units])</p></td>
+<td><p>Volume (m3).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.dims.Velocity.html#annoray.dims.Velocity" title="annoray.dims.Velocity"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Velocity</span></code></a>(magnitude[, units])</p></td>
+<td><p>Velocity (m s-1).</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.dims.Acceleration.html#annoray.dims.Acceleration" title="annoray.dims.Acceleration"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Acceleration</span></code></a>(magnitude[, units])</p></td>
+<td><p>Acceleration (m s-2).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.dims.Frequency.html#annoray.dims.Frequency" title="annoray.dims.Frequency"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Frequency</span></code></a>(magnitude[, units])</p></td>
+<td><p>Frequency (s-1).</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.dims.AngularVelocity.html#annoray.dims.AngularVelocity" title="annoray.dims.AngularVelocity"><code class="xref py py-obj docutils literal notranslate"><span class="pre">AngularVelocity</span></code></a>(magnitude[, units])</p></td>
+<td><p>Angular velocity (rad s-1).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.dims.Force.html#annoray.dims.Force" title="annoray.dims.Force"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Force</span></code></a>(magnitude[, units])</p></td>
+<td><p>Force (N = kg m s-2).</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.dims.Pressure.html#annoray.dims.Pressure" title="annoray.dims.Pressure"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Pressure</span></code></a>(magnitude[, units])</p></td>
+<td><p>Pressure and stress (Pa = N m-2).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.dims.Energy.html#annoray.dims.Energy" title="annoray.dims.Energy"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Energy</span></code></a>(magnitude[, units])</p></td>
+<td><p>Energy, work and heat (J = N m).</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.dims.Power.html#annoray.dims.Power" title="annoray.dims.Power"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Power</span></code></a>(magnitude[, units])</p></td>
+<td><p>Power (W = J s-1).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.dims.Momentum.html#annoray.dims.Momentum" title="annoray.dims.Momentum"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Momentum</span></code></a>(magnitude[, units])</p></td>
+<td><p>Momentum (kg m s-1).</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.dims.Density.html#annoray.dims.Density" title="annoray.dims.Density"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Density</span></code></a>(magnitude[, units])</p></td>
+<td><p>Density (kg m-3).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.dims.Charge.html#annoray.dims.Charge" title="annoray.dims.Charge"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Charge</span></code></a>(magnitude[, units])</p></td>
+<td><p>Electric charge (C = A s).</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.dims.Voltage.html#annoray.dims.Voltage" title="annoray.dims.Voltage"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Voltage</span></code></a>(magnitude[, units])</p></td>
+<td><p>Voltage (V = W A-1).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.dims.Resistance.html#annoray.dims.Resistance" title="annoray.dims.Resistance"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Resistance</span></code></a>(magnitude[, units])</p></td>
+<td><p>Resistance (ohm = V A-1).</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.dims.Concentration.html#annoray.dims.Concentration" title="annoray.dims.Concentration"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Concentration</span></code></a>(magnitude[, units])</p></td>
+<td><p>Concentration (mol m-3).</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+</section>
+
+
+                </article>
+              
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="generated/annoray.register_dataset_accessor.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">annoray.register_dataset_accessor</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="generated/annoray.Unit.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">annoray.Unit</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <dialog id="pst-secondary-sidebar-modal"></dialog>
+                <div id="pst-secondary-sidebar" class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+<div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> On this page
+  </div>
+  <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#unit">Unit</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#quantity">Quantity</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#dimension">Dimension</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#dimension-annotations">Dimension annotations</a><ul class="pst-show_toc_level nav section-nav flex-column">
+</ul>
+</li>
+</ul>
+  </nav></div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="../_static/scripts/bootstrap.js?digest=18bd87630a240e9c25be"></script>
+<script defer src="../_static/scripts/pydata-sphinx-theme.js?digest=18bd87630a240e9c25be"></script>
+
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item">
+
+  <p class="copyright">
+    
+      © Copyright 2026, Sunip K. Mukherjee.
+      <br/>
+    
+  </p>
+</div>
+      
+        <div class="footer-item">
+
+  <p class="sphinx-version">
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 9.2.0.
+  </p>
+</div>
+      
+    </div>
+  
+  
+  
+    <div class="footer-items__end">
+      
+        <div class="footer-item">
+<p class="theme-version">
+  <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.23.0.
+</p></div>
+      
+    </div>
+  
+</div>
+
+  </footer>
+  </body>
+</html>
