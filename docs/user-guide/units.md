@@ -79,6 +79,27 @@ A quantity is also made by multiplying a number by a unit (`2.5 * ar.Unit("km")`
 accepted wherever a value with a unit is expected: as an operand of a data array, as a label
 in `sel`, as the value of `put`, `where` and `fillna`.
 
+### Complex quantities
+
+A quantity's magnitude is a `float` or a `complex`. A complex quantity follows the rules of
+complex data: conversion scales both parts (a unit with an offset, such as °C, does not
+convert), real and complex operands give a complex result, and there is no order (`==` and
+`!=` only). `.real`, `.imag` and `abs()` are real quantities in the same unit, and `.item()` of
+complex data with a unit is a complex quantity.
+
+```{code-cell} python
+v = ar.Quantity(3 + 4j, "V")
+i = ar.Quantity(0.5j, "A")
+print(v / i)  # an impedance
+print(v.real, v.imag, abs(v), v.to("mV"))
+z = ar.DataArray([1 + 2j, 3 - 1j], dims="x", units="V")
+print(repr(z.sum().item()))
+try:
+    v < v.conjugate()
+except TypeError as e:
+    print("TypeError:", e)
+```
+
 ## Arithmetic rules
 
 annoray refuses operations whose result would depend on an unstated assumption about units.

@@ -231,7 +231,11 @@ impl WhereOther {
     /// `o` as a scalar `other`, or `None` if it is not a number or quantity.
     fn parse(o: &Bound<'_, PyAny>) -> PyResult<Option<Self>> {
         if let Ok(q) = o.cast::<PyQuantity>() {
-            return Ok(Some(Self::Quantity(q.get().inner.clone())));
+            // A complex quantity takes the general path (an array operand).
+            return Ok(match &q.get().inner {
+                crate::units::Q::Real(q) => Some(Self::Quantity(q.clone())),
+                crate::units::Q::Complex(_) => None,
+            });
         }
         if let Some((m, u)) = quantity_parts(o)? {
             return Ok(match m.extract::<f64>() {
@@ -467,10 +471,14 @@ impl PyDataArray {
         let py = slf.py();
         let v = slf.getattr("values")?.call_method1("item", args)?;
         match slf.borrow().inner.unit() {
-            Some(u) if !v.is_instance_of::<pyo3::types::PyBool>() => match v.extract::<f64>() {
-                Ok(x) => Ok(Bound::new(py, PyQuantity::new(x, u.clone())?)?.into_any()),
-                Err(_) => Ok(v),
-            },
+            // Numbers, real or complex, with the unit; anything else (text, times) as it is.
+            Some(u)
+                if !v.is_instance_of::<pyo3::types::PyBool>()
+                    && (v.extract::<f64>().is_ok()
+                        || v.is_instance_of::<pyo3::types::PyComplex>()) =>
+            {
+                Ok(Bound::new(py, PyQuantity::from_number(&v, u.clone())?)?.into_any())
+            }
             _ => Ok(v),
         }
     }
@@ -739,10 +747,15 @@ pub(crate) fn full_like(
     if let Ok(da) = other.cast::<PyDataArray>() {
         let a = &da.borrow().inner;
         let v = match fill_value.cast::<PyQuantity>() {
-            Ok(q) => match a.unit() {
-                Some(u) => q.get().inner.to(u.clone()).py_err()?.value(),
-                None => q.get().inner.as_number().py_err()?,
-            },
+            Ok(q) => {
+                let crate::units::Q::Real(q) = &q.get().inner else {
+                    return Err(PyTypeError::new_err("full_like takes a real fill value"));
+                };
+                match a.unit() {
+                    Some(u) => q.to(u.clone()).py_err()?.value(),
+                    None => q.as_number().py_err()?,
+                }
+            }
             Err(_) => fill_value.extract::<f64>()?,
         };
         return Ok(new_da(py, a.full_like(v, dt).py_err()?)?.into_any());

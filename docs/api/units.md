@@ -63,6 +63,9 @@ try:
     q + ar.Quantity(1.0, "kg")
 except ar.UnitError as e:
     print("UnitError:", e)
+# A complex magnitude: the parts, the modulus and conversion work as for complex arrays.
+v = ar.Quantity(3 + 4j, "V")
+print(v.real, v.imag, abs(v), v.to("mV"), v / ar.Quantity(2j, "A"))
 ```
 
 ```{eval-rst}
@@ -72,6 +75,10 @@ except ar.UnitError as e:
    :toctree: generated/
 
    Quantity.magnitude
+   Quantity.real
+   Quantity.imag
+   Quantity.conjugate
+   Quantity.conj
    Quantity.units
    Quantity.unit
    Quantity.dimension

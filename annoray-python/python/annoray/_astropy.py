@@ -166,11 +166,12 @@ def to_astropy(obj: Unit | Quantity | DataArray) -> Any:
     raise TypeError(f"expected an annoray Unit, Quantity or DataArray, not {type(obj).__name__}")
 
 
-def quantity_parts(q: Any) -> tuple[float, Unit]:
-    """Value and annoray unit of a scalar astropy quantity."""
+def quantity_parts(q: Any) -> tuple[float | complex, Unit]:
+    """Value (real or complex) and annoray unit of a scalar astropy quantity."""
     if not q.isscalar:
         raise TypeError("an array-valued astropy Quantity becomes a DataArray: use from_astropy")
-    return float(q.value), unit_from_astropy(q.unit)
+    value = complex(q.value) if np.iscomplexobj(q.value) else float(q.value)
+    return value, unit_from_astropy(q.unit)
 
 
 def from_astropy(

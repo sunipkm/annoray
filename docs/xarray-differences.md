@@ -106,6 +106,15 @@ attribute is decoded into it when a file is opened.
 - **Plain Python numbers are weak scalars** (NEP 50): `float32` data stays `float32` in
   `da * 2.0`.
 - **NumPy reductions** (`np.sum(da, ...)`) refuse `out=` and `dtype=` arguments.
+- **Complex numbers have no order.** `min`, `max`, `argmin`/`argmax`, `median`, `quantile`,
+  `rank`, sorting by them and `<`/`>` are errors; `==` and `!=` are defined.
+  - *NumPy:* orders complex numbers by real part, then imaginary part.
+- **Complex to real keeps the imaginary part.** `astype` to a real type raises `ValueError`
+  for a value whose imaginary part is not zero; `.real`, `.imag` and `abs` take the parts
+  explicitly.
+  - *NumPy:* emits a `ComplexWarning` and discards the imaginary part.
+- **Complex data with a unit with an offset** (°C, °F) cannot be converted (`to`): the offset has
+  no meaning for a complex number. Units without one scale both parts.
 
 ## Indexing and selection
 
@@ -274,7 +283,6 @@ attribute is decoded into it when a file is opened.
   point-wise relative mode without acceleration (not written with the default settings).
 - Writing in place to HDF5 datasets indexed by fixed or extensible arrays or version-2
   B-trees (files written with h5py's `libver="latest"`).
-- Complex numbers.
 - dask arrays.
 - Free-threaded CPython builds.
 - Plotting with cftime axes, `hue_style` / marker-size legends, `lines()` and faceted `hist`.

@@ -115,6 +115,48 @@ fn units_scale_both_parts() {
 }
 
 #[test]
+fn conversion_scales_both_parts() {
+    let v: Unit = "V".parse().unwrap();
+    let mv: Unit = "mV".parse().unwrap();
+    let a = da(vec![c(1.0, -2.5), c(f64::NAN, 0.0)]).with_unit(v.clone());
+    let out = a.to_unit(&mv).unwrap();
+    assert_eq!(out.unit(), Some(&mv));
+    assert_eq!(out.dtype(), DType::C128);
+    let got = values(&out);
+    assert_eq!(got[0], c(1000.0, -2500.0));
+    assert!(got[1].re.is_nan());
+    // complex64 stays complex64, as float32 stays float32.
+    let single: Vec<Complex<f32>> = vec![Complex::new(1.5, 2.0)];
+    let s = DataArray::from_array(["x"], ArrayD::from_shape_vec(IxDyn(&[1]), single).unwrap())
+        .unwrap()
+        .with_unit(v.clone());
+    let s = s.to_unit(&mv).unwrap();
+    assert_eq!(s.dtype(), DType::C64);
+    assert_eq!(
+        s.data::<Complex<f32>>().unwrap()[[0]],
+        Complex::new(1500.0, 2000.0)
+    );
+    // Lazily read data converts as it is read (Zarr reads complex data lazily).
+    let path = tmp("convert.zarr");
+    let _ = std::fs::remove_dir_all(&path);
+    let mut ds = Dataset::new();
+    ds.add_array("z", a).unwrap();
+    ds.to_zarr_with(&path, &ZarrOptions::format(ZarrFormat::V3))
+        .unwrap();
+    let opened = open_dataset(&path).unwrap();
+    let lazy = opened.get("z").unwrap();
+    assert!(lazy.variable().is_lazy());
+    let converted = lazy.to_unit(&mv).unwrap();
+    assert_eq!(values(&converted.to_owned())[0], c(1000.0, -2500.0));
+    // An offset has no meaning for a complex number.
+    let celsius = da(vec![c(1.0, 1.0)]).with_unit("degC".parse().unwrap());
+    assert!(matches!(
+        celsius.to_unit(&"K".parse().unwrap()),
+        Err(CoreError::UnsupportedDType { .. })
+    ));
+}
+
+#[test]
 fn functions() {
     let z = c(3.0, 4.0);
     let a = da(vec![z]);
@@ -309,6 +351,45 @@ fn comparisons_and_missing_values() {
     assert_eq!(values(&a.fillna(0.0).unwrap())[2], c(0.0, 0.0));
     assert!(a.equals(&a).unwrap());
     assert!(!a.equals(&b).unwrap());
+}
+
+#[test]
+fn where_and_missing_values() {
+    let z = da(vec![c(1.0, 1.0), c(f64::NAN, 0.0), c(3.0, -2.0)]);
+    let keep = DataArray::from_array(
+        ["x"],
+        ArrayD::from_shape_vec(IxDyn(&[3]), vec![true, false, true]).unwrap(),
+    )
+    .unwrap();
+    // Complex in both branches.
+    let fill = da(vec![c(0.0, 9.0); 3]);
+    let out = annoray::where_(&keep, &z, &fill).unwrap();
+    assert_eq!(out.dtype(), DType::C128);
+    assert_eq!(values(&out)[1], c(0.0, 9.0));
+    // A real branch is promoted, as numpy promotes: complex128 with float64 is complex128...
+    let real = DataArray::from_array(["x"], ArrayD::from_elem(IxDyn(&[3]), 7.0)).unwrap();
+    let out = annoray::where_(&keep, &z, &real).unwrap();
+    assert_eq!(out.dtype(), DType::C128);
+    assert_eq!(values(&out)[1], c(7.0, 0.0));
+    // ...and complex64 with float32 stays complex64.
+    let z64: Vec<Complex<f32>> = vec![Complex::new(1.0, 1.0); 3];
+    let z64 =
+        DataArray::from_array(["x"], ArrayD::from_shape_vec(IxDyn(&[3]), z64).unwrap()).unwrap();
+    let f32s = DataArray::from_array(["x"], ArrayD::from_elem(IxDyn(&[3]), 7.0_f32)).unwrap();
+    assert_eq!(
+        annoray::where_(&keep, &z64, &f32s).unwrap().dtype(),
+        DType::C64
+    );
+    // The other branch is converted into the data's unit.
+    let v = z.clone().with_unit("V".parse().unwrap());
+    let mv = da(vec![c(500.0, 0.0); 3]).with_unit("mV".parse().unwrap());
+    let out = annoray::where_(&keep, &v, &mv).unwrap();
+    assert_eq!(values(&out)[1], c(0.5, 0.0));
+    // Complex data can be missing, so not interpolating it is an error, not a no-op.
+    assert!(matches!(
+        z.interpolate_na("x", &annoray::InterpNaOptions::default()),
+        Err(CoreError::UnsupportedDType { .. })
+    ));
 }
 
 fn sample() -> Dataset {

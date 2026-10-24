@@ -1,0 +1,11 @@
+# Everything CI installs from PyPI, locked to exact versions in constraints.txt (see README.md).
+# Ranges belong in annoray-python/pyproject.toml and docs/requirements.txt; this file only adds
+# what CI installs beside them.
+../annoray-python[test]
+-r ../docs/requirements.txt
+# Tools and extra test references.
+hdf5plugin
+numbagg
+pyright
+ruff
+maturin

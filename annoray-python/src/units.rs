@@ -11,12 +11,13 @@
 
 use std::hash::{Hash, Hasher};
 
+use annoray::num_complex::Complex;
 use annoray::units::{BaseDim, Dimension, UnitKind};
 use annoray::{Quantity, Unit, UnitError as RsUnitError};
 use pyo3::basic::CompareOp;
 use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
-use pyo3::types::{PyFloat, PyString};
+use pyo3::types::{PyComplex, PyFloat, PyString};
 
 use crate::convert::{OrPy, UnitError};
 
@@ -305,9 +306,9 @@ impl PyUnit {
             )?
             .into_any());
         }
-        // A number times a unit is a quantity.
-        match other.extract::<f64>() {
-            Ok(v) => Ok(Py::new(py, PyQuantity::new(v, self.inner.clone())?)?.into_any()),
+        // A number (real or complex) times a unit is a quantity.
+        match PyQuantity::from_number(other, self.inner.clone()) {
+            Ok(q) => Ok(Py::new(py, q)?.into_any()),
             Err(_) => Ok(py.NotImplemented()),
         }
     }
@@ -340,10 +341,9 @@ impl PyUnit {
             .into_any());
         }
         // A number over a unit is a quantity in the reciprocal unit.
-        match other.extract::<f64>() {
-            Ok(v) => Ok(
-                Py::new(py, PyQuantity::new(v, self.inner.recip().map_err(rs_err)?)?)?.into_any(),
-            ),
+        let recip = self.inner.recip().map_err(rs_err)?;
+        match PyQuantity::from_number(other, recip) {
+            Ok(q) => Ok(Py::new(py, q)?.into_any()),
             Err(_) => Ok(py.NotImplemented()),
         }
     }
@@ -363,42 +363,139 @@ impl PyUnit {
     }
 }
 
-/// A number with a unit (`Quantity(2.5, "km")`, or `2.5 * Unit("km")`): annoray's Rust
-/// `Quantity`, with its dimension checked at run time.
+/// A quantity's number: real, or complex.
+pub(crate) type ComplexQuantity = Quantity<annoray::units::Dyn, Complex<f64>>;
+
+/// The quantity a Python `Quantity` holds.
+#[derive(Clone, Debug)]
+pub(crate) enum Q {
+    Real(Quantity),
+    Complex(ComplexQuantity),
+}
+
+impl Q {
+    pub(crate) fn unit(&self) -> &Unit {
+        match self {
+            Self::Real(q) => q.unit(),
+            Self::Complex(q) => q.unit(),
+        }
+    }
+
+    /// As a complex quantity (a real one with no imaginary part).
+    fn widened(&self) -> ComplexQuantity {
+        match self {
+            Self::Real(q) => q.clone().into(),
+            Self::Complex(q) => q.clone(),
+        }
+    }
+
+    /// The number, as a Python `float` or `complex`.
+    pub(crate) fn value_py<'py>(&self, py: Python<'py>) -> Bound<'py, PyAny> {
+        match self {
+            Self::Real(q) => PyFloat::new(py, q.value()).into_any(),
+            Self::Complex(q) => PyComplex::from_doubles(py, q.value().re, q.value().im).into_any(),
+        }
+    }
+
+    /// The same quantity in another unit.
+    pub(crate) fn to(&self, unit: Unit) -> Result<Self, RsUnitError> {
+        Ok(match self {
+            Self::Real(q) => Self::Real(q.to(unit)?),
+            Self::Complex(q) => Self::Complex(q.to(unit)?),
+        })
+    }
+
+    /// `a op b`, real when both are, complex otherwise (as Python's numbers mix).
+    fn binary(
+        a: &Self,
+        b: &Self,
+        real: impl Fn(&Quantity, &Quantity) -> Result<Quantity, RsUnitError>,
+        complex: impl Fn(&ComplexQuantity, &ComplexQuantity) -> Result<ComplexQuantity, RsUnitError>,
+    ) -> Result<Self, RsUnitError> {
+        match (a, b) {
+            (Self::Real(x), Self::Real(y)) => real(x, y).map(Self::Real),
+            _ => complex(&a.widened(), &b.widened()).map(Self::Complex),
+        }
+    }
+}
+
+/// A Python number as a complex one: `complex`, numpy's complex scalars, or anything with
+/// `__complex__`; `None` otherwise.
+fn complex_of(v: &Bound<'_, PyAny>) -> Option<Complex<f64>> {
+    if let Ok(c) = v.cast::<PyComplex>() {
+        return Some(Complex::new(c.real(), c.imag()));
+    }
+    let c = v.call_method0("__complex__").ok()?;
+    let c = c.cast::<PyComplex>().ok()?;
+    Some(Complex::new(c.real(), c.imag()))
+}
+
+/// A number with a unit (`Quantity(2.5, "km")`, `Quantity(3+4j, "V")`, or `2.5 * Unit("km")`):
+/// annoray's Rust `Quantity`, with its dimension checked at run time; the number is a `float`
+/// or a `complex`.
 ///
 /// Arithmetic checks units as data arrays do: `+` and `-` need the same unit (convert with
 /// `.to()` first; adding a plain number works only for dimensionless quantities), `*` and
-/// `/` combine units, `**` takes integer powers. Comparisons convert compatible units, so
-/// `Quantity(1, "km") == Quantity(1000, "m")`; comparing incompatible units is unequal, and
-/// ordering them is an error. Quantities work as operands of data arrays and as labels in
-/// `sel`.
+/// `/` combine units, `**` takes integer powers; a real and a complex operand give a complex
+/// result. Comparisons convert compatible units, so `Quantity(1, "km") == Quantity(1000, "m")`;
+/// comparing incompatible units is unequal, and ordering them is an error. Complex quantities
+/// are compared for equality only (they have no order), and a unit with an offset (°C) does not
+/// convert them. Quantities work as operands of data arrays and as labels in `sel`.
 #[pyclass(frozen, name = "Quantity", module = "annoray", skip_from_py_object)]
 #[derive(Clone)]
 pub(crate) struct PyQuantity {
-    pub(crate) inner: Quantity,
+    pub(crate) inner: Q,
 }
 
 impl PyQuantity {
     pub(crate) fn new(value: f64, unit: Unit) -> PyResult<Self> {
         Ok(Self {
-            inner: Quantity::new(value, unit).map_err(rs_err)?,
+            inner: Q::Real(Quantity::new(value, unit).map_err(rs_err)?),
         })
     }
 
-    /// The other operand: a quantity, or a plain number (dimensionless).
-    fn operand(other: &Bound<'_, PyAny>) -> Option<Quantity> {
+    pub(crate) fn new_complex(value: Complex<f64>, unit: Unit) -> PyResult<Self> {
+        Ok(Self {
+            inner: Q::Complex(ComplexQuantity::new(value, unit).map_err(rs_err)?),
+        })
+    }
+
+    /// `value` (a real or complex Python number) in `unit`.
+    pub(crate) fn from_number(value: &Bound<'_, PyAny>, unit: Unit) -> PyResult<Self> {
+        if let Ok(v) = value.extract::<f64>() {
+            return Self::new(v, unit);
+        }
+        match complex_of(value) {
+            Some(c) => Self::new_complex(c, unit),
+            None => Err(PyTypeError::new_err(format!(
+                "a quantity's magnitude is a real or complex number, not {}",
+                value.get_type().name()?
+            ))),
+        }
+    }
+
+    /// The other operand: a quantity, or a plain number (dimensionless), real or complex.
+    fn operand(other: &Bound<'_, PyAny>) -> Option<Q> {
         if let Ok(q) = other.cast::<PyQuantity>() {
             return Some(q.get().inner.clone());
         }
         if other.is_instance_of::<pyo3::types::PyBool>() {
             return None;
         }
-        let v = other.extract::<f64>().ok()?;
-        Quantity::new(v, Unit::one()).ok()
+        if let Ok(v) = other.extract::<f64>() {
+            return Quantity::new(v, Unit::one()).ok().map(Q::Real);
+        }
+        ComplexQuantity::new(complex_of(other)?, Unit::one())
+            .ok()
+            .map(Q::Complex)
+    }
+
+    fn of(inner: Q) -> Self {
+        Self { inner }
     }
 }
 
-fn wrap(py: Python<'_>, q: Option<Result<Quantity, RsUnitError>>) -> PyResult<Py<PyAny>> {
+fn wrap(py: Python<'_>, q: Option<Result<Q, RsUnitError>>) -> PyResult<Py<PyAny>> {
     match q {
         Some(q) => Ok(Py::new(
             py,
@@ -425,24 +522,25 @@ impl PyQuantity {
             .call1((cls, item))
     }
 
-    /// `Quantity(magnitude, units=None)`: dimensionless without `units`.
+    /// `Quantity(magnitude, units=None)`: dimensionless without `units`; the magnitude is a
+    /// real or complex number.
     #[new]
     #[pyo3(signature = (magnitude, units=None))]
     fn py_new(magnitude: &Bound<'_, PyAny>, units: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
         if units.is_none() && is_astropy(magnitude)? {
             // An astropy Quantity: its value and unit.
-            let (value, unit): (f64, Bound<'_, PyAny>) = magnitude
+            let (value, unit): (Bound<'_, PyAny>, Bound<'_, PyAny>) = magnitude
                 .py()
                 .import("annoray._astropy")?
                 .call_method1("quantity_parts", (magnitude,))?
                 .extract()?;
-            return Self::new(value, unit_from_py(&unit)?);
+            return Self::from_number(&value, unit_from_py(&unit)?);
         }
         let unit = match units {
             Some(u) => unit_from_py(u)?,
             None => Unit::one(),
         };
-        Self::new(magnitude.extract()?, unit)
+        Self::from_number(magnitude, unit)
     }
 
     /// As an `astropy.units.Quantity` (needs astropy).
@@ -450,10 +548,41 @@ impl PyQuantity {
         to_astropy(slf.as_any())
     }
 
-    /// The number, in this quantity's unit.
+    /// The number, in this quantity's unit: a `float`, or a `complex`.
     #[getter]
-    fn magnitude(&self) -> f64 {
-        self.inner.value()
+    fn magnitude<'py>(&self, py: Python<'py>) -> Bound<'py, PyAny> {
+        self.inner.value_py(py)
+    }
+
+    /// The real part, in the same unit.
+    #[getter]
+    fn real(&self) -> Self {
+        match &self.inner {
+            Q::Real(q) => Self::of(Q::Real(q.clone())),
+            Q::Complex(q) => Self::of(Q::Real(q.re().dynamic())),
+        }
+    }
+
+    /// The imaginary part, in the same unit (0 for a real quantity).
+    #[getter]
+    fn imag(&self) -> PyResult<Self> {
+        Ok(match &self.inner {
+            Q::Real(q) => Self::new(0.0, q.unit().clone())?,
+            Q::Complex(q) => Self::of(Q::Real(q.im().dynamic())),
+        })
+    }
+
+    /// The complex conjugate (a real quantity is its own).
+    fn conjugate(&self) -> Self {
+        match &self.inner {
+            Q::Real(_) => self.clone(),
+            Q::Complex(q) => Self::of(Q::Complex(q.conj())),
+        }
+    }
+
+    /// The complex conjugate, as `conjugate()` (numpy's spelling).
+    fn conj(&self) -> Self {
+        self.conjugate()
     }
 
     /// The quantity's dimension.
@@ -478,73 +607,116 @@ impl PyQuantity {
         }
     }
 
-    /// The same quantity in another (compatible) unit.
+    /// The same quantity in another (compatible) unit; for a complex quantity, both parts
+    /// scale, and a unit with an offset (°C) is an error.
     fn to(&self, units: &Bound<'_, PyAny>) -> PyResult<Self> {
-        Ok(Self {
-            inner: self.inner.to(unit_from_py(units)?).map_err(rs_err)?,
-        })
+        Ok(Self::of(
+            self.inner.to(unit_from_py(units)?).map_err(rs_err)?,
+        ))
     }
 
     fn __add__(&self, py: Python<'_>, o: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
-        wrap(py, Self::operand(o).map(|b| &self.inner + &b))
+        wrap(
+            py,
+            Self::operand(o).map(|b| Q::binary(&self.inner, &b, |x, y| x + y, |x, y| x + y)),
+        )
     }
     fn __radd__(&self, py: Python<'_>, o: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
-        wrap(py, Self::operand(o).map(|a| &a + &self.inner))
+        wrap(
+            py,
+            Self::operand(o).map(|a| Q::binary(&a, &self.inner, |x, y| x + y, |x, y| x + y)),
+        )
     }
     fn __sub__(&self, py: Python<'_>, o: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
-        wrap(py, Self::operand(o).map(|b| &self.inner - &b))
+        wrap(
+            py,
+            Self::operand(o).map(|b| Q::binary(&self.inner, &b, |x, y| x - y, |x, y| x - y)),
+        )
     }
     fn __rsub__(&self, py: Python<'_>, o: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
-        wrap(py, Self::operand(o).map(|a| &a - &self.inner))
+        wrap(
+            py,
+            Self::operand(o).map(|a| Q::binary(&a, &self.inner, |x, y| x - y, |x, y| x - y)),
+        )
     }
     fn __mul__(&self, py: Python<'_>, o: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
         if let Ok(u) = o.cast::<PyUnit>() {
             let unit = self.inner.unit().mul(&u.get().inner).map_err(rs_err)?;
-            return Ok(Py::new(py, Self::new(self.inner.value(), unit)?)?.into_any());
+            return Ok(Py::new(py, self.with_unit(unit)?)?.into_any());
         }
-        wrap(py, Self::operand(o).map(|b| &self.inner * &b))
+        wrap(
+            py,
+            Self::operand(o).map(|b| Q::binary(&self.inner, &b, |x, y| x * y, |x, y| x * y)),
+        )
     }
     fn __rmul__(&self, py: Python<'_>, o: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
-        wrap(py, Self::operand(o).map(|a| &a * &self.inner))
+        wrap(
+            py,
+            Self::operand(o).map(|a| Q::binary(&a, &self.inner, |x, y| x * y, |x, y| x * y)),
+        )
     }
     fn __truediv__(&self, py: Python<'_>, o: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
         if let Ok(u) = o.cast::<PyUnit>() {
             let unit = self.inner.unit().div(&u.get().inner).map_err(rs_err)?;
-            return Ok(Py::new(py, Self::new(self.inner.value(), unit)?)?.into_any());
+            return Ok(Py::new(py, self.with_unit(unit)?)?.into_any());
         }
-        wrap(py, Self::operand(o).map(|b| &self.inner / &b))
+        wrap(
+            py,
+            Self::operand(o).map(|b| Q::binary(&self.inner, &b, |x, y| x / y, |x, y| x / y)),
+        )
     }
     fn __rtruediv__(&self, py: Python<'_>, o: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
-        wrap(py, Self::operand(o).map(|a| &a / &self.inner))
+        wrap(
+            py,
+            Self::operand(o).map(|a| Q::binary(&a, &self.inner, |x, y| x / y, |x, y| x / y)),
+        )
     }
 
     fn __pow__(&self, n: i32, _modulo: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
-        Ok(Self {
-            inner: self.inner.powi(n).map_err(rs_err)?,
-        })
+        Ok(Self::of(match &self.inner {
+            Q::Real(q) => Q::Real(q.powi(n).map_err(rs_err)?),
+            Q::Complex(q) => Q::Complex(q.powi(n).map_err(rs_err)?),
+        }))
     }
 
     fn __neg__(&self) -> Self {
-        Self {
-            inner: -&self.inner,
-        }
+        Self::of(match &self.inner {
+            Q::Real(q) => Q::Real(-q),
+            Q::Complex(q) => Q::Complex(-q),
+        })
     }
 
     fn __pos__(&self) -> Self {
         self.clone()
     }
 
+    /// The magnitude: a real quantity in the same unit (for a complex one, its modulus).
     fn __abs__(&self) -> Self {
-        if self.inner.value() < 0.0 {
-            self.__neg__()
-        } else {
-            self.clone()
+        match &self.inner {
+            Q::Real(q) if q.value() < 0.0 => self.__neg__(),
+            Q::Real(_) => self.clone(),
+            Q::Complex(q) => Self::of(Q::Real(q.norm())),
         }
     }
 
-    /// Only dimensionless quantities are plain numbers (`Quantity(5, "%")` is 0.05).
+    /// Only dimensionless quantities are plain numbers (`Quantity(5, "%")` is 0.05); a complex
+    /// one is not a `float` (as `float(1j)` is an error).
     fn __float__(&self) -> PyResult<f64> {
-        self.inner.as_number().map_err(rs_err)
+        match &self.inner {
+            Q::Real(q) => q.as_number().map_err(rs_err),
+            Q::Complex(_) => Err(PyTypeError::new_err(
+                "a complex quantity is not a float: take .real, .imag or abs() first",
+            )),
+        }
+    }
+
+    /// Only dimensionless quantities are plain numbers.
+    fn __complex__<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyComplex>> {
+        let c = match &self.inner {
+            Q::Real(q) => Complex::new(q.as_number().map_err(rs_err)?, 0.0),
+            Q::Complex(q) => q.as_number().map_err(rs_err)?,
+        };
+        Ok(PyComplex::from_doubles(py, c.re, c.im))
     }
 
     fn __richcmp__(&self, other: &Bound<'_, PyAny>, op: CompareOp) -> PyResult<Py<PyAny>> {
@@ -552,28 +724,43 @@ impl PyQuantity {
         let Some(b) = Self::operand(other) else {
             return Ok(py.NotImplemented());
         };
-        let r = match self.inner.compare(&b) {
-            Some(o) => op.matches(o),
-            None if !self.inner.unit().is_convertible(b.unit()) => match op {
-                CompareOp::Eq => false,
-                CompareOp::Ne => true,
+        let convertible = self.inner.unit().is_convertible(b.unit());
+        let r = match (&self.inner, &b) {
+            (Q::Real(x), Q::Real(y)) => match x.compare(y) {
+                Some(o) => op.matches(o),
+                None if !convertible => match op {
+                    CompareOp::Eq => false,
+                    CompareOp::Ne => true,
+                    _ => {
+                        return Err(UnitError::new_err(format!(
+                            "incompatible units: {} and {}",
+                            self.inner.unit(),
+                            b.unit()
+                        )));
+                    }
+                },
+                // NaN.
+                None => matches!(op, CompareOp::Ne),
+            },
+            // Complex numbers have no order: equality only (after converting compatible units).
+            (x, y) => match op {
+                CompareOp::Eq => x.widened() == y.widened(),
+                CompareOp::Ne => x.widened() != y.widened(),
                 _ => {
-                    return Err(UnitError::new_err(format!(
-                        "incompatible units: {} and {}",
-                        self.inner.unit(),
-                        b.unit()
-                    )));
+                    return Err(PyTypeError::new_err(
+                        "complex quantities have no order: compare .real, .imag or abs()",
+                    ));
                 }
             },
-            // NaN.
-            None => matches!(op, CompareOp::Ne),
         };
         Ok(r.into_pyobject(py)?.to_owned().into_any().unbind())
     }
 
-    /// `f"{q:.2f}"` formats the magnitude and appends the unit: `"2.50 km"`.
+    /// `f"{q:.2f}"` formats the magnitude and appends the unit: `"2.50 km"`, `"(3+4j) V"`.
     fn __format__(&self, py: Python<'_>, spec: &str) -> PyResult<String> {
-        let m: String = PyFloat::new(py, self.inner.value())
+        let m: String = self
+            .inner
+            .value_py(py)
             .call_method1("__format__", (spec,))?
             .extract()?;
         Ok(format!("{m} {}", self.inner.unit()))
@@ -584,10 +771,20 @@ impl PyQuantity {
     }
 
     fn __repr__(&self, py: Python<'_>) -> PyResult<String> {
-        let m: String = PyFloat::new(py, self.inner.value()).repr()?.extract()?;
+        let m: String = self.inner.value_py(py).repr()?.extract()?;
         Ok(format!(
             "Quantity({m}, {:?})",
             self.inner.unit().to_string()
         ))
+    }
+}
+
+impl PyQuantity {
+    /// The same number in `unit`.
+    fn with_unit(&self, unit: Unit) -> PyResult<Self> {
+        match &self.inner {
+            Q::Real(q) => Self::new(q.value(), unit),
+            Q::Complex(q) => Self::new_complex(q.value(), unit),
+        }
     }
 }

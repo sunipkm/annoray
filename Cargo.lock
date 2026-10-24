@@ -89,6 +89,7 @@ name = "annoray-units"
 version = "0.0.0"
 dependencies = [
  "jiff",
+ "num-complex",
  "proptest",
  "thiserror",
  "typenum",

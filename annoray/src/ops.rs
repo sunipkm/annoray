@@ -343,7 +343,7 @@ fn complex_op(
 }
 
 /// `complex64` or `float32` data as `complex64`.
-fn to_c64(a: &TypedArray<View<'_>>) -> Result<ArrayD<Complex<f32>>> {
+pub(crate) fn to_c64(a: &TypedArray<View<'_>>) -> Result<ArrayD<Complex<f32>>> {
     match a {
         TypedArray::C64(x) => Ok(x.to_owned()),
         TypedArray::F32(x) => Ok(x.mapv(|v| Complex::new(v, 0.0))),
@@ -1136,6 +1136,25 @@ fn converted(a: &TypedArray<View<'_>>, conv: &Converter) -> Result<TypedArray<cr
     }
     if let TypedArray::F64(x) = a {
         return Ok(TypedArray::F64(go(x, |v: f64| conv.apply(v))));
+    }
+    // Complex numbers: both parts scaled (`complex64` stays `complex64`, as `f32` stays `f32`);
+    // an offset has no meaning for them.
+    if matches!(a, TypedArray::C64(_) | TypedArray::C128(_)) && conv.offset() != 0.0 {
+        return Err(CoreError::UnsupportedDType {
+            op: "conversion to an affine unit",
+            dtype: a.dtype(),
+        });
+    }
+    if let TypedArray::C64(x) = a {
+        let part = |v: f32| conv.apply(f64::from(v)) as f32;
+        return Ok(TypedArray::C64(go(x, |z: Complex<f32>| {
+            Complex::new(part(z.re), part(z.im))
+        })));
+    }
+    if let TypedArray::C128(x) = a {
+        return Ok(TypedArray::C128(go(x, |z: Complex<f64>| {
+            Complex::new(conv.apply(z.re), conv.apply(z.im))
+        })));
     }
     Ok(TypedArray::F64(to_f64(a, Some(conv))?))
 }

@@ -45,8 +45,8 @@ python="${PYTHON:-python3}"
 if [[ $install -eq 1 ]]; then
     echo "==> Building the extension (maturin develop --release)"
     (cd annoray-python && maturin develop --release)
-    echo "==> Installing documentation requirements"
-    "$python" -m pip install --quiet -r docs/requirements.txt
+    echo "==> Installing documentation requirements (at CI's versions, ci/constraints.txt)"
+    "$python" -m pip install --quiet -r docs/requirements.txt -c ci/constraints.txt
 fi
 
 echo "==> Checking the API reference covers every public name"

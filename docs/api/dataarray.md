@@ -241,6 +241,9 @@ print(temp.diff("time").isel(station=0).values)
 print(temp.differentiate("time").units)  # a rate: kelvin per second
 print(temp.shift(time=1).isel(station=0).values)
 print(temp.clip(max=ar.Quantity(10.0, "degC")).isel(station=0).values)
+# Complex data: the parts, the conjugate, and the magnitude in the data's unit.
+z = ar.DataArray([3 + 4j, 1 - 1j], dims="x", units="V")
+print(z.real.values, z.imag.values, z.conj().values, abs(z).values, abs(z).units)
 ```
 
 ```{eval-rst}

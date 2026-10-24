@@ -24,6 +24,9 @@ Runtime and compile-time physical units with exact scales; the units layer of
 - **Dimension-typed quantities:** `Quantity<D>` with `typenum` exponents over the eight base
   dimensions (SI + angle); derived dimensions are composed with `dimension!`, and dimensional
   errors are type errors.
+- **Complex quantities:** `Quantity<D, Complex<f64>>` holds a complex number under the same
+  rules: conversion scales both parts (units with an offset are refused), and complex quantities
+  have no order.
 
 ```rust
 use annoray_units::{Unit, UnitPolicy};

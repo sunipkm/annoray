@@ -83,7 +83,7 @@ print(list(ds.data_vars), list(ar.open_dataset(tmp / "small.nc").data_vars))
 
 | In the file | In annoray |
 |---|---|
-| Complex numbers | `complex64`/`complex128` values, from a compound of two floats named `r`/`i` (h5py, netCDF4-python's nc-complex) or `real`/`imag`; written as h5py's `r`/`i` compound. netCDF-3 has no complex type. |
+| Complex numbers | `complex64`/`complex128` values, from a compound of two floats named `r`/`i` (h5py, netCDF4-python's nc-complex) or `real`/`imag`; written as h5py's `r`/`i` compound. They are read when the file is opened, not lazily (Zarr's complex arrays are read lazily). netCDF-3 has no complex type. |
 | Compound (record) variables | One variable per field, `var.field` (nested fields dotted, array members with dimensions of their own); written back as one compound variable when every field is written. |
 | Variable-length (ragged) variables | A CF contiguous ragged array: the values along `var_obs`, the lengths in `var_count`; written back as a variable-length variable. |
 | Enumerations | The integer values, with the names in `encoding["dtype"].metadata` (`enum`, `enum_name`), as in xarray; written back as the same type. h5py's booleans read as booleans. |

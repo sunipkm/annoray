@@ -153,6 +153,28 @@ print(local.time.dt.hour.values[:3])  # 20:00, 21:00, 22:00 on the evening befor
 print(local.resample(time="1D").mean().sizes)  # local days: one more than in UTC
 ```
 
+## Complex numbers
+
+`complex64` and `complex128` data work as in numpy, with units: arithmetic, the numpy functions,
+`sum`, `mean` and `var` (real, in the unit squared), conversion (both parts scale), and storage
+in netCDF-4/HDF5 and Zarr. A single complex value with a unit is a complex
+{class}`~annoray.Quantity`, so `.item()` keeps the unit. Complex numbers have no order, so `max` and `<` are errors, and a
+cast to a real type refuses to drop the imaginary part silently (see the
+[differences from xarray](../xarray-differences.md#element-types)). Interpolation, rolling
+windows and cumulative reductions do not support them yet.
+
+```{code-cell} python
+z = ar.DataArray([3 + 4j, 1 - 1j], dims="x", units="V")
+print(abs(z).values, abs(z).units)
+print(z.to("mV").values)
+print(z.var().values, z.var().units)
+print(repr(z.sum().item()))
+try:
+    z.max()
+except TypeError as e:
+    print("TypeError:", e)
+```
+
 ## Files
 
 netCDF and Zarr are read and written by annoray's own backends. Files open lazily:

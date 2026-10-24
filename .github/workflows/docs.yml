@@ -56,10 +56,11 @@ jobs:
       # The extension is built once and installed; the docs import it for docstrings.
       - name: Build and install annoray
         run: |
-          pip install maturin
+          pip install maturin -c ci/constraints.txt
           maturin build --release -m annoray-python/Cargo.toml --out dist
-          pip install dist/*.whl
-      - run: pip install -r docs/requirements.txt
+          pip install dist/*.whl -c ci/constraints.txt
+      # At the versions in ci/constraints.txt (see ci/README.md).
+      - run: pip install -r docs/requirements.txt -c ci/constraints.txt
       - run: python docs/_tools/check_api.py
       - name: Build the documentation
         env:

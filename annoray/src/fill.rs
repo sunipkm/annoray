@@ -594,7 +594,9 @@ impl<S: Repr> DataArrayBase<S> {
         let n = self.variable().len_of(dim)?;
         match self.variable().dtype() {
             DType::F64 | DType::F32 => {}
-            d @ (DType::DateTime | DType::CfDate | DType::TimeDelta) => {
+            // Types that can be missing but are not interpolated here (other types cannot
+            // be missing, and come back as they are).
+            d @ (DType::DateTime | DType::CfDate | DType::TimeDelta | DType::C64 | DType::C128) => {
                 return Err(CoreError::UnsupportedDType {
                     op: "interpolate_na",
                     dtype: d,

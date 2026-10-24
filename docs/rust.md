@@ -41,8 +41,35 @@ element type.
 as `annoray::num_complex`), numpy's `complex64` and `complex128`. They support `+ - * /` with
 any numeric operand, the complex functions of `MathFn` (with `Conj`, `Real`, `Imag` and
 `Angle`), `sum`/`prod`/`mean` (complex) and `var`/`std` (real), casts, `==`/`!=`, missing
-values (NaN in either part), and storage in netCDF-4/HDF5 and Zarr. They have no order:
-`min`, `max`, sorting and `<` are errors.
+values (NaN in either part), and storage in netCDF-4/HDF5 and Zarr. Unit conversion
+(`to_unit`) scales both parts, and `complex64` stays `complex64`; a unit with an offset (°C)
+cannot be converted. Casts to a real type fail for a value with a non-zero imaginary part.
+`where` and filling missing values work as for floats. They have no order: `min`, `max`,
+sorting and `<` are errors. Interpolation (`interp`, `interpolate_na`), rolling windows and
+cumulative reductions are not supported for them yet, and refuse them with an error.
+netCDF-4/HDF5 complex variables are read when the file is opened, not lazily; Zarr's are read
+lazily.
+
+A single complex value with a unit is a `Quantity<K, Complex<f64>>` (`Quantity`'s second
+parameter is its number type, `f64` by default). It follows the rules of real quantities, typed
+dimensions included, with the differences of complex arrays: conversion scales both parts (a
+unit with an offset is `UnitError::ComplexOffset`), and there is no order (`<` does not
+compile). `re`, `im` and `norm` are real quantities in the same unit, `arg` is in radians, and
+a real quantity becomes a complex one with `into()`.
+
+```rust
+use annoray::num_complex::Complex;
+use annoray::units::Quantity;
+use annoray::units::dims::{Current, Voltage};
+
+let v = Quantity::<Voltage, _>::new(Complex::new(3.0, 4.0), "V")?;
+let i = Quantity::<Current, _>::new(Complex::new(0.0, 2.0), "A")?;
+let z = (&v / &i)?; // an impedance, dimension checked by the compiler
+assert_eq!(z.value(), Complex::new(2.0, -1.5));
+assert_eq!(v.to("mV")?.value(), Complex::new(3000.0, 4000.0));
+assert_eq!(v.norm().to_string(), "5 V");
+# Ok::<(), annoray::units::UnitError>(())
+```
 
 ## Dates, times and time zones
 

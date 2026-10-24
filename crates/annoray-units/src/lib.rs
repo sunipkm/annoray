@@ -62,7 +62,7 @@ use std::str::FromStr;
 pub use dimension::{BaseDim, Dimension};
 pub use error::UnitError;
 pub use instant::{Duration, Instant};
-pub use quantity::{Dyn, IntoUnit, Kind, Quantity, SameDimension};
+pub use quantity::{Dyn, IntoUnit, Kind, Quantity, SameDimension, Scalar};
 pub use scale::{Rational, Scale};
 pub use static_unit::{StaticUnit, StaticValue, converter_from, converter_into};
 pub use time::{Calendar, CfDate, EpochCodec, RefDate};

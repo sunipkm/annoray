@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import warnings
 from collections.abc import Callable, Sequence
 from typing import Any, Literal, Self, cast
 
@@ -64,7 +65,12 @@ def infer_freq(index: Any) -> str | None:
     values = np.asarray(index.values if isinstance(index, DataArray) else index)
     if values.dtype.kind != "M":
         raise TypeError("infer_freq needs datetime64 values")
-    return pd.infer_freq(pd.DatetimeIndex(values))
+    # pandas 3.1 warns that it will return an offset instead of the string (as xarray's does);
+    # the string is asked for in either form.
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", getattr(pd.errors, "Pandas4Warning", FutureWarning))
+        freq: Any = pd.infer_freq(pd.DatetimeIndex(values))
+    return freq if freq is None or isinstance(freq, str) else freq.freqstr
 
 
 # Options that only change speed or display: accepted, with no effect.

@@ -245,9 +245,9 @@ def combine_first(obj: Any, other: Any) -> Any:
 
 
 def fillna(obj: Any, value: Any) -> Any:
-    """Missing values replaced by ``value``: a number (in the data's unit; beside data with a
-    unit, only 0), a quantity (converted), a DataArray (aligned, left join), or for a
-    Dataset a Dataset or a mapping of variable names to values."""
+    """Missing values replaced by ``value``: a number, real or complex (in the data's unit;
+    beside data with a unit, only 0), a quantity (converted), a DataArray (aligned, left
+    join), or for a Dataset a Dataset or a mapping of variable names to values."""
     from annoray import align, where
 
     if isinstance(obj, Dataset):
@@ -262,11 +262,21 @@ def fillna(obj: Any, value: Any) -> Any:
         a, b = align(obj, value, join="left")
         return where(a.notnull(), a, b)
     if isinstance(value, Quantity) or hasattr(value, "magnitude"):
+        q = Quantity(value.magnitude, str(value.units))
+        if isinstance(q.magnitude, complex):
+            # In the data's unit (both parts scaled); real data become complex, as with where.
+            fill = q.to(obj.units).magnitude if obj.units is not None else complex(q)
+            return where(obj.notnull(), obj, DataArray(np.asarray(fill), units=obj.units))
         if obj.units is None:
-            return obj._fillna_number(float(value))
-        return obj._fillna_number(
-            float(Quantity(value.magnitude, str(value.units)).to(obj.units).magnitude)
-        )
+            return obj._fillna_number(float(q))
+        return obj._fillna_number(cast(float, q.to(obj.units).magnitude))  # real here
+    if isinstance(value, complex | np.complexfloating) and not isinstance(value, float):
+        # A complex fill: as for a real number, only 0 or NaN without a unit.
+        if obj.units is not None and value != 0 and not np.isnan(value):
+            raise UnitError(
+                f"a number without a unit cannot fill data in {obj.units}; give a Quantity"
+            )
+        return where(obj.notnull(), obj, DataArray(np.asarray(value), units=obj.units))
     number = float(value)
     if obj.units is not None and number != 0 and not np.isnan(number):
         raise UnitError(f"a number without a unit cannot fill data in {obj.units}; give a Quantity")
@@ -344,11 +354,15 @@ def _pad_array(
     if fill is not None:
         if isinstance(fill, Quantity) or hasattr(fill, "magnitude"):
             q = Quantity(fill.magnitude, str(fill.units))
-            fill = q.to(da.units).magnitude if da.units else float(q)
+            number = complex if isinstance(q.magnitude, complex) else float
+            fill = q.to(da.units).magnitude if da.units else number(q)
         elif da.units is not None and fill != 0 and not np.isnan(fill):
             raise UnitError(
                 f"a number without a unit cannot pad data in {da.units}; give a Quantity"
             )
+    if isinstance(fill, complex | np.complexfloating) and da.dtype.kind != "c":
+        # numpy would drop the imaginary part.
+        raise TypeError(f"a complex value cannot pad {da.dtype} data; convert the data first")
     axes = [widths.get(d, (0, 0)) for d in da.dims]
     values = _pad_values(da.values, axes, mode, fill)
     new_coords = {}
@@ -397,8 +411,11 @@ def rank(obj: Any, dim: str, *, pct: bool = False, keep_attrs: bool | None = Non
             lambda v: rank(v, dim, pct=pct, keep_attrs=keep_attrs) if dim in v.dims else v
         )
     axis = obj.dims.index(dim)
-    values = np.asarray(obj.values, dtype=float)
-    ranked = np.apply_along_axis(_rank_1d, axis, values, pct)
+    values = np.asarray(obj.values)
+    if values.dtype.kind == "c":
+        # Complex numbers have no order (numpy would rank their real parts).
+        raise TypeError(f"rank is not supported for dtype {values.dtype}")
+    ranked = np.apply_along_axis(_rank_1d, axis, values.astype(float), pct)
     return obj.copy(data=ranked).pipe(_strip_unit, keep_attrs)
 
 

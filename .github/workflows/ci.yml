@@ -52,7 +52,7 @@ jobs:
       - name: Python xarray reads our files
         if: matrix.os == 'ubuntu-latest'
         run: |
-          pip install xarray netCDF4 cftime h5py hdf5plugin
+          pip install xarray netCDF4 cftime h5py hdf5plugin -c ci/constraints.txt
           cargo test -p annoray --features netcdf-c --test netcdf_io -- --ignored python
           cargo test -p annoray-hdf5 --test write_round_trip -- --ignored
           cargo test -p annoray --test nat -- --ignored
@@ -76,15 +76,16 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      # hdf5plugin: imported by the fixture scripts pyright checks. ruff is pinned: its default
-      # rules change between releases, and the package's config selects none of its own.
-      - run: pip install "./annoray-python[test]" hdf5plugin ruff==0.17.1 pyright
+      # Every package at its version in ci/constraints.txt (see ci/README.md); ruff's matters
+      # most, as its default rules change between releases. hdf5plugin: imported by the fixture
+      # scripts pyright checks.
+      - run: pip install "./annoray-python[test]" hdf5plugin ruff pyright -c ci/constraints.txt
       # numbagg (with numba and llvmlite, ~160 MB) is only the reference for rolling_exp,
       # whose arithmetic does not depend on the platform: one job is enough. Elsewhere those
       # tests skip.
       - name: Reference for rolling_exp
         if: matrix.os == 'ubuntu-latest'
-        run: pip install --no-cache-dir numbagg
+        run: pip install --no-cache-dir numbagg -c ci/constraints.txt
       # Text read or written without an encoding takes the locale's (cp1252 on Windows): the
       # warning makes it an error in annoray and its tests on every platform (pyproject.toml).
       - run: pytest annoray-python/tests

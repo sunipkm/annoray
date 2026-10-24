@@ -170,8 +170,7 @@ pub(crate) fn quantity_parts<'py>(
 ) -> PyResult<Option<(Bound<'py, PyAny>, String)>> {
     if let Ok(q) = v.cast::<crate::units::PyQuantity>() {
         let q = &q.get().inner;
-        let m = pyo3::types::PyFloat::new(v.py(), q.value()).into_any();
-        return Ok(Some((m, q.unit().to_string())));
+        return Ok(Some((q.value_py(v.py()), q.unit().to_string())));
     }
     if !(v.hasattr("magnitude")? && v.hasattr("units")?) {
         return Ok(None);

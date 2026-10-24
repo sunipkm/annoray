@@ -79,6 +79,15 @@ pub enum UnitError {
     /// 2262-04-11), or is missing.
     #[error("{0} is outside the range of datetime64[ns] (1677-09-21 to 2262-04-11)")]
     InstantRange(String),
+    /// A complex number cannot be converted to or from a unit with an offset (°C, °F): the
+    /// offset has no meaning for it.
+    #[error("{from} → {to} has an offset, which has no meaning for a complex number")]
+    ComplexOffset {
+        /// The unit converted from.
+        from: String,
+        /// The unit converted to.
+        to: String,
+    },
     /// A time zone name is neither `UTC`, an offset such as `+05:30`, nor an IANA zone known
     /// to the time zone database.
     #[error(

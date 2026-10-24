@@ -178,8 +178,36 @@ fn select(
         });
     };
     let c = (c.view(), cd);
+    let complex = |d: DType| matches!(d, DType::C64 | DType::C128);
     if xt.dtype() == yt.dtype() && conv.is_none() {
         same_type(c, (xt, xd), (yt, yd), od, shape)
+    } else if (complex(xt.dtype()) || complex(yt.dtype()))
+        && is_number(xt.dtype())
+        && is_number(yt.dtype())
+    {
+        // As numpy promotes: complex64 with float32 (or complex64) stays complex64.
+        let narrow = |d: DType| matches!(d, DType::C64 | DType::F32);
+        if conv.is_none() && narrow(xt.dtype()) && narrow(yt.dtype()) {
+            let (a, b) = (crate::ops::to_c64(xt)?, crate::ops::to_c64(yt)?);
+            return Ok(TypedArray::C64(pick(
+                c,
+                (a.view(), xd),
+                (b.view(), yd),
+                od,
+                shape,
+            )?));
+        }
+        let (a, b) = (
+            crate::ops::to_c128(xt, None)?,
+            crate::ops::to_c128(yt, conv)?,
+        );
+        Ok(TypedArray::C128(pick(
+            c,
+            (a.view(), xd),
+            (b.view(), yd),
+            od,
+            shape,
+        )?))
     } else if is_number(xt.dtype()) && is_number(yt.dtype()) {
         let (a, b) = (to_f64(xt, None)?, to_f64(yt, conv)?);
         Ok(TypedArray::F64(pick(
@@ -338,7 +366,8 @@ fn same_type(
         };
     }
     Ok(same!(
-        F32, F64, I8, I16, I32, I64, U8, U16, U32, U64, Bool, Str, DateTime, CfDate, TimeDelta
+        F32, F64, C64, C128, I8, I16, I32, I64, U8, U16, U32, U64, Bool, Str, DateTime, CfDate,
+        TimeDelta
     ))
 }
 
