@@ -1,0 +1,1508 @@
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../" data-theme="auto">
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Units and quantities &#8212; annoray</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "auto";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "auto";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../_static/styles/theme.css?digest=18bd87630a240e9c25be" rel="stylesheet" />
+<link href="../_static/styles/pydata-sphinx-theme.css?digest=18bd87630a240e9c25be" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../_static/mystnb.11b39860a7a0cbfd473a3ad8a317855267ff0bd372690045ca344a6b62be495e.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
+  
+  <!-- So that users can add custom icons -->
+  <script defer src="../_static/scripts/fontawesome.js?digest=18bd87630a240e9c25be"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=18bd87630a240e9c25be" />
+<link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=18bd87630a240e9c25be" />
+
+    <script src="../_static/documentation_options.js?v=8446fafd"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../_static/copybutton.js?v=f281be69"></script>
+    <script src="../_static/design-tabs.js?v=f930bc37"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'user-guide/units';</script>
+    <script>
+        DOCUMENTATION_OPTIONS.theme_version = '0.23.0';
+        DOCUMENTATION_OPTIONS.theme_switcher_json_url = 'https://sunipkm.github.io/annoray/switcher.json';
+        DOCUMENTATION_OPTIONS.theme_switcher_version_match = '0.0.1-pre3';
+        DOCUMENTATION_OPTIONS.show_version_warning_banner =
+            false;
+        </script>
+    <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Dates, times and time zones" href="time.html" />
+    <link rel="prev" title="User guide" href="index.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="color-scheme" content="light dark"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="0.0.1-pre3" />
+  
+    
+    <script src="../_static/searchtools.js"></script>
+    <script src="../_static/language_data.js"></script>
+    <script src="../searchindex.js"></script>
+  
+  </head>
+  <body data-default-mode="auto">
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+  
+  
+  
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header id="pst-header" class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button type="button" class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-3 navbar-header-items__start">
+    
+      <div class="navbar-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../index.html">
+  
+  
+  
+  
+  
+  
+    <p class="title logo__title">annoray</p>
+  
+</a></div>
+    
+  </div>
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    <div class="me-auto navbar-header-items__center">
+      
+        <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../getting-started/installation.html">
+    Installation
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../getting-started/overview.html">
+    Overview
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../getting-started/examples.html">
+    Examples
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../xarray-differences.html">
+    Differences from xarray
+  </a>
+</li>
+
+
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="index.html">
+    User guide
+  </a>
+</li>
+
+            <li class="nav-item dropdown">
+                <button class="btn dropdown-toggle nav-item" type="button"
+                data-bs-toggle="dropdown" aria-expanded="false"
+                aria-controls="pst-nav-more-links">
+                    More
+                </button>
+                <ul id="pst-nav-more-links" class="dropdown-menu">
+                    
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="../api/index.html">
+    API reference
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="../rust.html">
+    Rust crates
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="../performance.html">
+    Performance
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-external" href="https://docs.rs/annoray">
+    Rust API
+  </a>
+</li>
+
+                </ul>
+            </li>
+            
+  </ul>
+</nav></div>
+      
+    </div>
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button type="button" class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+        </div>
+      
+      
+        <div class="navbar-item">
+<div class="version-switcher__container dropdown pst-js-only">
+  <button id="pst-version-switcher-button-2"
+    type="button"
+    class="version-switcher__button btn btn-sm dropdown-toggle"
+    data-bs-toggle="dropdown"
+    aria-haspopup="listbox"
+    aria-controls="pst-version-switcher-list-2"
+    aria-label="Version switcher list"
+  >
+    Choose version  <!-- this text may get changed later by javascript -->
+    <span class="caret"></span>
+  </button>
+  <div id="pst-version-switcher-list-2"
+    class="version-switcher__menu dropdown-menu list-group-flush py-0"
+    role="listbox" aria-labelledby="pst-version-switcher-button-2">
+    <!-- dropdown will be populated by javascript on page load -->
+  </div>
+</div></div>
+      
+        <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button type="button" class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+      
+        <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/sunipkm/annoray" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-square-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
+        </li>
+</ul></div>
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button type="button" class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+    </div>
+  
+
+  
+    <button type="button" class="pst-navbar-icon sidebar-toggle secondary-toggle" aria-label="On this page">
+      <span class="fa-solid fa-outdent"></span>
+    </button>
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../getting-started/installation.html">
+    Installation
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../getting-started/overview.html">
+    Overview
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../getting-started/examples.html">
+    Examples
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../xarray-differences.html">
+    Differences from xarray
+  </a>
+</li>
+
+
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="index.html">
+    User guide
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../api/index.html">
+    API reference
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../rust.html">
+    Rust crates
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../performance.html">
+    Performance
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-external" href="https://docs.rs/annoray">
+    Rust API
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+<div class="version-switcher__container dropdown pst-js-only">
+  <button id="pst-version-switcher-button-3"
+    type="button"
+    class="version-switcher__button btn btn-sm dropdown-toggle"
+    data-bs-toggle="dropdown"
+    aria-haspopup="listbox"
+    aria-controls="pst-version-switcher-list-3"
+    aria-label="Version switcher list"
+  >
+    Choose version  <!-- this text may get changed later by javascript -->
+    <span class="caret"></span>
+  </button>
+  <div id="pst-version-switcher-list-3"
+    class="version-switcher__menu dropdown-menu list-group-flush py-0"
+    role="listbox" aria-labelledby="pst-version-switcher-button-3">
+    <!-- dropdown will be populated by javascript on page load -->
+  </div>
+</div></div>
+        
+          <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button type="button" class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+        
+          <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/sunipkm/annoray" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-square-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
+        </li>
+</ul></div>
+        
+      </div>
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item pst-sidebar-collapse"><button type="button" id="pst-collapse-sidebar-button" aria-expanded="true" aria-controls="pst-primary-sidebar">
+  <svg class="pst-icon" role="img" aria-hidden="true" focusable="false" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+    <path fill="currentColor" d="M3 15.5C2.36232 15.5 1.74874 15.2564 1.28478 14.8189C0.820828 14.3815 0.541576 13.7832 0.504167 13.1467L0.5 13L0.5 3C0.499965 2.36232 0.743605 1.74874 1.18107 1.28478C1.61854 0.820828 2.21676 0.541576 2.85333 0.504167L3 0.5L13 0.5C13.6377 0.499965 14.2513 0.743605 14.7152 1.18107C15.1792 1.61854 15.4584 2.21676 15.4958 2.85333L15.5 3L15.5 13C15.5 13.6377 15.2564 14.2513 14.8189 14.7152C14.3815 15.1792 13.7832 15.4584 13.1467 15.4958L13 15.5L3 15.5ZM3 13.8333L10.5 13.8333L10.5 2.16667L3 2.16667C2.79589 2.16669 2.59889 2.24163 2.44636 2.37726C2.29383 2.5129 2.19638 2.69979 2.1725 2.9025L2.16667 3L2.16667 13C2.16669 13.2041 2.24163 13.4011 2.37726 13.5536C2.5129 13.7062 2.69979 13.8036 2.9025 13.8275L3 13.8333ZM6.65583 10.325L6.5775 10.2558L4.91083 8.58917C4.76735 8.44567 4.68116 8.25476 4.66843 8.05223C4.65569 7.84971 4.71729 7.6495 4.84167 7.48917L4.91083 7.41083L6.5775 5.74417C6.72747 5.59471 6.9287 5.50794 7.14032 5.50148C7.35194 5.49502 7.55809 5.56935 7.7169 5.70937C7.8757 5.8494 7.97525 6.04463 7.99533 6.25539C8.01541 6.46616 7.95451 6.67667 7.825 6.84417L7.75583 6.9225L6.67917 8L7.75583 9.0775C7.89931 9.22099 7.98551 9.41191 7.99824 9.61443C8.01097 9.81695 7.94938 10.0172 7.825 10.1775L7.75583 10.2558C7.61234 10.3993 7.42142 10.4855 7.2189 10.4982C7.01638 10.511 6.81617 10.4494 6.65583 10.325Z"/>
+  </svg>
+  <span class="pst-collapse-sidebar-label">Collapse Sidebar</span>
+  <span class="pst-expand-sidebar-label">Expand Sidebar</span>
+</button></div>
+        <div class="sidebar-primary-item">
+
+<nav class="bd-docs-nav bd-links"
+     aria-label="Section Navigation">
+  <p class="bd-links__title" role="heading" aria-level="1">Section Navigation</p>
+  <div class="bd-toc-item navbar-nav"><ul class="current nav bd-sidenav">
+<li class="toctree-l1 current active"><a aria-current="page" class="current reference internal" href="#">Units and quantities</a></li>
+<li class="toctree-l1"><a class="reference internal" href="time.html">Dates, times and time zones</a></li>
+<li class="toctree-l1"><a class="reference internal" href="io.html">Reading and writing files</a></li>
+</ul>
+</div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+<nav aria-label="Breadcrumb" class="d-print-none">
+  <ul class="bd-breadcrumbs">
+    
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="../index.html" class="nav-link" aria-label="Home">
+        <i class="fa-solid fa-home"></i>
+      </a>
+    </li>
+    
+    <li class="breadcrumb-item"><a href="index.html" class="nav-link">User guide</a></li>
+    
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">Units and quantities</span></li>
+  </ul>
+</nav>
+</div>
+      
+    </div>
+  
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section id="units-and-quantities">
+<h1>Units and quantities<a class="headerlink" href="#units-and-quantities" title="Link to this heading">#</a></h1>
+<p>In annoray a physical unit is part of the data, not an attribute beside it. Every
+<a class="reference internal" href="../api/generated/annoray.DataArray.html#annoray.DataArray" title="annoray.DataArray"><code class="xref py py-class docutils literal notranslate"><span class="pre">DataArray</span></code></a> carries a <a class="reference internal" href="../api/generated/annoray.Unit.html#annoray.Unit" title="annoray.Unit"><code class="xref py py-class docutils literal notranslate"><span class="pre">Unit</span></code></a> (or none), single values with a
+unit are <a class="reference internal" href="../api/generated/annoray.Quantity.html#annoray.Quantity" title="annoray.Quantity"><code class="xref py py-class docutils literal notranslate"><span class="pre">Quantity</span></code></a> objects, and every operation checks that the units of its
+operands fit together. A CF <code class="docutils literal notranslate"><span class="pre">units</span></code> attribute is decoded into a unit when a file is opened and
+written back when it is saved.</p>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">annoray</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">ar</span>
+</pre></div>
+</div>
+</div>
+</div>
+<section id="writing-units">
+<h2>Writing units<a class="headerlink" href="#writing-units" title="Link to this heading">#</a></h2>
+<p>Units are written in the UDUNITS-2 grammar that the CF conventions use, so every <code class="docutils literal notranslate"><span class="pre">units</span></code>
+attribute of a CF file parses as it is. The same unit has several spellings:</p>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">same</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"m/s"</span><span class="p">,</span> <span class="s2">"m s-1"</span><span class="p">,</span> <span class="s2">"m.s-1"</span><span class="p">,</span> <span class="s2">"m s^-1"</span><span class="p">,</span> <span class="s2">"meters per second"</span><span class="p">,</span> <span class="s2">"m.s**-1"</span><span class="p">]</span>
+<span class="nb">print</span><span class="p">({</span><span class="n">ar</span><span class="o">.</span><span class="n">Unit</span><span class="p">(</span><span class="n">s</span><span class="p">)</span> <span class="o">==</span> <span class="n">ar</span><span class="o">.</span><span class="n">Unit</span><span class="p">(</span><span class="s2">"m/s"</span><span class="p">)</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">same</span><span class="p">})</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>{True}
+</pre></div>
+</div>
+</div>
+</div>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Form</p></th>
+<th class="head"><p>Examples</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Symbols, with SI prefixes</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">km</span></code>, <code class="docutils literal notranslate"><span class="pre">hPa</span></code>, <code class="docutils literal notranslate"><span class="pre">µm</span></code> or <code class="docutils literal notranslate"><span class="pre">um</span></code>, <code class="docutils literal notranslate"><span class="pre">GHz</span></code>, <code class="docutils literal notranslate"><span class="pre">mGal</span></code>, <code class="docutils literal notranslate"><span class="pre">kG</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>Names, singular or plural, with prefixes</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">meter</span></code>, <code class="docutils literal notranslate"><span class="pre">metres</span></code>, <code class="docutils literal notranslate"><span class="pre">kilogram</span></code>, <code class="docutils literal notranslate"><span class="pre">millibar</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>Products: space, <code class="docutils literal notranslate"><span class="pre">.</span></code> or <code class="docutils literal notranslate"><span class="pre">*</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">kg</span> <span class="pre">m2</span> <span class="pre">s-2</span></code>, <code class="docutils literal notranslate"><span class="pre">kg.m2.s-2</span></code>, <code class="docutils literal notranslate"><span class="pre">N*m</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>Quotients</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">W/m2</span></code>, <code class="docutils literal notranslate"><span class="pre">W</span> <span class="pre">m-2</span></code>, <code class="docutils literal notranslate"><span class="pre">mol/(m2</span> <span class="pre">s)</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>Powers: bare digits, <code class="docutils literal notranslate"><span class="pre">^</span></code> or <code class="docutils literal notranslate"><span class="pre">**</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">m2</span></code>, <code class="docutils literal notranslate"><span class="pre">m^2</span></code>, <code class="docutils literal notranslate"><span class="pre">m**2</span></code>, <code class="docutils literal notranslate"><span class="pre">s-1</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>Numeric factors</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">100</span> <span class="pre">Pa</span></code>, <code class="docutils literal notranslate"><span class="pre">1e-3</span></code>, <code class="docutils literal notranslate"><span class="pre">0.01</span> <span class="pre">m</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>Offsets and epochs</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">degC</span></code>, <code class="docutils literal notranslate"><span class="pre">°F</span></code>, <code class="docutils literal notranslate"><span class="pre">K</span> <span class="pre">&#64;</span> <span class="pre">273.15</span></code>, <code class="docutils literal notranslate"><span class="pre">days</span> <span class="pre">since</span> <span class="pre">2000-01-01</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>Logarithmic</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">dB</span></code>, <code class="docutils literal notranslate"><span class="pre">B</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>Dimensionless</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">1</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">%</span></code>, <code class="docutils literal notranslate"><span class="pre">ppm</span></code></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>A string that does not parse is an error when the unit is made, not later:</p>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="k">try</span><span class="p">:</span>
+    <span class="n">ar</span><span class="o">.</span><span class="n">Unit</span><span class="p">(</span><span class="s2">"meters per fortnite"</span><span class="p">)</span>
+<span class="k">except</span> <span class="n">ar</span><span class="o">.</span><span class="n">UnitError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">"UnitError:"</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>UnitError: unknown unit "fortnite"
+</pre></div>
+</div>
+</div>
+</div>
+</section>
+<section id="units-on-data">
+<h2>Units on data<a class="headerlink" href="#units-on-data" title="Link to this heading">#</a></h2>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">speed</span> <span class="o">=</span> <span class="n">ar</span><span class="o">.</span><span class="n">DataArray</span><span class="p">([</span><span class="mf">4.0</span><span class="p">,</span> <span class="mf">12.5</span><span class="p">,</span> <span class="mf">30.0</span><span class="p">],</span> <span class="n">dims</span><span class="o">=</span><span class="s2">"t"</span><span class="p">,</span> <span class="n">units</span><span class="o">=</span><span class="s2">"km/h"</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">speed</span><span class="o">.</span><span class="n">units</span><span class="p">,</span> <span class="s2">"→"</span><span class="p">,</span> <span class="n">speed</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="s2">"m/s"</span><span class="p">)</span><span class="o">.</span><span class="n">values</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>km/h → [1.11111111 3.47222222 8.33333333]
+</pre></div>
+</div>
+</div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">to</span></code> converts to any unit of the same dimension, exactly where the conversion factor is a
+rational number (inches to centimetres is 127/50, not a rounded float); conversions that
+involve π, such as degrees to radians, are as exact as a double allows. <code class="docutils literal notranslate"><span class="pre">float32</span></code> data stays
+<code class="docutils literal notranslate"><span class="pre">float32</span></code>.</p>
+<p>A file’s CF <code class="docutils literal notranslate"><span class="pre">units</span></code> attribute becomes the unit of the variable it belongs to, and
+<code class="docutils literal notranslate"><span class="pre">to_netcdf</span></code> writes the unit back as the attribute. Units are therefore never stale: there is
+no attribute that can disagree with the data after a conversion.</p>
+</section>
+<section id="quantities">
+<h2>Quantities<a class="headerlink" href="#quantities" title="Link to this heading">#</a></h2>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">d</span> <span class="o">=</span> <span class="n">ar</span><span class="o">.</span><span class="n">Quantity</span><span class="p">(</span><span class="mf">2.5</span><span class="p">,</span> <span class="s2">"km"</span><span class="p">)</span>
+<span class="n">t</span> <span class="o">=</span> <span class="n">ar</span><span class="o">.</span><span class="n">Quantity</span><span class="p">(</span><span class="mi">30</span><span class="p">,</span> <span class="s2">"min"</span><span class="p">)</span>
+<span class="n">v</span> <span class="o">=</span> <span class="n">d</span> <span class="o">/</span> <span class="n">t</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="s2">"="</span><span class="p">,</span> <span class="n">v</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="s2">"m/s"</span><span class="p">))</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">ar</span><span class="o">.</span><span class="n">Quantity</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="s2">"km"</span><span class="p">)</span> <span class="o">==</span> <span class="n">ar</span><span class="o">.</span><span class="n">Quantity</span><span class="p">(</span><span class="mi">1000</span><span class="p">,</span> <span class="s2">"m"</span><span class="p">),</span> <span class="n">ar</span><span class="o">.</span><span class="n">Quantity</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="s2">"km"</span><span class="p">)</span> <span class="o">&gt;</span> <span class="n">ar</span><span class="o">.</span><span class="n">Quantity</span><span class="p">(</span><span class="mi">900</span><span class="p">,</span> <span class="s2">"m"</span><span class="p">))</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>0.08333333333333333 km min-1 = 1.3888888888888888 m/s
+True True
+</pre></div>
+</div>
+</div>
+</div>
+<p>A quantity is also made by multiplying a number by a unit (<code class="docutils literal notranslate"><span class="pre">2.5</span> <span class="pre">*</span> <span class="pre">ar.Unit(&quot;km&quot;)</span></code>), and is
+accepted wherever a value with a unit is expected: as an operand of a data array, as a label
+in <code class="docutils literal notranslate"><span class="pre">sel</span></code>, as the value of <code class="docutils literal notranslate"><span class="pre">put</span></code>, <code class="docutils literal notranslate"><span class="pre">where</span></code> and <code class="docutils literal notranslate"><span class="pre">fillna</span></code>.</p>
+<section id="complex-quantities">
+<h3>Complex quantities<a class="headerlink" href="#complex-quantities" title="Link to this heading">#</a></h3>
+<p>A quantity’s magnitude is a <code class="docutils literal notranslate"><span class="pre">float</span></code> or a <code class="docutils literal notranslate"><span class="pre">complex</span></code>. A complex quantity follows the rules of
+complex data: conversion scales both parts (a unit with an offset, such as °C, does not
+convert), real and complex operands give a complex result, and there is no order (<code class="docutils literal notranslate"><span class="pre">==</span></code> and
+<code class="docutils literal notranslate"><span class="pre">!=</span></code> only). <code class="docutils literal notranslate"><span class="pre">.real</span></code>, <code class="docutils literal notranslate"><span class="pre">.imag</span></code> and <code class="docutils literal notranslate"><span class="pre">abs()</span></code> are real quantities in the same unit, and <code class="docutils literal notranslate"><span class="pre">.item()</span></code> of
+complex data with a unit is a complex quantity.</p>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">v</span> <span class="o">=</span> <span class="n">ar</span><span class="o">.</span><span class="n">Quantity</span><span class="p">(</span><span class="mi">3</span> <span class="o">+</span> <span class="mi">4</span><span class="n">j</span><span class="p">,</span> <span class="s2">"V"</span><span class="p">)</span>
+<span class="n">i</span> <span class="o">=</span> <span class="n">ar</span><span class="o">.</span><span class="n">Quantity</span><span class="p">(</span><span class="mf">0.5</span><span class="n">j</span><span class="p">,</span> <span class="s2">"A"</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">v</span> <span class="o">/</span> <span class="n">i</span><span class="p">)</span>  <span class="c1"># an impedance</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">v</span><span class="o">.</span><span class="n">real</span><span class="p">,</span> <span class="n">v</span><span class="o">.</span><span class="n">imag</span><span class="p">,</span> <span class="nb">abs</span><span class="p">(</span><span class="n">v</span><span class="p">),</span> <span class="n">v</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="s2">"mV"</span><span class="p">))</span>
+<span class="n">z</span> <span class="o">=</span> <span class="n">ar</span><span class="o">.</span><span class="n">DataArray</span><span class="p">([</span><span class="mi">1</span> <span class="o">+</span> <span class="mi">2</span><span class="n">j</span><span class="p">,</span> <span class="mi">3</span> <span class="o">-</span> <span class="mi">1</span><span class="n">j</span><span class="p">],</span> <span class="n">dims</span><span class="o">=</span><span class="s2">"x"</span><span class="p">,</span> <span class="n">units</span><span class="o">=</span><span class="s2">"V"</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="nb">repr</span><span class="p">(</span><span class="n">z</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span><span class="o">.</span><span class="n">item</span><span class="p">()))</span>
+<span class="k">try</span><span class="p">:</span>
+    <span class="n">v</span> <span class="o">&lt;</span> <span class="n">v</span><span class="o">.</span><span class="n">conjugate</span><span class="p">()</span>
+<span class="k">except</span> <span class="ne">TypeError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">"TypeError:"</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>(8-6j) V A-1
+3.0 V 4.0 V 5.0 V (3000+4000j) mV
+Quantity((4+1j), "V")
+TypeError: complex quantities have no order: compare .real, .imag or abs()
+</pre></div>
+</div>
+</div>
+</div>
+</section>
+</section>
+<section id="arithmetic-rules">
+<h2>Arithmetic rules<a class="headerlink" href="#arithmetic-rules" title="Link to this heading">#</a></h2>
+<p>annoray refuses operations whose result would depend on an unstated assumption about units.</p>
+<p><strong>Dimensions must match</strong> for <code class="docutils literal notranslate"><span class="pre">+</span></code>, <code class="docutils literal notranslate"><span class="pre">-</span></code> and comparisons:</p>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="k">try</span><span class="p">:</span>
+    <span class="n">speed</span> <span class="o">+</span> <span class="n">ar</span><span class="o">.</span><span class="n">Quantity</span><span class="p">(</span><span class="mf">1.0</span><span class="p">,</span> <span class="s2">"m"</span><span class="p">)</span>
+<span class="k">except</span> <span class="n">ar</span><span class="o">.</span><span class="n">UnitError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">"UnitError:"</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>UnitError: incompatible units: km/h and m
+</pre></div>
+</div>
+</div>
+</div>
+<p><strong>Scales must match too.</strong> Adding kilometres to metres is not guessed at: the result’s unit
+would have to be chosen silently. One operand is converted first:</p>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">a</span> <span class="o">=</span> <span class="n">ar</span><span class="o">.</span><span class="n">Quantity</span><span class="p">(</span><span class="mf">1.0</span><span class="p">,</span> <span class="s2">"km"</span><span class="p">)</span>
+<span class="n">b</span> <span class="o">=</span> <span class="n">ar</span><span class="o">.</span><span class="n">Quantity</span><span class="p">(</span><span class="mf">250.0</span><span class="p">,</span> <span class="s2">"m"</span><span class="p">)</span>
+<span class="k">try</span><span class="p">:</span>
+    <span class="n">a</span> <span class="o">+</span> <span class="n">b</span>
+<span class="k">except</span> <span class="n">ar</span><span class="o">.</span><span class="n">UnitError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">"UnitError:"</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">a</span> <span class="o">+</span> <span class="n">b</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="s2">"km"</span><span class="p">))</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>UnitError: units km and m differ in scale; convert one first
+1.25 km
+</pre></div>
+</div>
+</div>
+</div>
+<p>Comparisons convert compatible units (<code class="docutils literal notranslate"><span class="pre">1</span> <span class="pre">km</span> <span class="pre">&gt;</span> <span class="pre">900</span> <span class="pre">m</span></code> above); they only decide, they produce
+no unit.</p>
+<p><strong><code class="docutils literal notranslate"><span class="pre">*</span></code>, <code class="docutils literal notranslate"><span class="pre">/</span></code> and powers combine units</strong>: <code class="docutils literal notranslate"><span class="pre">km</span> <span class="pre">/</span> <span class="pre">min</span></code> above, <code class="docutils literal notranslate"><span class="pre">m</span> <span class="pre">s-1</span> <span class="pre">*</span> <span class="pre">s</span></code> is <code class="docutils literal notranslate"><span class="pre">m</span></code>. Integer powers
+and exact roots of dimensioned data work (<code class="docutils literal notranslate"><span class="pre">(m2)</span> <span class="pre">**</span> <span class="pre">0.5</span></code> is <code class="docutils literal notranslate"><span class="pre">m</span></code>); other powers need
+dimensionless data.</p>
+<p><strong>Temperatures and other offset units.</strong> The difference of two absolute temperatures is a
+temperature <em>step</em>, in kelvin-sized degrees; their sum has no meaning:</p>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="nb">print</span><span class="p">(</span><span class="n">ar</span><span class="o">.</span><span class="n">Quantity</span><span class="p">(</span><span class="mi">20</span><span class="p">,</span> <span class="s2">"degC"</span><span class="p">)</span> <span class="o">-</span> <span class="n">ar</span><span class="o">.</span><span class="n">Quantity</span><span class="p">(</span><span class="mi">15</span><span class="p">,</span> <span class="s2">"degC"</span><span class="p">))</span>
+<span class="k">try</span><span class="p">:</span>
+    <span class="n">ar</span><span class="o">.</span><span class="n">Quantity</span><span class="p">(</span><span class="mi">20</span><span class="p">,</span> <span class="s2">"degC"</span><span class="p">)</span> <span class="o">+</span> <span class="n">ar</span><span class="o">.</span><span class="n">Quantity</span><span class="p">(</span><span class="mi">15</span><span class="p">,</span> <span class="s2">"degC"</span><span class="p">)</span>
+<span class="k">except</span> <span class="n">ar</span><span class="o">.</span><span class="n">UnitError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">"UnitError:"</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>5.0 K
+UnitError: adding two absolute temperatures is not defined for degC
+</pre></div>
+</div>
+</div>
+</div>
+<p>Products of offset units (<code class="docutils literal notranslate"><span class="pre">degC</span> <span class="pre">*</span> <span class="pre">m</span></code>) are errors: convert to an absolute scale (<code class="docutils literal notranslate"><span class="pre">K</span></code>) first.
+Sums over a dimension (<code class="docutils literal notranslate"><span class="pre">sum</span></code>) refuse °C; <code class="docutils literal notranslate"><span class="pre">mean</span></code>, <code class="docutils literal notranslate"><span class="pre">min</span></code> and <code class="docutils literal notranslate"><span class="pre">max</span></code> keep it, and <code class="docutils literal notranslate"><span class="pre">std</span></code> is a step
+in K.</p>
+<p><strong>Logarithmic units</strong> (<code class="docutils literal notranslate"><span class="pre">dB</span></code>, <code class="docutils literal notranslate"><span class="pre">B</span></code>) convert only between the same reference.</p>
+<p><strong>Functions.</strong> Transcendental functions (<code class="docutils literal notranslate"><span class="pre">np.exp</span></code>, <code class="docutils literal notranslate"><span class="pre">np.log</span></code>) need dimensionless input;
+<code class="docutils literal notranslate"><span class="pre">np.sin</span></code>, <code class="docutils literal notranslate"><span class="pre">np.cos</span></code> and <code class="docutils literal notranslate"><span class="pre">np.tan</span></code> take angles (converted to radians) or plain numbers; inverse
+trigonometric functions of data with a unit return radians. NumPy ufuncs without a unit rule
+refuse data with a unit instead of dropping it.</p>
+</section>
+<section id="plain-numbers-beside-units">
+<h2>Plain numbers beside units<a class="headerlink" href="#plain-numbers-beside-units" title="Link to this heading">#</a></h2>
+<p>A number without a unit next to data with one is accepted only where its meaning does not
+depend on the unit: <code class="docutils literal notranslate"><span class="pre">0</span></code> (for ratio-scale and logarithmic units) and NaN. Any other value is
+given as a quantity, so that a threshold cannot silently be in the wrong unit:</p>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">temp</span> <span class="o">=</span> <span class="n">ar</span><span class="o">.</span><span class="n">DataArray</span><span class="p">([</span><span class="mf">281.2</span><span class="p">,</span> <span class="mf">283.9</span><span class="p">,</span> <span class="mf">290.5</span><span class="p">],</span> <span class="n">dims</span><span class="o">=</span><span class="s2">"x"</span><span class="p">,</span> <span class="n">units</span><span class="o">=</span><span class="s2">"K"</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">temp</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">temp</span> <span class="o">&gt;</span> <span class="n">ar</span><span class="o">.</span><span class="n">Quantity</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="s2">"degC"</span><span class="p">))</span><span class="o">.</span><span class="n">values</span><span class="p">)</span>
+<span class="k">try</span><span class="p">:</span>
+    <span class="n">temp</span> <span class="o">&gt;</span> <span class="mi">10</span>
+<span class="k">except</span> <span class="n">ar</span><span class="o">.</span><span class="n">UnitError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">"UnitError:"</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>[  nan 283.9 290.5]
+UnitError: incompatible units: K and 1
+</pre></div>
+</div>
+</div>
+</div>
+<p>The same rule applies to <code class="docutils literal notranslate"><span class="pre">where</span></code>, <code class="docutils literal notranslate"><span class="pre">fillna</span></code>, <code class="docutils literal notranslate"><span class="pre">clip</span></code>, <code class="docutils literal notranslate"><span class="pre">isin</span></code>, <code class="docutils literal notranslate"><span class="pre">put</span></code> and <code class="docutils literal notranslate"><span class="pre">query</span></code>.</p>
+</section>
+<section id="unit-systems">
+<h2>Unit systems<a class="headerlink" href="#unit-systems" title="Link to this heading">#</a></h2>
+<p>All of UDUNITS-2 is available. The tables below list the units most often needed in each
+system with their usual symbols; every entry is checked against the units engine by the test
+suite. Symbols take SI prefixes (<code class="docutils literal notranslate"><span class="pre">kG</span></code>, <code class="docutils literal notranslate"><span class="pre">cP</span></code>, <code class="docutils literal notranslate"><span class="pre">mJy</span></code>); names take them too (<code class="docutils literal notranslate"><span class="pre">kilogauss</span></code>).</p>
+<section id="si">
+<h3>SI<a class="headerlink" href="#si" title="Link to this heading">#</a></h3>
+<p>The seven SI base units, the radian (a dimension of its own in annoray, as in astropy), the
+derived units with special names, and the units accepted for use with SI.</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Unit</p></th>
+<th class="head"><p>Symbol</p></th>
+<th class="head"><p>Value</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>metre</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">m</span></code></p></td>
+<td><p>base</p></td>
+</tr>
+<tr class="row-odd"><td><p>kilogram</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">kg</span></code></p></td>
+<td><p>base</p></td>
+</tr>
+<tr class="row-even"><td><p>second</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">s</span></code></p></td>
+<td><p>base</p></td>
+</tr>
+<tr class="row-odd"><td><p>ampere</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">A</span></code></p></td>
+<td><p>base</p></td>
+</tr>
+<tr class="row-even"><td><p>kelvin</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">K</span></code></p></td>
+<td><p>base</p></td>
+</tr>
+<tr class="row-odd"><td><p>mole</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">mol</span></code></p></td>
+<td><p>base</p></td>
+</tr>
+<tr class="row-even"><td><p>candela</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cd</span></code></p></td>
+<td><p>base</p></td>
+</tr>
+<tr class="row-odd"><td><p>radian</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">rad</span></code></p></td>
+<td><p>base</p></td>
+</tr>
+<tr class="row-even"><td><p>newton</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">N</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">kg</span> <span class="pre">m</span> <span class="pre">s-2</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>pascal</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">Pa</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">N</span> <span class="pre">m-2</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>joule</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">J</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">N</span> <span class="pre">m</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>watt</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">W</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">J</span> <span class="pre">s-1</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>coulomb</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">C</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">A</span> <span class="pre">s</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>volt</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">V</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">W</span> <span class="pre">A-1</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>ohm</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">ohm</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">V</span> <span class="pre">A-1</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>tesla</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">T</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">V</span> <span class="pre">s</span> <span class="pre">m-2</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>hertz</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">Hz</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">s-1</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>litre</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">L</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">1e-3</span> <span class="pre">m3</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>tonne</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">t</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">1000</span> <span class="pre">kg</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>minute, hour, day</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">min</span></code>, <code class="docutils literal notranslate"><span class="pre">h</span></code>, <code class="docutils literal notranslate"><span class="pre">d</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">60</span> <span class="pre">s</span></code>, <code class="docutils literal notranslate"><span class="pre">3600</span> <span class="pre">s</span></code>, <code class="docutils literal notranslate"><span class="pre">86400</span> <span class="pre">s</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>degree (angle)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">degree</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">pi/180</span> <span class="pre">rad</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>electronvolt</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">eV</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">1.602176634e-19</span> <span class="pre">J</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>bar</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">bar</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">1e5</span> <span class="pre">Pa</span></code></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="cgs">
+<h3>CGS<a class="headerlink" href="#cgs" title="Link to this heading">#</a></h3>
+<p>Mechanical CGS units are exact multiples of SI units. CGS electromagnetic units are mapped
+onto SI quantities by their standard correspondence (1 G = 10⁻⁴ T, 1 statC = 1/2997924580 C),
+as UDUNITS and astropy do: values convert, but equations written in Gaussian form keep their
+factors of 4π and <em>c</em> relative to their SI form.</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Unit</p></th>
+<th class="head"><p>Symbol</p></th>
+<th class="head"><p>Value</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>centimetre</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cm</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0.01</span> <span class="pre">m</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>gram</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">g</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">1e-3</span> <span class="pre">kg</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>dyne</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">dyn</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">1e-5</span> <span class="pre">N</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>erg</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">erg</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">1e-7</span> <span class="pre">J</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>barye</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">Ba</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0.1</span> <span class="pre">Pa</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>poise</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">P</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0.1</span> <span class="pre">Pa</span> <span class="pre">s</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>stokes</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">St</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">1e-4</span> <span class="pre">m2</span> <span class="pre">s-1</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>galileo (gal)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">Gal</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0.01</span> <span class="pre">m</span> <span class="pre">s-2</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>kayser</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">kayser</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">100</span> <span class="pre">m-1</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>gauss</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">G</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">1e-4</span> <span class="pre">T</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>maxwell</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">Mx</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">1e-8</span> <span class="pre">Wb</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>oersted</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">Oe</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">250/pi</span> <span class="pre">A</span> <span class="pre">m-1</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>statcoulomb (franklin)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">statC</span></code>, <code class="docutils literal notranslate"><span class="pre">Fr</span></code>, <code class="docutils literal notranslate"><span class="pre">esu</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">C/2997924580</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>statampere</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">statA</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">statC</span> <span class="pre">s-1</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>statvolt</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">statV</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">299.792458</span> <span class="pre">V</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>abampere (biot)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">abA</span></code>, <code class="docutils literal notranslate"><span class="pre">Bi</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">10</span> <span class="pre">A</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>abcoulomb</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">abC</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">10</span> <span class="pre">C</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>abvolt</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">abV</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">1e-8</span> <span class="pre">V</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>jansky (astronomy)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">Jy</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">1e-26</span> <span class="pre">W</span> <span class="pre">m-2</span> <span class="pre">Hz-1</span></code></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="us-customary-and-imperial">
+<h3>US customary and imperial<a class="headerlink" href="#us-customary-and-imperial" title="Link to this heading">#</a></h3>
+<p>Values are the legal definitions (NIST SP 811 and Handbook 44), so conversions are exact: a US
+gallon is 231 in³, a pound 0.45359237 kg. US and imperial (UK) volumes differ and have
+separate names; the bare names are the US ones. Since 2023 the fathom, chain, rod and furlong
+are based on the international foot; the US survey foot keeps its own name.</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Unit</p></th>
+<th class="head"><p>Symbol</p></th>
+<th class="head"><p>Value</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>inch</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">in</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0.0254</span> <span class="pre">m</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>foot</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">ft</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0.3048</span> <span class="pre">m</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>yard</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">yd</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0.9144</span> <span class="pre">m</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>mile</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">mi</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">1609.344</span> <span class="pre">m</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>nautical mile</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">nmi</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">1852</span> <span class="pre">m</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>fathom</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">fathom</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">6</span> <span class="pre">ft</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>furlong</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">furlong</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">660</span> <span class="pre">ft</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>US survey foot</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">US_survey_foot</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">1200/3937</span> <span class="pre">m</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>acre</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">acre</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">43560</span> <span class="pre">ft2</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>pound</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">lb</span></code>, <code class="docutils literal notranslate"><span class="pre">lbm</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0.45359237</span> <span class="pre">kg</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>ounce</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">oz</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">lb/16</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>troy ounce</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">ozt</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">31.1034768</span> <span class="pre">g</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>grain</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">gr</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">6.479891e-5</span> <span class="pre">kg</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>stone</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">stone</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">14</span> <span class="pre">lb</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>short ton</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">short_ton</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">2000</span> <span class="pre">lb</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>long ton</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">long_ton</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">2240</span> <span class="pre">lb</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>US gallon</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">gallon</span></code>, <code class="docutils literal notranslate"><span class="pre">US_gallon</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">231</span> <span class="pre">in3</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>US quart</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">qt</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">gallon/4</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>US pint</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">pt</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">gallon/8</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>US fluid ounce</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">fl_oz</span></code>, <code class="docutils literal notranslate"><span class="pre">floz</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">gallon/128</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>imperial gallon</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">UK_gallon</span></code>, <code class="docutils literal notranslate"><span class="pre">imperial_gallon</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">4.54609</span> <span class="pre">L</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>imperial pint</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">UK_pint</span></code>, <code class="docutils literal notranslate"><span class="pre">imperial_pint</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">UK_gallon/8</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>imperial fluid ounce</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">UK_fluid_ounce</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">UK_gallon/160</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>pound-force</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">lbf</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">lb</span> <span class="pre">9.80665</span> <span class="pre">m</span> <span class="pre">s-2</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>pound per square inch</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">psi</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">lbf</span> <span class="pre">in-2</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>mile per hour</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">mph</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">mi/h</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>knot</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">knot</span></code>, <code class="docutils literal notranslate"><span class="pre">kt</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">nmi/h</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>degree Fahrenheit</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">degF</span></code>, <code class="docutils literal notranslate"><span class="pre">°F</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">degR</span> <span class="pre">&#64;</span> <span class="pre">459.67</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>degree Rankine</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">degR</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">K/1.8</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>British thermal unit</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">BTU</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">1055.05585262</span> <span class="pre">J</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>horsepower</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">hp</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">550</span> <span class="pre">ft</span> <span class="pre">lbf/s</span></code></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="other-common-units">
+<h3>Other common units<a class="headerlink" href="#other-common-units" title="Link to this heading">#</a></h3>
+<p>Physical constants are the exact values of the 2019 SI (the electronvolt, the elementary
+charge) or CODATA 2022’s (the dalton); the light year and the parsec follow from the exact
+astronomical unit and the Julian year.</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Unit</p></th>
+<th class="head"><p>Symbol</p></th>
+<th class="head"><p>Value</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>standard atmosphere</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">atm</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">101325</span> <span class="pre">Pa</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>torr</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">Torr</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">atm/760</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>millimetre of mercury</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">mmHg</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">133.322387415</span> <span class="pre">Pa</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>hectare</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">hectare</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">1e4</span> <span class="pre">m2</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>ångström</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">angstrom</span></code>, <code class="docutils literal notranslate"><span class="pre">Å</span></code>, <code class="docutils literal notranslate"><span class="pre">AA</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">1e-10</span> <span class="pre">m</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>degree (of arc)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">deg</span></code>, <code class="docutils literal notranslate"><span class="pre">degree</span></code>, <code class="docutils literal notranslate"><span class="pre">°</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">pi/180</span> <span class="pre">rad</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>arcminute</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">arcmin</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">deg/60</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>arcsecond</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">arcsec</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">arcmin/60</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>milliarcsecond</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">mas</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">1e-3</span> <span class="pre">arcsec</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>microarcsecond</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">uas</span></code>, <code class="docutils literal notranslate"><span class="pre">µas</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">1e-6</span> <span class="pre">arcsec</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>barn</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">barn</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">1e-28</span> <span class="pre">m2</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>watt-hour</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">Wh</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">3600</span> <span class="pre">J</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>calorie (international table)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cal</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">4.1868</span> <span class="pre">J</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>elementary charge</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">e</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">1.602176634e-19</span> <span class="pre">C</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>dalton (atomic mass unit)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">Da</span></code>, <code class="docutils literal notranslate"><span class="pre">u</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">1.66053906892e-27</span> <span class="pre">kg</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>astronomical unit</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">au</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">149597870700</span> <span class="pre">m</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>light year</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">ly</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">9460730472580800</span> <span class="pre">m</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>parsec</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">pc</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">648000/pi</span> <span class="pre">au</span></code></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="symbols-to-read-carefully">
+<h3>Symbols to read carefully<a class="headerlink" href="#symbols-to-read-carefully" title="Link to this heading">#</a></h3>
+<p>Some short symbols mean something other than a guess might suggest. The meanings below are
+UDUNITS’ (and so CF’s) or the established ones:</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Written</p></th>
+<th class="head"><p>Means</p></th>
+<th class="head"><p>Not</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">gal</span></code>, <code class="docutils literal notranslate"><span class="pre">Gal</span></code>, <code class="docutils literal notranslate"><span class="pre">mGal</span></code></p></td>
+<td><p>galileo, the CGS unit of acceleration (gravity anomalies)</p></td>
+<td><p>gallon: <code class="docutils literal notranslate"><span class="pre">gallon</span></code>, <code class="docutils literal notranslate"><span class="pre">US_gallon</span></code>, <code class="docutils literal notranslate"><span class="pre">UK_gallon</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">oz</span></code></p></td>
+<td><p>avoirdupois ounce (mass)</p></td>
+<td><p>fluid ounce: <code class="docutils literal notranslate"><span class="pre">fl_oz</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">pt</span></code></p></td>
+<td><p>US liquid pint</p></td>
+<td><p>imperial pint: <code class="docutils literal notranslate"><span class="pre">UK_pint</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">nmi</span></code></p></td>
+<td><p>nautical mile</p></td>
+<td><p>nano-mile</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">mph</span></code>, <code class="docutils literal notranslate"><span class="pre">kph</span></code></p></td>
+<td><p>miles, kilometres per hour</p></td>
+<td><p>milli-, kilo-phot</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">t</span></code></p></td>
+<td><p>tonne (1000 kg)</p></td>
+<td><p>short ton: <code class="docutils literal notranslate"><span class="pre">short_ton</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">G</span></code></p></td>
+<td><p>gauss</p></td>
+<td><p>giga- (a prefix, as in <code class="docutils literal notranslate"><span class="pre">GHz</span></code>)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">P</span></code></p></td>
+<td><p>poise</p></td>
+<td><p>peta- (a prefix, as in <code class="docutils literal notranslate"><span class="pre">PW</span></code>)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">Gs</span></code></p></td>
+<td><p>gigasecond</p></td>
+<td><p>gauss: <code class="docutils literal notranslate"><span class="pre">G</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">yr</span></code>, <code class="docutils literal notranslate"><span class="pre">year</span></code></p></td>
+<td><p>tropical year (UDUNITS)</p></td>
+<td><p>Julian year: <code class="docutils literal notranslate"><span class="pre">365.25</span> <span class="pre">d</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">C</span></code></p></td>
+<td><p>coulomb</p></td>
+<td><p>degree Celsius: <code class="docutils literal notranslate"><span class="pre">degC</span></code>, <code class="docutils literal notranslate"><span class="pre">°C</span></code></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">"gal"</span><span class="p">,</span> <span class="s2">"gallon"</span><span class="p">,</span> <span class="s2">"oz"</span><span class="p">,</span> <span class="s2">"fl_oz"</span><span class="p">,</span> <span class="s2">"nmi"</span><span class="p">,</span> <span class="s2">"mph"</span><span class="p">,</span> <span class="s2">"kG"</span><span class="p">]:</span>
+    <span class="n">u</span> <span class="o">=</span> <span class="n">ar</span><span class="o">.</span><span class="n">Unit</span><span class="p">(</span><span class="n">s</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">s</span><span class="si">:</span><span class="s2">&gt;7</span><span class="si">}</span><span class="s2">: dimension </span><span class="si">{</span><span class="n">u</span><span class="o">.</span><span class="n">dimension</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">u</span><span class="o">.</span><span class="n">si_factor</span><span class="si">:</span><span class="s2">g</span><span class="si">}</span><span class="s2"> in SI units"</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>    gal: dimension m s-2, 0.01 in SI units
+ gallon: dimension m3, 0.00378541 in SI units
+     oz: dimension kg, 0.0283495 in SI units
+  fl_oz: dimension m3, 2.95735e-05 in SI units
+    nmi: dimension m, 1852 in SI units
+    mph: dimension m s-1, 0.44704 in SI units
+     kG: dimension kg s-2 A-1, 0.1 in SI units
+</pre></div>
+</div>
+</div>
+</div>
+</section>
+</section>
+<section id="time">
+<h2>Time<a class="headerlink" href="#time" title="Link to this heading">#</a></h2>
+<p>Time units with an epoch (<code class="docutils literal notranslate"><span class="pre">days</span> <span class="pre">since</span> <span class="pre">2000-01-01</span></code>, <code class="docutils literal notranslate"><span class="pre">hours</span> <span class="pre">since</span> <span class="pre">1970-01-01</span> <span class="pre">00:00</span></code>) are
+decoded into dates in the variable’s CF calendar (all CF calendars are supported). A time unit
+without an epoch (<code class="docutils literal notranslate"><span class="pre">days</span></code>, <code class="docutils literal notranslate"><span class="pre">hours</span></code>) is a duration and stays a quantity;
+<a class="reference internal" href="../api/generated/annoray.DataArray.to.html#annoray.DataArray.to" title="annoray.DataArray.to"><code class="xref py py-meth docutils literal notranslate"><span class="pre">to()</span></code></a> converts it like any other unit. <code class="docutils literal notranslate"><span class="pre">months</span></code> and <code class="docutils literal notranslate"><span class="pre">years</span></code> are
+refused as epochs, as cftime refuses them: their length varies.</p>
+</section>
+<section id="dimension-annotations">
+<h2>Dimension annotations<a class="headerlink" href="#dimension-annotations" title="Link to this heading">#</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">annoray.dims</span></code> names dimensions as classes. They make checked quantities, recognise them, and
+annotate functions; <a class="reference internal" href="../api/generated/annoray.dims.checked.html#annoray.dims.checked" title="annoray.dims.checked"><code class="xref py py-func docutils literal notranslate"><span class="pre">annoray.dims.checked()</span></code></a> enforces the annotations at every call:</p>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">annoray.dims</span><span class="w"> </span><span class="kn">import</span> <span class="n">Length</span><span class="p">,</span> <span class="n">Time</span><span class="p">,</span> <span class="n">Velocity</span><span class="p">,</span> <span class="n">Dim</span><span class="p">,</span> <span class="n">checked</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">annoray</span><span class="w"> </span><span class="kn">import</span> <span class="n">Quantity</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">Jerk</span><span class="p">(</span><span class="n">Dim</span><span class="p">,</span> <span class="n">dimension</span><span class="o">=</span><span class="n">Length</span> <span class="o">/</span> <span class="n">Time</span><span class="o">**</span><span class="mi">3</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Rate of change of acceleration."""</span>
+
+<span class="nd">@checked</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">mean_speed</span><span class="p">(</span><span class="n">d</span><span class="p">:</span> <span class="n">Quantity</span><span class="p">[</span><span class="n">Length</span><span class="p">],</span> <span class="n">t</span><span class="p">:</span> <span class="n">Quantity</span><span class="p">[</span><span class="n">Time</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Quantity</span><span class="p">[</span><span class="n">Velocity</span><span class="p">]:</span>
+    <span class="k">return</span> <span class="n">d</span> <span class="o">/</span> <span class="n">t</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="n">mean_speed</span><span class="p">(</span><span class="n">Length</span><span class="p">(</span><span class="mf">42.195</span><span class="p">,</span> <span class="s2">"km"</span><span class="p">),</span> <span class="n">Time</span><span class="p">(</span><span class="mf">2.1</span><span class="p">,</span> <span class="s2">"h"</span><span class="p">))</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="s2">"km/h"</span><span class="p">))</span>
+<span class="nb">print</span><span class="p">(</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">ar</span><span class="o">.</span><span class="n">Quantity</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="s2">"m s-3"</span><span class="p">),</span> <span class="n">Jerk</span><span class="p">))</span>
+<span class="k">try</span><span class="p">:</span>
+    <span class="n">mean_speed</span><span class="p">(</span><span class="n">Time</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="s2">"h"</span><span class="p">),</span> <span class="n">Time</span><span class="p">(</span><span class="mf">2.1</span><span class="p">,</span> <span class="s2">"h"</span><span class="p">))</span>
+<span class="k">except</span> <span class="n">ar</span><span class="o">.</span><span class="n">UnitError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">"UnitError:"</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>20.09285714285714 km/h
+True
+UnitError: mean_speed(): argument 'd': expected Length [m], got Time
+</pre></div>
+</div>
+</div>
+</div>
+<p>In Rust the same names are types, and the check happens at compile time:</p>
+<div class="highlight-rust notranslate"><div class="highlight"><pre><span></span><span class="k">use</span><span class="w"> </span><span class="n">annoray</span><span class="p">::</span><span class="n">dims</span><span class="p">::{</span><span class="n">Length</span><span class="p">,</span><span class="w"> </span><span class="n">Time</span><span class="p">,</span><span class="w"> </span><span class="n">Velocity</span><span class="p">};</span>
+<span class="k">use</span><span class="w"> </span><span class="n">annoray</span><span class="p">::</span><span class="n">Quantity</span><span class="p">;</span>
+
+<span class="kd">let</span><span class="w"> </span><span class="n">d</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Quantity</span><span class="p">::</span><span class="o">&lt;</span><span class="n">Length</span><span class="o">&gt;</span><span class="p">::</span><span class="n">new</span><span class="p">(</span><span class="mf">2.5</span><span class="p">,</span><span class="w"> </span><span class="s">"km"</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+<span class="kd">let</span><span class="w"> </span><span class="n">t</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Quantity</span><span class="p">::</span><span class="o">&lt;</span><span class="n">Time</span><span class="o">&gt;</span><span class="p">::</span><span class="n">new</span><span class="p">(</span><span class="mf">30.0</span><span class="p">,</span><span class="w"> </span><span class="s">"min"</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+<span class="kd">let</span><span class="w"> </span><span class="n">v</span><span class="p">:</span><span class="w"> </span><span class="nc">Quantity</span><span class="o">&lt;</span><span class="n">Velocity</span><span class="o">&gt;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="o">&amp;</span><span class="n">d</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="o">&amp;</span><span class="n">t</span><span class="p">)</span><span class="o">?</span><span class="p">;</span><span class="w"> </span><span class="c1">// any other dimension is a type error</span>
+</pre></div>
+</div>
+</section>
+<section id="other-unit-libraries">
+<h2>Other unit libraries<a class="headerlink" href="#other-unit-libraries" title="Link to this heading">#</a></h2>
+<ul class="simple">
+<li><p><strong>astropy</strong> (<code class="docutils literal notranslate"><span class="pre">annoray[astropy]</span></code>): <code class="docutils literal notranslate"><span class="pre">to_astropy()</span></code> on units, quantities and arrays, and
+<a class="reference internal" href="../api/generated/annoray.from_astropy.html#annoray.from_astropy" title="annoray.from_astropy"><code class="xref py py-func docutils literal notranslate"><span class="pre">annoray.from_astropy()</span></code></a>. Units correspond through their SI-plus-radian decomposition,
+and keep their names where both libraries define a name the same way.</p></li>
+<li><p><strong>xarray and pint-xarray</strong>: <a class="reference internal" href="../api/generated/annoray.DataArray.to_xarray.html#annoray.DataArray.to_xarray" title="annoray.DataArray.to_xarray"><code class="xref py py-meth docutils literal notranslate"><span class="pre">to_xarray()</span></code></a> writes the unit as the
+<code class="docutils literal notranslate"><span class="pre">units</span></code> attribute, as pint-xarray and cf-xarray expect.</p></li>
+<li><p><strong>Rust</strong>: the <code class="docutils literal notranslate"><span class="pre">uom</span></code> and <code class="docutils literal notranslate"><span class="pre">whippyunits</span></code> features convert to and from those crates’
+compile-time quantities.</p></li>
+</ul>
+</section>
+</section>
+
+
+                </article>
+              
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="index.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">User guide</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="time.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">Dates, times and time zones</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <dialog id="pst-secondary-sidebar-modal"></dialog>
+                <div id="pst-secondary-sidebar" class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+<div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> On this page
+  </div>
+  <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#writing-units">Writing units</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#units-on-data">Units on data</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#quantities">Quantities</a><ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#complex-quantities">Complex quantities</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#arithmetic-rules">Arithmetic rules</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#plain-numbers-beside-units">Plain numbers beside units</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#unit-systems">Unit systems</a><ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#si">SI</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#cgs">CGS</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#us-customary-and-imperial">US customary and imperial</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#other-common-units">Other common units</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#symbols-to-read-carefully">Symbols to read carefully</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#time">Time</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#dimension-annotations">Dimension annotations</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#other-unit-libraries">Other unit libraries</a></li>
+</ul>
+  </nav></div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="../_static/scripts/bootstrap.js?digest=18bd87630a240e9c25be"></script>
+<script defer src="../_static/scripts/pydata-sphinx-theme.js?digest=18bd87630a240e9c25be"></script>
+
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item">
+
+  <p class="copyright">
+    
+      © Copyright 2026, Sunip K. Mukherjee.
+      <br/>
+    
+  </p>
+</div>
+      
+        <div class="footer-item">
+
+  <p class="sphinx-version">
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 9.2.0.
+  </p>
+</div>
+      
+    </div>
+  
+  
+  
+    <div class="footer-items__end">
+      
+        <div class="footer-item">
+<p class="theme-version">
+  <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.23.0.
+</p></div>
+      
+    </div>
+  
+</div>
+
+  </footer>
+  </body>
+</html>

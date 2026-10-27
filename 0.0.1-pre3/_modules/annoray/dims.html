@@ -1,0 +1,987 @@
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../../" data-theme="auto">
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>annoray.dims &#8212; annoray</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "auto";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "auto";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../../_static/styles/theme.css?digest=18bd87630a240e9c25be" rel="stylesheet" />
+<link href="../../_static/styles/pydata-sphinx-theme.css?digest=18bd87630a240e9c25be" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../../_static/mystnb.11b39860a7a0cbfd473a3ad8a317855267ff0bd372690045ca344a6b62be495e.css" />
+    <link rel="stylesheet" type="text/css" href="../../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../_static/sphinx-design.min.css?v=95c83b7e" />
+  
+  <!-- So that users can add custom icons -->
+  <script defer src="../../_static/scripts/fontawesome.js?digest=18bd87630a240e9c25be"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../../_static/scripts/bootstrap.js?digest=18bd87630a240e9c25be" />
+<link rel="preload" as="script" href="../../_static/scripts/pydata-sphinx-theme.js?digest=18bd87630a240e9c25be" />
+
+    <script src="../../_static/documentation_options.js?v=8446fafd"></script>
+    <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../../_static/copybutton.js?v=f281be69"></script>
+    <script src="../../_static/design-tabs.js?v=f930bc37"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = '_modules/annoray/dims';</script>
+    <script>
+        DOCUMENTATION_OPTIONS.theme_version = '0.23.0';
+        DOCUMENTATION_OPTIONS.theme_switcher_json_url = 'https://sunipkm.github.io/annoray/switcher.json';
+        DOCUMENTATION_OPTIONS.theme_switcher_version_match = '0.0.1-pre3';
+        DOCUMENTATION_OPTIONS.show_version_warning_banner =
+            false;
+        </script>
+    <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="color-scheme" content="light dark"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="0.0.1-pre3" />
+  
+    
+    <script src="../../_static/searchtools.js"></script>
+    <script src="../../_static/language_data.js"></script>
+    <script src="../../searchindex.js"></script>
+  
+  </head>
+  <body data-default-mode="auto">
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+  
+  
+  
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="../../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header id="pst-header" class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button type="button" class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-3 navbar-header-items__start">
+    
+      <div class="navbar-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../../index.html">
+  
+  
+  
+  
+  
+  
+    <p class="title logo__title">annoray</p>
+  
+</a></div>
+    
+  </div>
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    <div class="me-auto navbar-header-items__center">
+      
+        <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../getting-started/installation.html">
+    Installation
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../getting-started/overview.html">
+    Overview
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../getting-started/examples.html">
+    Examples
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../xarray-differences.html">
+    Differences from xarray
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../user-guide/index.html">
+    User guide
+  </a>
+</li>
+
+            <li class="nav-item dropdown">
+                <button class="btn dropdown-toggle nav-item" type="button"
+                data-bs-toggle="dropdown" aria-expanded="false"
+                aria-controls="pst-nav-more-links">
+                    More
+                </button>
+                <ul id="pst-nav-more-links" class="dropdown-menu">
+                    
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="../../api/index.html">
+    API reference
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="../../rust.html">
+    Rust crates
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="../../performance.html">
+    Performance
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-external" href="https://docs.rs/annoray">
+    Rust API
+  </a>
+</li>
+
+                </ul>
+            </li>
+            
+  </ul>
+</nav></div>
+      
+    </div>
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button type="button" class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+        </div>
+      
+      
+        <div class="navbar-item">
+<div class="version-switcher__container dropdown pst-js-only">
+  <button id="pst-version-switcher-button-2"
+    type="button"
+    class="version-switcher__button btn btn-sm dropdown-toggle"
+    data-bs-toggle="dropdown"
+    aria-haspopup="listbox"
+    aria-controls="pst-version-switcher-list-2"
+    aria-label="Version switcher list"
+  >
+    Choose version  <!-- this text may get changed later by javascript -->
+    <span class="caret"></span>
+  </button>
+  <div id="pst-version-switcher-list-2"
+    class="version-switcher__menu dropdown-menu list-group-flush py-0"
+    role="listbox" aria-labelledby="pst-version-switcher-button-2">
+    <!-- dropdown will be populated by javascript on page load -->
+  </div>
+</div></div>
+      
+        <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button type="button" class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+      
+        <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/sunipkm/annoray" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-square-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
+        </li>
+</ul></div>
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button type="button" class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+    </div>
+  
+
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+        
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar hide-on-wide">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../getting-started/installation.html">
+    Installation
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../getting-started/overview.html">
+    Overview
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../getting-started/examples.html">
+    Examples
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../xarray-differences.html">
+    Differences from xarray
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../user-guide/index.html">
+    User guide
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../api/index.html">
+    API reference
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../rust.html">
+    Rust crates
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../performance.html">
+    Performance
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-external" href="https://docs.rs/annoray">
+    Rust API
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+<div class="version-switcher__container dropdown pst-js-only">
+  <button id="pst-version-switcher-button-3"
+    type="button"
+    class="version-switcher__button btn btn-sm dropdown-toggle"
+    data-bs-toggle="dropdown"
+    aria-haspopup="listbox"
+    aria-controls="pst-version-switcher-list-3"
+    aria-label="Version switcher list"
+  >
+    Choose version  <!-- this text may get changed later by javascript -->
+    <span class="caret"></span>
+  </button>
+  <div id="pst-version-switcher-list-3"
+    class="version-switcher__menu dropdown-menu list-group-flush py-0"
+    role="listbox" aria-labelledby="pst-version-switcher-button-3">
+    <!-- dropdown will be populated by javascript on page load -->
+  </div>
+</div></div>
+        
+          <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button type="button" class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+        
+          <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/sunipkm/annoray" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-square-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
+        </li>
+</ul></div>
+        
+      </div>
+    
+  </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+<nav aria-label="Breadcrumb" class="d-print-none">
+  <ul class="bd-breadcrumbs">
+    
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="../../index.html" class="nav-link" aria-label="Home">
+        <i class="fa-solid fa-home"></i>
+      </a>
+    </li>
+    
+    <li class="breadcrumb-item"><a href="../index.html" class="nav-link">Module code</a></li>
+    
+    
+    <li class="breadcrumb-item"><a href="../annoray.html" class="nav-link">annoray</a></li>
+    
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">annoray.dims</span></li>
+  </ul>
+</nav>
+</div>
+      
+    </div>
+  
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <h1>Source code for annoray.dims</h1><div class="highlight"><pre>
+<span></span><span class="sd">"""Named dimensions: explicit, composable, and checked; the Python side of Rust's `dims`.</span>
+
+<span class="sd">A dimension is the exponents of the base quantities (the seven SI ones and angle). The</span>
+<span class="sd">names here are classes that stand for one. They:</span>
+
+<span class="sd">- **make checked quantities:** ``Length(2.5, "km")`` is a ``Quantity[Length]``, and its unit</span>
+<span class="sd">  must be a length (``Length(1, "s")`` raises ``UnitError``);</span>
+<span class="sd">- **recognise them:** ``isinstance(q, Velocity)`` asks whether ``q`` (a ``Quantity`` or a</span>
+<span class="sd">  ``DataArray``) has that dimension, however it was made: ``isinstance(d / t, Velocity)``;</span>
+<span class="sd">- **compose:** ``Length / Time**3`` is a ``Dimension``; declare a name for it with a class::</span>
+
+<span class="sd">      class Jerk(Dim, dimension=Length / Time**3):</span>
+<span class="sd">          '''Rate of change of acceleration.'''</span>
+
+<span class="sd">  Names that describe the same exponents are interchangeable, as in Rust.</span>
+
+<span class="sd">Annotate with ``Quantity[Length]`` (or ``DataArray[Velocity]``), the spelling of Rust's</span>
+<span class="sd">``Quantity&lt;Length&gt;``; type checkers accept it, and ``@checked`` enforces it at each call::</span>
+
+<span class="sd">    @checked</span>
+<span class="sd">    def speed(d: Quantity[Length], t: Quantity[Time]) -&gt; Quantity[Velocity]:</span>
+<span class="sd">        return d / t</span>
+
+<span class="sd">Python checks when the code runs; the Rust twin (`annoray::dims`, `Quantity&lt;D&gt;`) checks when</span>
+<span class="sd">it compiles.</span>
+<span class="sd">"""</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">functools</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">inspect</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">typing</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">collections.abc</span><span class="w"> </span><span class="kn">import</span> <span class="n">Callable</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">TypeVar</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">annoray._annoray</span><span class="w"> </span><span class="kn">import</span> <span class="n">DataArray</span><span class="p">,</span> <span class="n">Dimension</span><span class="p">,</span> <span class="n">Quantity</span><span class="p">,</span> <span class="n">UnitError</span>
+
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="s2">"Acceleration"</span><span class="p">,</span>
+    <span class="s2">"Amount"</span><span class="p">,</span>
+    <span class="s2">"Angle"</span><span class="p">,</span>
+    <span class="s2">"AngularVelocity"</span><span class="p">,</span>
+    <span class="s2">"Area"</span><span class="p">,</span>
+    <span class="s2">"Charge"</span><span class="p">,</span>
+    <span class="s2">"Concentration"</span><span class="p">,</span>
+    <span class="s2">"Current"</span><span class="p">,</span>
+    <span class="s2">"Density"</span><span class="p">,</span>
+    <span class="s2">"Dim"</span><span class="p">,</span>
+    <span class="s2">"DimensionType"</span><span class="p">,</span>
+    <span class="s2">"Dimensionless"</span><span class="p">,</span>
+    <span class="s2">"Energy"</span><span class="p">,</span>
+    <span class="s2">"Force"</span><span class="p">,</span>
+    <span class="s2">"Frequency"</span><span class="p">,</span>
+    <span class="s2">"Length"</span><span class="p">,</span>
+    <span class="s2">"Luminosity"</span><span class="p">,</span>
+    <span class="s2">"Mass"</span><span class="p">,</span>
+    <span class="s2">"Momentum"</span><span class="p">,</span>
+    <span class="s2">"Power"</span><span class="p">,</span>
+    <span class="s2">"Pressure"</span><span class="p">,</span>
+    <span class="s2">"Resistance"</span><span class="p">,</span>
+    <span class="s2">"Temperature"</span><span class="p">,</span>
+    <span class="s2">"Time"</span><span class="p">,</span>
+    <span class="s2">"Velocity"</span><span class="p">,</span>
+    <span class="s2">"Voltage"</span><span class="p">,</span>
+    <span class="s2">"Volume"</span><span class="p">,</span>
+    <span class="s2">"checked"</span><span class="p">,</span>
+    <span class="s2">"dimension"</span><span class="p">,</span>
+    <span class="s2">"name_of"</span><span class="p">,</span>
+<span class="p">]</span>
+
+<span class="c1"># Dimension -&gt; the first name given to it (for messages).</span>
+<span class="n">_names</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="n">Dimension</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+
+<span class="n">D</span> <span class="o">=</span> <span class="n">TypeVar</span><span class="p">(</span><span class="s2">"D"</span><span class="p">,</span> <span class="n">bound</span><span class="o">=</span><span class="s2">"Dim"</span><span class="p">)</span>
+<span class="n">F</span> <span class="o">=</span> <span class="n">TypeVar</span><span class="p">(</span><span class="s2">"F"</span><span class="p">,</span> <span class="n">bound</span><span class="o">=</span><span class="n">Callable</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_as_dimension</span><span class="p">(</span><span class="n">d</span><span class="p">:</span> <span class="n">Dimension</span> <span class="o">|</span> <span class="n">DimensionType</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dimension</span><span class="p">:</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">d</span><span class="p">,</span> <span class="n">Dimension</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">d</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">d</span><span class="p">,</span> <span class="n">DimensionType</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">d</span><span class="o">.</span><span class="n">dimension</span>
+    <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"expected a dimension, not </span><span class="si">{</span><span class="n">d</span><span class="si">!r}</span><span class="s2">"</span><span class="p">)</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">DimensionType</span><span class="p">(</span><span class="nb">type</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""The type of named dimensions (``Length``, ``Velocity``, your own ``Dim`` classes)."""</span>
+
+    <span class="n">dimension</span><span class="p">:</span> <span class="n">Dimension</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__new__</span><span class="p">(</span>
+        <span class="n">mcs</span><span class="p">,</span>
+        <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">bases</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">type</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span>
+        <span class="n">namespace</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span>
+        <span class="n">dimension</span><span class="p">:</span> <span class="n">Dimension</span> <span class="o">|</span> <span class="n">DimensionType</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">DimensionType</span><span class="p">:</span>
+        <span class="bp">cls</span> <span class="o">=</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__new__</span><span class="p">(</span><span class="n">mcs</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">bases</span><span class="p">,</span> <span class="n">namespace</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">dimension</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">d</span> <span class="o">=</span> <span class="n">_as_dimension</span><span class="p">(</span><span class="n">dimension</span><span class="p">)</span>
+            <span class="bp">cls</span><span class="o">.</span><span class="n">dimension</span> <span class="o">=</span> <span class="n">d</span>
+            <span class="n">_names</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">d</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">cls</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__call__</span><span class="p">(</span><span class="bp">cls</span><span class="p">:</span> <span class="nb">type</span><span class="p">[</span><span class="n">D</span><span class="p">],</span> <span class="n">magnitude</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">units</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Quantity</span><span class="p">[</span><span class="n">D</span><span class="p">]:</span>  <span class="c1"># type: ignore[misc]</span>
+<span class="w">        </span><span class="sd">"""A quantity of this dimension: ``Length(2.5, "km")``."""</span>
+        <span class="n">q</span><span class="p">:</span> <span class="n">Quantity</span><span class="p">[</span><span class="n">D</span><span class="p">]</span> <span class="o">=</span> <span class="n">Quantity</span><span class="p">(</span><span class="n">magnitude</span><span class="p">,</span> <span class="n">units</span><span class="p">)</span>
+        <span class="n">typing</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="s2">"DimensionType"</span><span class="p">,</span> <span class="bp">cls</span><span class="p">)</span><span class="o">.</span><span class="n">check</span><span class="p">(</span><span class="n">q</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">q</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">check</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""``value`` itself if it has this dimension (Rust's ``cast``); ``UnitError``</span>
+<span class="sd">        otherwise."""</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">cls</span><span class="o">.</span><span class="fm">__instancecheck__</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+            <span class="n">got</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="s2">"dimension"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="n">UnitError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"expected </span><span class="si">{</span><span class="bp">cls</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2"> [</span><span class="si">{</span><span class="bp">cls</span><span class="o">.</span><span class="n">dimension</span><span class="si">}</span><span class="s2">], got </span><span class="si">{</span><span class="n">name_of</span><span class="p">(</span><span class="n">got</span><span class="p">)</span><span class="w"> </span><span class="ow">or</span><span class="w"> </span><span class="n">got</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">value</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__instancecheck__</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">instance</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="k">return</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">instance</span><span class="p">,</span> <span class="p">(</span><span class="n">Quantity</span><span class="p">,</span> <span class="n">DataArray</span><span class="p">))</span> <span class="ow">and</span> <span class="n">instance</span><span class="o">.</span><span class="n">dimension</span> <span class="o">==</span> <span class="bp">cls</span><span class="o">.</span><span class="n">dimension</span>
+
+    <span class="c1"># Named dimensions compose like the dimensions they stand for.</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__mul__</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">other</span><span class="p">:</span> <span class="n">Dimension</span> <span class="o">|</span> <span class="n">DimensionType</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dimension</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">cls</span><span class="o">.</span><span class="n">dimension</span> <span class="o">*</span> <span class="n">_as_dimension</span><span class="p">(</span><span class="n">other</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__rmul__</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">other</span><span class="p">:</span> <span class="n">Dimension</span> <span class="o">|</span> <span class="n">DimensionType</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dimension</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">_as_dimension</span><span class="p">(</span><span class="n">other</span><span class="p">)</span> <span class="o">*</span> <span class="bp">cls</span><span class="o">.</span><span class="n">dimension</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__truediv__</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">other</span><span class="p">:</span> <span class="n">Dimension</span> <span class="o">|</span> <span class="n">DimensionType</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dimension</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">cls</span><span class="o">.</span><span class="n">dimension</span> <span class="o">/</span> <span class="n">_as_dimension</span><span class="p">(</span><span class="n">other</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__rtruediv__</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">other</span><span class="p">:</span> <span class="n">Dimension</span> <span class="o">|</span> <span class="n">DimensionType</span> <span class="o">|</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dimension</span><span class="p">:</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="nb">int</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">other</span> <span class="o">/</span> <span class="bp">cls</span><span class="o">.</span><span class="n">dimension</span>
+        <span class="k">return</span> <span class="n">_as_dimension</span><span class="p">(</span><span class="n">other</span><span class="p">)</span> <span class="o">/</span> <span class="bp">cls</span><span class="o">.</span><span class="n">dimension</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__pow__</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">n</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dimension</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">cls</span><span class="o">.</span><span class="n">dimension</span><span class="o">**</span><span class="n">n</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__repr__</span><span class="p">(</span><span class="bp">cls</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="n">dim</span> <span class="o">=</span> <span class="bp">cls</span><span class="o">.</span><span class="vm">__dict__</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"dimension"</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="s2">"dimension"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">dim</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>  <span class="c1"># the base class `Dim` names no dimension</span>
+            <span class="k">return</span> <span class="sa">f</span><span class="s2">"&lt;dimension base </span><span class="si">{</span><span class="bp">cls</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">&gt;"</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">"&lt;dimension </span><span class="si">{</span><span class="bp">cls</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2"> [</span><span class="si">{</span><span class="n">dim</span><span class="si">}</span><span class="s2">]&gt;"</span>
+
+
+<div class="viewcode-block" id="Dim">
+<a class="viewcode-back" href="../../api/generated/annoray.dims.Dim.html#annoray.Dim">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">Dim</span><span class="p">(</span><span class="n">metaclass</span><span class="o">=</span><span class="n">DimensionType</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Base of named dimensions: ``class Jerk(Dim, dimension=Length / Time**3): ...``."""</span></div>
+
+
+
+<div class="viewcode-block" id="dimension">
+<a class="viewcode-back" href="../../api/generated/annoray.dimension-function.html#annoray.dimension">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">dimension</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">dim</span><span class="p">:</span> <span class="n">Dimension</span> <span class="o">|</span> <span class="n">DimensionType</span><span class="p">,</span> <span class="n">doc</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">DimensionType</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""A named dimension made at run time. In code that type checkers read, prefer a class</span>
+<span class="sd">    (``class Jerk(Dim, dimension=...)``): they accept classes in annotations."""</span>
+    <span class="n">d</span> <span class="o">=</span> <span class="n">_as_dimension</span><span class="p">(</span><span class="n">dim</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">DimensionType</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="p">(</span><span class="n">Dim</span><span class="p">,),</span> <span class="p">{</span><span class="s2">"__doc__"</span><span class="p">:</span> <span class="n">doc</span> <span class="ow">or</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2"> [</span><span class="si">{</span><span class="n">d</span><span class="si">}</span><span class="s2">]."</span><span class="p">},</span> <span class="n">dimension</span><span class="o">=</span><span class="n">d</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="name_of">
+<a class="viewcode-back" href="../../api/generated/annoray.dims.name_of.html#annoray.name_of">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">name_of</span><span class="p">(</span><span class="n">d</span><span class="p">:</span> <span class="nb">object</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""The name given to a dimension (the first one, if several), or ``None``."""</span>
+    <span class="k">return</span> <span class="n">_names</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">d</span><span class="p">)</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">d</span><span class="p">,</span> <span class="n">Dimension</span><span class="p">)</span> <span class="k">else</span> <span class="kc">None</span></div>
+
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_dims_in</span><span class="p">(</span><span class="n">annotation</span><span class="p">:</span> <span class="nb">object</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">DimensionType</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""The dimension an annotation names: ``Quantity[Length]``, ``DataArray[Length]``,</span>
+<span class="sd">    ``Annotated[..., Length]`` or ``Length`` itself."""</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">annotation</span><span class="p">,</span> <span class="n">DimensionType</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">annotation</span>
+    <span class="n">origin</span> <span class="o">=</span> <span class="n">typing</span><span class="o">.</span><span class="n">get_origin</span><span class="p">(</span><span class="n">annotation</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">origin</span> <span class="ow">in</span> <span class="p">(</span><span class="n">Quantity</span><span class="p">,</span> <span class="n">DataArray</span><span class="p">,</span> <span class="n">typing</span><span class="o">.</span><span class="n">Annotated</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">arg</span> <span class="ow">in</span> <span class="n">typing</span><span class="o">.</span><span class="n">get_args</span><span class="p">(</span><span class="n">annotation</span><span class="p">):</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">arg</span><span class="p">,</span> <span class="n">DimensionType</span><span class="p">):</span>
+                <span class="k">return</span> <span class="n">arg</span>
+    <span class="k">return</span> <span class="kc">None</span>
+
+
+<div class="viewcode-block" id="checked">
+<a class="viewcode-back" href="../../api/generated/annoray.dims.checked.html#annoray.checked">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">checked</span><span class="p">(</span><span class="n">func</span><span class="p">:</span> <span class="n">F</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">F</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Check dimension annotations of ``func``'s arguments and result at each call:</span>
+<span class="sd">    ``def speed(d: Quantity[Length], t: Quantity[Time]) -&gt; Quantity[Velocity]``. Other</span>
+<span class="sd">    annotations are left alone."""</span>
+    <span class="n">sig</span> <span class="o">=</span> <span class="n">inspect</span><span class="o">.</span><span class="n">signature</span><span class="p">(</span><span class="n">func</span><span class="p">)</span>
+    <span class="c1"># String annotations (`from __future__ import annotations`) may name dimensions imported</span>
+    <span class="c1"># where the function is defined, not only at module level.</span>
+    <span class="n">frame</span> <span class="o">=</span> <span class="n">inspect</span><span class="o">.</span><span class="n">currentframe</span><span class="p">()</span>
+    <span class="n">caller</span> <span class="o">=</span> <span class="n">frame</span><span class="o">.</span><span class="n">f_back</span> <span class="k">if</span> <span class="n">frame</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span>
+    <span class="n">localns</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">caller</span><span class="o">.</span><span class="n">f_locals</span><span class="p">)</span> <span class="k">if</span> <span class="n">caller</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span>
+    <span class="k">del</span> <span class="n">frame</span><span class="p">,</span> <span class="n">caller</span>
+    <span class="n">hints</span> <span class="o">=</span> <span class="n">typing</span><span class="o">.</span><span class="n">get_type_hints</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">localns</span><span class="o">=</span><span class="n">localns</span><span class="p">,</span> <span class="n">include_extras</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">params</span> <span class="o">=</span> <span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="n">d</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">hints</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">if</span> <span class="n">k</span> <span class="o">!=</span> <span class="s2">"return"</span> <span class="ow">and</span> <span class="p">(</span><span class="n">d</span> <span class="o">:=</span> <span class="n">_dims_in</span><span class="p">(</span><span class="n">v</span><span class="p">))}</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="n">_dims_in</span><span class="p">(</span><span class="n">hints</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"return"</span><span class="p">))</span>
+
+    <span class="nd">@functools</span><span class="o">.</span><span class="n">wraps</span><span class="p">(</span><span class="n">func</span><span class="p">)</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">wrapper</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+        <span class="n">bound</span> <span class="o">=</span> <span class="n">sig</span><span class="o">.</span><span class="n">bind</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">dim</span> <span class="ow">in</span> <span class="n">params</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">bound</span><span class="o">.</span><span class="n">arguments</span><span class="p">:</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">dim</span><span class="o">.</span><span class="n">check</span><span class="p">(</span><span class="n">bound</span><span class="o">.</span><span class="n">arguments</span><span class="p">[</span><span class="n">name</span><span class="p">])</span>
+                <span class="k">except</span> <span class="n">UnitError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="n">UnitError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">func</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">(): argument </span><span class="si">{</span><span class="n">name</span><span class="si">!r}</span><span class="s2">: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="kc">None</span>
+        <span class="n">out</span> <span class="o">=</span> <span class="n">func</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">result</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">result</span><span class="o">.</span><span class="n">check</span><span class="p">(</span><span class="n">out</span><span class="p">)</span>
+            <span class="k">except</span> <span class="n">UnitError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">UnitError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">func</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">(): result: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="kc">None</span>
+        <span class="k">return</span> <span class="n">out</span>
+
+    <span class="k">return</span> <span class="n">typing</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="s2">"F"</span><span class="p">,</span> <span class="n">wrapper</span><span class="p">)</span></div>
+
+
+
+<span class="c1"># ----- the base quantities -----</span>
+
+
+<div class="viewcode-block" id="Dimensionless">
+<a class="viewcode-back" href="../../api/generated/annoray.dims.Dimensionless.html#annoray.Dimensionless">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">Dimensionless</span><span class="p">(</span><span class="n">Dim</span><span class="p">,</span> <span class="n">dimension</span><span class="o">=</span><span class="n">Dimension</span><span class="p">()):</span>
+<span class="w">    </span><span class="sd">"""No dimension (pure numbers, ratios)."""</span></div>
+
+
+
+<div class="viewcode-block" id="Mass">
+<a class="viewcode-back" href="../../api/generated/annoray.dims.Mass.html#annoray.Mass">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">Mass</span><span class="p">(</span><span class="n">Dim</span><span class="p">,</span> <span class="n">dimension</span><span class="o">=</span><span class="n">Dimension</span><span class="p">(</span><span class="n">mass</span><span class="o">=</span><span class="mi">1</span><span class="p">)):</span>
+<span class="w">    </span><span class="sd">"""Mass (kg)."""</span></div>
+
+
+
+<div class="viewcode-block" id="Length">
+<a class="viewcode-back" href="../../api/generated/annoray.dims.Length.html#annoray.Length">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">Length</span><span class="p">(</span><span class="n">Dim</span><span class="p">,</span> <span class="n">dimension</span><span class="o">=</span><span class="n">Dimension</span><span class="p">(</span><span class="n">length</span><span class="o">=</span><span class="mi">1</span><span class="p">)):</span>
+<span class="w">    </span><span class="sd">"""Length (m)."""</span></div>
+
+
+
+<div class="viewcode-block" id="Time">
+<a class="viewcode-back" href="../../api/generated/annoray.dims.Time.html#annoray.Time">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">Time</span><span class="p">(</span><span class="n">Dim</span><span class="p">,</span> <span class="n">dimension</span><span class="o">=</span><span class="n">Dimension</span><span class="p">(</span><span class="n">time</span><span class="o">=</span><span class="mi">1</span><span class="p">)):</span>
+<span class="w">    </span><span class="sd">"""Time (s)."""</span></div>
+
+
+
+<div class="viewcode-block" id="Current">
+<a class="viewcode-back" href="../../api/generated/annoray.dims.Current.html#annoray.Current">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">Current</span><span class="p">(</span><span class="n">Dim</span><span class="p">,</span> <span class="n">dimension</span><span class="o">=</span><span class="n">Dimension</span><span class="p">(</span><span class="n">current</span><span class="o">=</span><span class="mi">1</span><span class="p">)):</span>
+<span class="w">    </span><span class="sd">"""Electric current (A)."""</span></div>
+
+
+
+<div class="viewcode-block" id="Temperature">
+<a class="viewcode-back" href="../../api/generated/annoray.dims.Temperature.html#annoray.Temperature">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">Temperature</span><span class="p">(</span><span class="n">Dim</span><span class="p">,</span> <span class="n">dimension</span><span class="o">=</span><span class="n">Dimension</span><span class="p">(</span><span class="n">temperature</span><span class="o">=</span><span class="mi">1</span><span class="p">)):</span>
+<span class="w">    </span><span class="sd">"""Thermodynamic temperature (K)."""</span></div>
+
+
+
+<div class="viewcode-block" id="Amount">
+<a class="viewcode-back" href="../../api/generated/annoray.dims.Amount.html#annoray.Amount">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">Amount</span><span class="p">(</span><span class="n">Dim</span><span class="p">,</span> <span class="n">dimension</span><span class="o">=</span><span class="n">Dimension</span><span class="p">(</span><span class="n">amount</span><span class="o">=</span><span class="mi">1</span><span class="p">)):</span>
+<span class="w">    </span><span class="sd">"""Amount of substance (mol)."""</span></div>
+
+
+
+<div class="viewcode-block" id="Luminosity">
+<a class="viewcode-back" href="../../api/generated/annoray.dims.Luminosity.html#annoray.Luminosity">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">Luminosity</span><span class="p">(</span><span class="n">Dim</span><span class="p">,</span> <span class="n">dimension</span><span class="o">=</span><span class="n">Dimension</span><span class="p">(</span><span class="n">luminosity</span><span class="o">=</span><span class="mi">1</span><span class="p">)):</span>
+<span class="w">    </span><span class="sd">"""Luminous intensity (cd)."""</span></div>
+
+
+
+<div class="viewcode-block" id="Angle">
+<a class="viewcode-back" href="../../api/generated/annoray.dims.Angle.html#annoray.Angle">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">Angle</span><span class="p">(</span><span class="n">Dim</span><span class="p">,</span> <span class="n">dimension</span><span class="o">=</span><span class="n">Dimension</span><span class="p">(</span><span class="n">angle</span><span class="o">=</span><span class="mi">1</span><span class="p">)):</span>
+<span class="w">    </span><span class="sd">"""Plane angle (rad): a dimension of its own here, as in whippyunits."""</span></div>
+
+
+
+<span class="c1"># ----- common derived dimensions (as Rust's `annoray::dims`) -----</span>
+
+
+<div class="viewcode-block" id="Frequency">
+<a class="viewcode-back" href="../../api/generated/annoray.dims.Frequency.html#annoray.Frequency">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">Frequency</span><span class="p">(</span><span class="n">Dim</span><span class="p">,</span> <span class="n">dimension</span><span class="o">=</span><span class="mi">1</span> <span class="o">/</span> <span class="n">Time</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Frequency (s-1)."""</span></div>
+
+
+
+<div class="viewcode-block" id="Area">
+<a class="viewcode-back" href="../../api/generated/annoray.dims.Area.html#annoray.Area">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">Area</span><span class="p">(</span><span class="n">Dim</span><span class="p">,</span> <span class="n">dimension</span><span class="o">=</span><span class="n">Length</span><span class="o">**</span><span class="mi">2</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Area (m2)."""</span></div>
+
+
+
+<div class="viewcode-block" id="Volume">
+<a class="viewcode-back" href="../../api/generated/annoray.dims.Volume.html#annoray.Volume">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">Volume</span><span class="p">(</span><span class="n">Dim</span><span class="p">,</span> <span class="n">dimension</span><span class="o">=</span><span class="n">Length</span><span class="o">**</span><span class="mi">3</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Volume (m3)."""</span></div>
+
+
+
+<div class="viewcode-block" id="Velocity">
+<a class="viewcode-back" href="../../api/generated/annoray.dims.Velocity.html#annoray.Velocity">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">Velocity</span><span class="p">(</span><span class="n">Dim</span><span class="p">,</span> <span class="n">dimension</span><span class="o">=</span><span class="n">Length</span> <span class="o">/</span> <span class="n">Time</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Velocity (m s-1)."""</span></div>
+
+
+
+<div class="viewcode-block" id="Acceleration">
+<a class="viewcode-back" href="../../api/generated/annoray.dims.Acceleration.html#annoray.Acceleration">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">Acceleration</span><span class="p">(</span><span class="n">Dim</span><span class="p">,</span> <span class="n">dimension</span><span class="o">=</span><span class="n">Velocity</span> <span class="o">/</span> <span class="n">Time</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Acceleration (m s-2)."""</span></div>
+
+
+
+<div class="viewcode-block" id="Force">
+<a class="viewcode-back" href="../../api/generated/annoray.dims.Force.html#annoray.Force">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">Force</span><span class="p">(</span><span class="n">Dim</span><span class="p">,</span> <span class="n">dimension</span><span class="o">=</span><span class="n">Mass</span> <span class="o">*</span> <span class="n">Acceleration</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Force (N = kg m s-2)."""</span></div>
+
+
+
+<div class="viewcode-block" id="Momentum">
+<a class="viewcode-back" href="../../api/generated/annoray.dims.Momentum.html#annoray.Momentum">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">Momentum</span><span class="p">(</span><span class="n">Dim</span><span class="p">,</span> <span class="n">dimension</span><span class="o">=</span><span class="n">Mass</span> <span class="o">*</span> <span class="n">Velocity</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Momentum (kg m s-1)."""</span></div>
+
+
+
+<div class="viewcode-block" id="Energy">
+<a class="viewcode-back" href="../../api/generated/annoray.dims.Energy.html#annoray.Energy">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">Energy</span><span class="p">(</span><span class="n">Dim</span><span class="p">,</span> <span class="n">dimension</span><span class="o">=</span><span class="n">Force</span> <span class="o">*</span> <span class="n">Length</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Energy, work and heat (J = N m). Torque has the same dimension."""</span></div>
+
+
+
+<div class="viewcode-block" id="Power">
+<a class="viewcode-back" href="../../api/generated/annoray.dims.Power.html#annoray.Power">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">Power</span><span class="p">(</span><span class="n">Dim</span><span class="p">,</span> <span class="n">dimension</span><span class="o">=</span><span class="n">Energy</span> <span class="o">/</span> <span class="n">Time</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Power (W = J s-1)."""</span></div>
+
+
+
+<div class="viewcode-block" id="Pressure">
+<a class="viewcode-back" href="../../api/generated/annoray.dims.Pressure.html#annoray.Pressure">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">Pressure</span><span class="p">(</span><span class="n">Dim</span><span class="p">,</span> <span class="n">dimension</span><span class="o">=</span><span class="n">Force</span> <span class="o">/</span> <span class="n">Area</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Pressure and stress (Pa = N m-2)."""</span></div>
+
+
+
+<div class="viewcode-block" id="Density">
+<a class="viewcode-back" href="../../api/generated/annoray.dims.Density.html#annoray.Density">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">Density</span><span class="p">(</span><span class="n">Dim</span><span class="p">,</span> <span class="n">dimension</span><span class="o">=</span><span class="n">Mass</span> <span class="o">/</span> <span class="n">Volume</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Density (kg m-3)."""</span></div>
+
+
+
+<div class="viewcode-block" id="Charge">
+<a class="viewcode-back" href="../../api/generated/annoray.dims.Charge.html#annoray.Charge">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">Charge</span><span class="p">(</span><span class="n">Dim</span><span class="p">,</span> <span class="n">dimension</span><span class="o">=</span><span class="n">Current</span> <span class="o">*</span> <span class="n">Time</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Electric charge (C = A s)."""</span></div>
+
+
+
+<div class="viewcode-block" id="Voltage">
+<a class="viewcode-back" href="../../api/generated/annoray.dims.Voltage.html#annoray.Voltage">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">Voltage</span><span class="p">(</span><span class="n">Dim</span><span class="p">,</span> <span class="n">dimension</span><span class="o">=</span><span class="n">Power</span> <span class="o">/</span> <span class="n">Current</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Voltage (V = W A-1)."""</span></div>
+
+
+
+<div class="viewcode-block" id="Resistance">
+<a class="viewcode-back" href="../../api/generated/annoray.dims.Resistance.html#annoray.Resistance">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">Resistance</span><span class="p">(</span><span class="n">Dim</span><span class="p">,</span> <span class="n">dimension</span><span class="o">=</span><span class="n">Voltage</span> <span class="o">/</span> <span class="n">Current</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Resistance (ohm = V A-1)."""</span></div>
+
+
+
+<div class="viewcode-block" id="AngularVelocity">
+<a class="viewcode-back" href="../../api/generated/annoray.dims.AngularVelocity.html#annoray.AngularVelocity">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">AngularVelocity</span><span class="p">(</span><span class="n">Dim</span><span class="p">,</span> <span class="n">dimension</span><span class="o">=</span><span class="n">Angle</span> <span class="o">/</span> <span class="n">Time</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Angular velocity (rad s-1)."""</span></div>
+
+
+
+<div class="viewcode-block" id="Concentration">
+<a class="viewcode-back" href="../../api/generated/annoray.dims.Concentration.html#annoray.Concentration">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">Concentration</span><span class="p">(</span><span class="n">Dim</span><span class="p">,</span> <span class="n">dimension</span><span class="o">=</span><span class="n">Amount</span> <span class="o">/</span> <span class="n">Volume</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Concentration (mol m-3)."""</span></div>
+
+</pre></div>
+
+                </article>
+              
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="../../_static/scripts/bootstrap.js?digest=18bd87630a240e9c25be"></script>
+<script defer src="../../_static/scripts/pydata-sphinx-theme.js?digest=18bd87630a240e9c25be"></script>
+
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item">
+
+  <p class="copyright">
+    
+      © Copyright 2026, Sunip K. Mukherjee.
+      <br/>
+    
+  </p>
+</div>
+      
+        <div class="footer-item">
+
+  <p class="sphinx-version">
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 9.2.0.
+  </p>
+</div>
+      
+    </div>
+  
+  
+  
+    <div class="footer-items__end">
+      
+        <div class="footer-item">
+<p class="theme-version">
+  <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.23.0.
+</p></div>
+      
+    </div>
+  
+</div>
+
+  </footer>
+  </body>
+</html>

@@ -1,0 +1,1360 @@
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../" data-theme="auto">
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>DataTree &#8212; annoray</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "auto";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "auto";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../_static/styles/theme.css?digest=18bd87630a240e9c25be" rel="stylesheet" />
+<link href="../_static/styles/pydata-sphinx-theme.css?digest=18bd87630a240e9c25be" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../_static/mystnb.11b39860a7a0cbfd473a3ad8a317855267ff0bd372690045ca344a6b62be495e.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
+  
+  <!-- So that users can add custom icons -->
+  <script defer src="../_static/scripts/fontawesome.js?digest=18bd87630a240e9c25be"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=18bd87630a240e9c25be" />
+<link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=18bd87630a240e9c25be" />
+
+    <script src="../_static/documentation_options.js?v=8446fafd"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../_static/copybutton.js?v=f281be69"></script>
+    <script src="../_static/design-tabs.js?v=f930bc37"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'api/datatree';</script>
+    <script>
+        DOCUMENTATION_OPTIONS.theme_version = '0.23.0';
+        DOCUMENTATION_OPTIONS.theme_switcher_json_url = 'https://sunipkm.github.io/annoray/switcher.json';
+        DOCUMENTATION_OPTIONS.theme_switcher_version_match = '0.0.1-pre3';
+        DOCUMENTATION_OPTIONS.show_version_warning_banner =
+            false;
+        </script>
+    <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="annoray.DataTree" href="generated/annoray.DataTree.html" />
+    <link rel="prev" title="annoray.Dataset.from_dataframe" href="generated/annoray.Dataset.from_dataframe.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="color-scheme" content="light dark"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="0.0.1-pre3" />
+  
+    
+    <script src="../_static/searchtools.js"></script>
+    <script src="../_static/language_data.js"></script>
+    <script src="../searchindex.js"></script>
+  
+  </head>
+  <body data-default-mode="auto">
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+  
+  
+  
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header id="pst-header" class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button type="button" class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-3 navbar-header-items__start">
+    
+      <div class="navbar-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../index.html">
+  
+  
+  
+  
+  
+  
+    <p class="title logo__title">annoray</p>
+  
+</a></div>
+    
+  </div>
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    <div class="me-auto navbar-header-items__center">
+      
+        <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../getting-started/installation.html">
+    Installation
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../getting-started/overview.html">
+    Overview
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../getting-started/examples.html">
+    Examples
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../xarray-differences.html">
+    Differences from xarray
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../user-guide/index.html">
+    User guide
+  </a>
+</li>
+
+            <li class="nav-item dropdown">
+                <button class="btn dropdown-toggle nav-item" type="button"
+                data-bs-toggle="dropdown" aria-expanded="false"
+                aria-controls="pst-nav-more-links">
+                    More
+                </button>
+                <ul id="pst-nav-more-links" class="dropdown-menu">
+                    
+<li class=" current active">
+  <a class="nav-link dropdown-item nav-internal" href="index.html">
+    API reference
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="../rust.html">
+    Rust crates
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="../performance.html">
+    Performance
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-external" href="https://docs.rs/annoray">
+    Rust API
+  </a>
+</li>
+
+                </ul>
+            </li>
+            
+  </ul>
+</nav></div>
+      
+    </div>
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button type="button" class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+        </div>
+      
+      
+        <div class="navbar-item">
+<div class="version-switcher__container dropdown pst-js-only">
+  <button id="pst-version-switcher-button-2"
+    type="button"
+    class="version-switcher__button btn btn-sm dropdown-toggle"
+    data-bs-toggle="dropdown"
+    aria-haspopup="listbox"
+    aria-controls="pst-version-switcher-list-2"
+    aria-label="Version switcher list"
+  >
+    Choose version  <!-- this text may get changed later by javascript -->
+    <span class="caret"></span>
+  </button>
+  <div id="pst-version-switcher-list-2"
+    class="version-switcher__menu dropdown-menu list-group-flush py-0"
+    role="listbox" aria-labelledby="pst-version-switcher-button-2">
+    <!-- dropdown will be populated by javascript on page load -->
+  </div>
+</div></div>
+      
+        <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button type="button" class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+      
+        <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/sunipkm/annoray" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-square-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
+        </li>
+</ul></div>
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button type="button" class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+    </div>
+  
+
+  
+    <button type="button" class="pst-navbar-icon sidebar-toggle secondary-toggle" aria-label="On this page">
+      <span class="fa-solid fa-outdent"></span>
+    </button>
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../getting-started/installation.html">
+    Installation
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../getting-started/overview.html">
+    Overview
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../getting-started/examples.html">
+    Examples
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../xarray-differences.html">
+    Differences from xarray
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../user-guide/index.html">
+    User guide
+  </a>
+</li>
+
+
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="index.html">
+    API reference
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../rust.html">
+    Rust crates
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../performance.html">
+    Performance
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-external" href="https://docs.rs/annoray">
+    Rust API
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+<div class="version-switcher__container dropdown pst-js-only">
+  <button id="pst-version-switcher-button-3"
+    type="button"
+    class="version-switcher__button btn btn-sm dropdown-toggle"
+    data-bs-toggle="dropdown"
+    aria-haspopup="listbox"
+    aria-controls="pst-version-switcher-list-3"
+    aria-label="Version switcher list"
+  >
+    Choose version  <!-- this text may get changed later by javascript -->
+    <span class="caret"></span>
+  </button>
+  <div id="pst-version-switcher-list-3"
+    class="version-switcher__menu dropdown-menu list-group-flush py-0"
+    role="listbox" aria-labelledby="pst-version-switcher-button-3">
+    <!-- dropdown will be populated by javascript on page load -->
+  </div>
+</div></div>
+        
+          <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button type="button" class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+        
+          <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/sunipkm/annoray" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-square-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
+        </li>
+</ul></div>
+        
+      </div>
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item pst-sidebar-collapse"><button type="button" id="pst-collapse-sidebar-button" aria-expanded="true" aria-controls="pst-primary-sidebar">
+  <svg class="pst-icon" role="img" aria-hidden="true" focusable="false" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+    <path fill="currentColor" d="M3 15.5C2.36232 15.5 1.74874 15.2564 1.28478 14.8189C0.820828 14.3815 0.541576 13.7832 0.504167 13.1467L0.5 13L0.5 3C0.499965 2.36232 0.743605 1.74874 1.18107 1.28478C1.61854 0.820828 2.21676 0.541576 2.85333 0.504167L3 0.5L13 0.5C13.6377 0.499965 14.2513 0.743605 14.7152 1.18107C15.1792 1.61854 15.4584 2.21676 15.4958 2.85333L15.5 3L15.5 13C15.5 13.6377 15.2564 14.2513 14.8189 14.7152C14.3815 15.1792 13.7832 15.4584 13.1467 15.4958L13 15.5L3 15.5ZM3 13.8333L10.5 13.8333L10.5 2.16667L3 2.16667C2.79589 2.16669 2.59889 2.24163 2.44636 2.37726C2.29383 2.5129 2.19638 2.69979 2.1725 2.9025L2.16667 3L2.16667 13C2.16669 13.2041 2.24163 13.4011 2.37726 13.5536C2.5129 13.7062 2.69979 13.8036 2.9025 13.8275L3 13.8333ZM6.65583 10.325L6.5775 10.2558L4.91083 8.58917C4.76735 8.44567 4.68116 8.25476 4.66843 8.05223C4.65569 7.84971 4.71729 7.6495 4.84167 7.48917L4.91083 7.41083L6.5775 5.74417C6.72747 5.59471 6.9287 5.50794 7.14032 5.50148C7.35194 5.49502 7.55809 5.56935 7.7169 5.70937C7.8757 5.8494 7.97525 6.04463 7.99533 6.25539C8.01541 6.46616 7.95451 6.67667 7.825 6.84417L7.75583 6.9225L6.67917 8L7.75583 9.0775C7.89931 9.22099 7.98551 9.41191 7.99824 9.61443C8.01097 9.81695 7.94938 10.0172 7.825 10.1775L7.75583 10.2558C7.61234 10.3993 7.42142 10.4855 7.2189 10.4982C7.01638 10.511 6.81617 10.4494 6.65583 10.325Z"/>
+  </svg>
+  <span class="pst-collapse-sidebar-label">Collapse Sidebar</span>
+  <span class="pst-expand-sidebar-label">Expand Sidebar</span>
+</button></div>
+        <div class="sidebar-primary-item">
+
+<nav class="bd-docs-nav bd-links"
+     aria-label="Section Navigation">
+  <p class="bd-links__title" role="heading" aria-level="1">Section Navigation</p>
+  <div class="bd-toc-item navbar-nav"><ul class="current nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="dataarray.html">DataArray</a></li>
+<li class="toctree-l1"><a class="reference internal" href="dataset.html">Dataset</a></li>
+<li class="toctree-l1 current active has-children"><a aria-current="page" class="current reference internal" href="#">DataTree</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.html">annoray.DataTree</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.name.html">annoray.DataTree.name</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.parent.html">annoray.DataTree.parent</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.children.html">annoray.DataTree.children</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.root.html">annoray.DataTree.root</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.path.html">annoray.DataTree.path</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.paths.html">annoray.DataTree.paths</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.depth.html">annoray.DataTree.depth</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.level.html">annoray.DataTree.level</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.width.html">annoray.DataTree.width</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.lineage.html">annoray.DataTree.lineage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.parents.html">annoray.DataTree.parents</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.ancestors.html">annoray.DataTree.ancestors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.descendants.html">annoray.DataTree.descendants</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.leaves.html">annoray.DataTree.leaves</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.groups.html">annoray.DataTree.groups</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.subtree.html">annoray.DataTree.subtree</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.is_root.html">annoray.DataTree.is_root</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.is_leaf.html">annoray.DataTree.is_leaf</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.is_empty.html">annoray.DataTree.is_empty</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.has_data.html">annoray.DataTree.has_data</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.has_attrs.html">annoray.DataTree.has_attrs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.relative_to.html">annoray.DataTree.relative_to</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.find_common_ancestor.html">annoray.DataTree.find_common_ancestor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.same_tree.html">annoray.DataTree.same_tree</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.isomorphic.html">annoray.DataTree.isomorphic</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.dataset.html">annoray.DataTree.dataset</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.ds.html">annoray.DataTree.ds</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.to_dataset.html">annoray.DataTree.to_dataset</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.data_vars.html">annoray.DataTree.data_vars</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.coords.html">annoray.DataTree.coords</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.dims.html">annoray.DataTree.dims</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.sizes.html">annoray.DataTree.sizes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.attrs.html">annoray.DataTree.attrs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.encoding.html">annoray.DataTree.encoding</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.values.html">annoray.DataTree.values</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.keys.html">annoray.DataTree.keys</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.items.html">annoray.DataTree.items</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.get.html">annoray.DataTree.get</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.assign.html">annoray.DataTree.assign</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.copy.html">annoray.DataTree.copy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.orphan.html">annoray.DataTree.orphan</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.drop_nodes.html">annoray.DataTree.drop_nodes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.drop_vars.html">annoray.DataTree.drop_vars</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.rename_vars.html">annoray.DataTree.rename_vars</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.match.html">annoray.DataTree.match</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.filter.html">annoray.DataTree.filter</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.filter_like.html">annoray.DataTree.filter_like</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.prune.html">annoray.DataTree.prune</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.map_over_datasets.html">annoray.DataTree.map_over_datasets</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.pipe.html">annoray.DataTree.pipe</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.astype.html">annoray.DataTree.astype</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.load.html">annoray.DataTree.load</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.compute.html">annoray.DataTree.compute</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.persist.html">annoray.DataTree.persist</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.chunk.html">annoray.DataTree.chunk</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.isel.html">annoray.DataTree.isel</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.sel.html">annoray.DataTree.sel</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.head.html">annoray.DataTree.head</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.tail.html">annoray.DataTree.tail</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.thin.html">annoray.DataTree.thin</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.reindex.html">annoray.DataTree.reindex</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.interp.html">annoray.DataTree.interp</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.isnull.html">annoray.DataTree.isnull</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.notnull.html">annoray.DataTree.notnull</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.fillna.html">annoray.DataTree.fillna</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.dropna.html">annoray.DataTree.dropna</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.where.html">annoray.DataTree.where</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.equals.html">annoray.DataTree.equals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.identical.html">annoray.DataTree.identical</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.all.html">annoray.DataTree.all</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.any.html">annoray.DataTree.any</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.count.html">annoray.DataTree.count</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.max.html">annoray.DataTree.max</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.mean.html">annoray.DataTree.mean</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.median.html">annoray.DataTree.median</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.min.html">annoray.DataTree.min</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.prod.html">annoray.DataTree.prod</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.std.html">annoray.DataTree.std</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.sum.html">annoray.DataTree.sum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.var.html">annoray.DataTree.var</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.quantile.html">annoray.DataTree.quantile</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.cumsum.html">annoray.DataTree.cumsum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.cumprod.html">annoray.DataTree.cumprod</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.clip.html">annoray.DataTree.clip</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.round.html">annoray.DataTree.round</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.diff.html">annoray.DataTree.diff</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.shift.html">annoray.DataTree.shift</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.roll.html">annoray.DataTree.roll</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.squeeze.html">annoray.DataTree.squeeze</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.to_netcdf.html">annoray.DataTree.to_netcdf</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.to_zarr.html">annoray.DataTree.to_zarr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.to_dict.html">annoray.DataTree.to_dict</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.to_xarray.html">annoray.DataTree.to_xarray</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.DataTree.from_dict.html">annoray.DataTree.from_dict</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1"><a class="reference internal" href="functions.html">Top-level functions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="units.html">Units</a></li>
+<li class="toctree-l1"><a class="reference internal" href="helpers.html">GroupBy, windows and weights</a></li>
+<li class="toctree-l1"><a class="reference internal" href="testing.html">Testing</a></li>
+</ul>
+</div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+<nav aria-label="Breadcrumb" class="d-print-none">
+  <ul class="bd-breadcrumbs">
+    
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="../index.html" class="nav-link" aria-label="Home">
+        <i class="fa-solid fa-home"></i>
+      </a>
+    </li>
+    
+    <li class="breadcrumb-item"><a href="index.html" class="nav-link">API reference</a></li>
+    
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">DataTree</span></li>
+  </ul>
+</nav>
+</div>
+      
+    </div>
+  
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section id="datatree">
+<h1>DataTree<a class="headerlink" href="#datatree" title="Link to this heading">#</a></h1>
+<p>A tree of datasets; a node is a view of the shared tree at a path.</p>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.DataTree.html#annoray.DataTree" title="annoray.DataTree"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree</span></code></a>([dataset, children, name])</p></td>
+<td><p>A node of a tree of datasets: its own variables and named children, inheriting its ancestors' dimension coordinates (xarray's <code class="code docutils literal notranslate"><span class="pre">DataTree</span></code>).</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Each section has a short example; the examples share this setup:</p>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">annoray</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">ar</span>
+
+<span class="n">tree</span> <span class="o">=</span> <span class="n">ar</span><span class="o">.</span><span class="n">DataTree</span><span class="o">.</span><span class="n">from_dict</span><span class="p">({</span>
+    <span class="s2">"/"</span><span class="p">:</span> <span class="n">ar</span><span class="o">.</span><span class="n">Dataset</span><span class="p">(</span><span class="n">attrs</span><span class="o">=</span><span class="p">{</span><span class="s2">"title"</span><span class="p">:</span> <span class="s2">"campaign"</span><span class="p">}),</span>
+    <span class="s2">"/surface"</span><span class="p">:</span> <span class="n">ar</span><span class="o">.</span><span class="n">Dataset</span><span class="p">({</span><span class="s2">"t"</span><span class="p">:</span> <span class="p">(</span><span class="s2">"time"</span><span class="p">,</span> <span class="p">[</span><span class="mf">280.0</span><span class="p">,</span> <span class="mf">281.0</span><span class="p">,</span> <span class="mf">283.0</span><span class="p">],</span> <span class="p">{</span><span class="s2">"units"</span><span class="p">:</span> <span class="s2">"K"</span><span class="p">})}),</span>
+    <span class="s2">"/upper"</span><span class="p">:</span> <span class="n">ar</span><span class="o">.</span><span class="n">Dataset</span><span class="p">({</span><span class="s2">"t"</span><span class="p">:</span> <span class="p">(</span><span class="s2">"time"</span><span class="p">,</span> <span class="p">[</span><span class="mf">250.0</span><span class="p">,</span> <span class="mf">248.5</span><span class="p">,</span> <span class="mf">247.0</span><span class="p">],</span> <span class="p">{</span><span class="s2">"units"</span><span class="p">:</span> <span class="s2">"K"</span><span class="p">})}),</span>
+<span class="p">})</span>
+</pre></div>
+</div>
+</div>
+</div>
+<section id="tree-structure">
+<h2>Tree structure<a class="headerlink" href="#tree-structure" title="Link to this heading">#</a></h2>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="nb">print</span><span class="p">(</span><span class="n">tree</span><span class="o">.</span><span class="n">groups</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">tree</span><span class="p">[</span><span class="s2">"surface"</span><span class="p">]</span><span class="o">.</span><span class="n">path</span><span class="p">,</span> <span class="n">tree</span><span class="p">[</span><span class="s2">"surface"</span><span class="p">]</span><span class="o">.</span><span class="n">parent</span><span class="o">.</span><span class="n">path</span><span class="p">,</span> <span class="n">tree</span><span class="p">[</span><span class="s2">"surface"</span><span class="p">]</span><span class="o">.</span><span class="n">is_leaf</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>('/', '/surface', '/upper')
+/surface / True
+</pre></div>
+</div>
+</div>
+</div>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.DataTree.name.html#annoray.DataTree.name" title="annoray.DataTree.name"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.name</span></code></a></p></td>
+<td><p>This node's name (the root's is <code class="code docutils literal notranslate"><span class="pre">None</span></code> unless given).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.DataTree.parent.html#annoray.DataTree.parent" title="annoray.DataTree.parent"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.parent</span></code></a></p></td>
+<td><p>The parent node (<code class="code docutils literal notranslate"><span class="pre">None</span></code> at the root).</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.DataTree.children.html#annoray.DataTree.children" title="annoray.DataTree.children"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.children</span></code></a></p></td>
+<td><p>Child name → node.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.DataTree.root.html#annoray.DataTree.root" title="annoray.DataTree.root"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.root</span></code></a></p></td>
+<td><p>The root of the tree this node is in.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.DataTree.path.html#annoray.DataTree.path" title="annoray.DataTree.path"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.path</span></code></a></p></td>
+<td><p>This node's path from the root (<code class="code docutils literal notranslate"><span class="pre">&quot;/&quot;</span></code>, <code class="code docutils literal notranslate"><span class="pre">&quot;/a/b&quot;</span></code>).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.DataTree.paths.html#annoray.DataTree.paths" title="annoray.DataTree.paths"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.paths</span></code></a></p></td>
+<td><p>Every node's path below this one (this one first, depth first), relative to the root.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.DataTree.depth.html#annoray.DataTree.depth" title="annoray.DataTree.depth"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.depth</span></code></a></p></td>
+<td><p>The deepest level in the tree.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.DataTree.level.html#annoray.DataTree.level" title="annoray.DataTree.level"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.level</span></code></a></p></td>
+<td><p>The number of ancestors.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.DataTree.width.html#annoray.DataTree.width" title="annoray.DataTree.width"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.width</span></code></a></p></td>
+<td><p>The number of nodes at this level of the tree.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.DataTree.lineage.html#annoray.DataTree.lineage" title="annoray.DataTree.lineage"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.lineage</span></code></a></p></td>
+<td><p>This node and its ancestors, nearest first.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.DataTree.parents.html#annoray.DataTree.parents" title="annoray.DataTree.parents"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.parents</span></code></a></p></td>
+<td><p>The ancestors, nearest first.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.DataTree.ancestors.html#annoray.DataTree.ancestors" title="annoray.DataTree.ancestors"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.ancestors</span></code></a></p></td>
+<td><p>The root first, this node last.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.DataTree.descendants.html#annoray.DataTree.descendants" title="annoray.DataTree.descendants"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.descendants</span></code></a></p></td>
+<td><p>Every node below this one, breadth first.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.DataTree.leaves.html#annoray.DataTree.leaves" title="annoray.DataTree.leaves"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.leaves</span></code></a></p></td>
+<td><p>The nodes without children below (or at) this one.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.DataTree.groups.html#annoray.DataTree.groups" title="annoray.DataTree.groups"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.groups</span></code></a></p></td>
+<td><p>The paths of <code class="code docutils literal notranslate"><span class="pre">subtree</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.DataTree.subtree.html#annoray.DataTree.subtree" title="annoray.DataTree.subtree"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.subtree</span></code></a></p></td>
+<td><p>This node and every node below it, breadth first.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.DataTree.is_root.html#annoray.DataTree.is_root" title="annoray.DataTree.is_root"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.is_root</span></code></a></p></td>
+<td><p>Whether this node is its tree's root.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.DataTree.is_leaf.html#annoray.DataTree.is_leaf" title="annoray.DataTree.is_leaf"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.is_leaf</span></code></a></p></td>
+<td><p>Whether this node has no children.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.DataTree.is_empty.html#annoray.DataTree.is_empty" title="annoray.DataTree.is_empty"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.is_empty</span></code></a></p></td>
+<td><p>No variables and no children.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.DataTree.has_data.html#annoray.DataTree.has_data" title="annoray.DataTree.has_data"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.has_data</span></code></a></p></td>
+<td><p>Whether this node has variables of its own.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.DataTree.has_attrs.html#annoray.DataTree.has_attrs" title="annoray.DataTree.has_attrs"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.has_attrs</span></code></a></p></td>
+<td><p>Whether this node has attributes.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.DataTree.relative_to.html#annoray.DataTree.relative_to" title="annoray.DataTree.relative_to"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.relative_to</span></code></a>(other)</p></td>
+<td><p>This node's path relative to another node of the tree.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.DataTree.find_common_ancestor.html#annoray.DataTree.find_common_ancestor" title="annoray.DataTree.find_common_ancestor"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.find_common_ancestor</span></code></a>(other)</p></td>
+<td><p>The deepest node both are below.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.DataTree.same_tree.html#annoray.DataTree.same_tree" title="annoray.DataTree.same_tree"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.same_tree</span></code></a>(other)</p></td>
+<td><p>Whether another node is in the same tree.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.DataTree.isomorphic.html#annoray.DataTree.isomorphic" title="annoray.DataTree.isomorphic"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.isomorphic</span></code></a>(other)</p></td>
+<td><p>The same structure (child names at every level).</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="node-contents">
+<h2>Node contents<a class="headerlink" href="#node-contents" title="Link to this heading">#</a></h2>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="nb">print</span><span class="p">(</span><span class="n">tree</span><span class="p">[</span><span class="s2">"surface"</span><span class="p">]</span><span class="o">.</span><span class="n">dataset</span><span class="p">[</span><span class="s2">"t"</span><span class="p">]</span><span class="o">.</span><span class="n">units</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">tree</span><span class="p">[</span><span class="s2">"upper"</span><span class="p">]</span><span class="o">.</span><span class="n">data_vars</span><span class="p">))</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>K
+['t']
+</pre></div>
+</div>
+</div>
+</div>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.DataTree.dataset.html#annoray.DataTree.dataset" title="annoray.DataTree.dataset"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.dataset</span></code></a></p></td>
+<td><p>Same as <code class="code docutils literal notranslate"><span class="pre">ds</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.DataTree.ds.html#annoray.DataTree.ds" title="annoray.DataTree.ds"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.ds</span></code></a></p></td>
+<td><p>This node's dataset with the coordinates it inherits (a copy).</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.DataTree.to_dataset.html#annoray.DataTree.to_dataset" title="annoray.DataTree.to_dataset"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.to_dataset</span></code></a>([path_or_inherit, inherit])</p></td>
+<td><p>This node's dataset: with the coordinates it inherits (<code class="code docutils literal notranslate"><span class="pre">inherit</span></code>), or its own.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.DataTree.data_vars.html#annoray.DataTree.data_vars" title="annoray.DataTree.data_vars"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.data_vars</span></code></a></p></td>
+<td><p>The data variables (with inherited coordinates).</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.DataTree.coords.html#annoray.DataTree.coords" title="annoray.DataTree.coords"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.coords</span></code></a></p></td>
+<td><p>The coordinates, inherited ones included.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.DataTree.dims.html#annoray.DataTree.dims" title="annoray.DataTree.dims"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.dims</span></code></a></p></td>
+<td><p>The dimensions, inherited ones included.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.DataTree.sizes.html#annoray.DataTree.sizes" title="annoray.DataTree.sizes"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.sizes</span></code></a></p></td>
+<td><p>Dimension → length.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.DataTree.attrs.html#annoray.DataTree.attrs" title="annoray.DataTree.attrs"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.attrs</span></code></a></p></td>
+<td><p>This node's attributes, as a dict whose changes apply to the node.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.DataTree.encoding.html#annoray.DataTree.encoding" title="annoray.DataTree.encoding"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.encoding</span></code></a></p></td>
+<td><p>This node's dataset encoding (<code class="code docutils literal notranslate"><span class="pre">unlimited_dims</span></code>), as a live dict.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.DataTree.values.html#annoray.DataTree.values" title="annoray.DataTree.values"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.values</span></code></a>()</p></td>
+<td><p>The values of <code class="code docutils literal notranslate"><span class="pre">keys()</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.DataTree.keys.html#annoray.DataTree.keys" title="annoray.DataTree.keys"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.keys</span></code></a>()</p></td>
+<td><p>Data variable names, then child names.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.DataTree.items.html#annoray.DataTree.items" title="annoray.DataTree.items"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.items</span></code></a>()</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">(key,</span> <span class="pre">value)</span></code> pairs of <code class="code docutils literal notranslate"><span class="pre">keys()</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.DataTree.get.html#annoray.DataTree.get" title="annoray.DataTree.get"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.get</span></code></a>(key[, default])</p></td>
+<td><p>The node or variable at a key, or a default.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="editing">
+<h2>Editing<a class="headerlink" href="#editing" title="Link to this heading">#</a></h2>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">tree2</span> <span class="o">=</span> <span class="n">tree</span><span class="o">.</span><span class="n">assign</span><span class="p">(</span><span class="n">note</span><span class="o">=</span><span class="n">ar</span><span class="o">.</span><span class="n">DataArray</span><span class="p">(</span><span class="s2">"synthetic"</span><span class="p">))</span>
+<span class="nb">print</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">tree2</span><span class="o">.</span><span class="n">data_vars</span><span class="p">),</span> <span class="nb">list</span><span class="p">(</span><span class="n">tree</span><span class="o">.</span><span class="n">data_vars</span><span class="p">))</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>['note'] []
+</pre></div>
+</div>
+</div>
+</div>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.DataTree.assign.html#annoray.DataTree.assign" title="annoray.DataTree.assign"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.assign</span></code></a>([items])</p></td>
+<td><p>A copy with variables or children set on this node.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.DataTree.copy.html#annoray.DataTree.copy" title="annoray.DataTree.copy"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.copy</span></code></a>([deep])</p></td>
+<td><p>This node's subtree as a new tree.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.DataTree.orphan.html#annoray.DataTree.orphan" title="annoray.DataTree.orphan"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.orphan</span></code></a>()</p></td>
+<td><p>Detach this node from its parent: it becomes the root of its own tree (xarray's <code class="code docutils literal notranslate"><span class="pre">orphan</span></code>).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.DataTree.drop_nodes.html#annoray.DataTree.drop_nodes" title="annoray.DataTree.drop_nodes"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.drop_nodes</span></code></a>(names, *[, errors])</p></td>
+<td><p>A copy without the named children.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.DataTree.drop_vars.html#annoray.DataTree.drop_vars" title="annoray.DataTree.drop_vars"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.drop_vars</span></code></a>(*args, **kwargs)</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">Dataset.drop_vars</span></code> applied to every node's dataset, as a new tree of the same shape.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.DataTree.rename_vars.html#annoray.DataTree.rename_vars" title="annoray.DataTree.rename_vars"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.rename_vars</span></code></a>(*args, **kwargs)</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">Dataset.rename_vars</span></code> applied to every node's dataset, as a new tree of the same shape.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="selecting-nodes">
+<h2>Selecting nodes<a class="headerlink" href="#selecting-nodes" title="Link to this heading">#</a></h2>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="nb">print</span><span class="p">(</span><span class="n">tree</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="s2">"surf*"</span><span class="p">)</span><span class="o">.</span><span class="n">groups</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">tree</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="k">lambda</span> <span class="n">node</span><span class="p">:</span> <span class="n">node</span><span class="o">.</span><span class="n">has_data</span><span class="p">)</span><span class="o">.</span><span class="n">groups</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>('/', '/surface')
+('/', '/surface', '/upper')
+</pre></div>
+</div>
+</div>
+</div>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.DataTree.match.html#annoray.DataTree.match" title="annoray.DataTree.match"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.match</span></code></a>(pattern)</p></td>
+<td><p>The nodes whose relative path matches a glob pattern, as a new tree.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.DataTree.filter.html#annoray.DataTree.filter" title="annoray.DataTree.filter"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.filter</span></code></a>(filterfunc)</p></td>
+<td><p>The nodes for which a function holds, as a new tree.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.DataTree.filter_like.html#annoray.DataTree.filter_like" title="annoray.DataTree.filter_like"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.filter_like</span></code></a>(other)</p></td>
+<td><p>The nodes whose relative paths exist in another tree.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.DataTree.prune.html#annoray.DataTree.prune" title="annoray.DataTree.prune"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.prune</span></code></a>([drop_size_zero_vars])</p></td>
+<td><p>A copy without the nodes whose subtree holds no data.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="mapping-over-nodes">
+<h2>Mapping over nodes<a class="headerlink" href="#mapping-over-nodes" title="Link to this heading">#</a></h2>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">celsius</span> <span class="o">=</span> <span class="n">tree</span><span class="o">.</span><span class="n">map_over_datasets</span><span class="p">(</span><span class="k">lambda</span> <span class="n">ds</span><span class="p">:</span> <span class="n">ds</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">v</span><span class="p">:</span> <span class="n">v</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="s2">"degC"</span><span class="p">)))</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">celsius</span><span class="p">[</span><span class="s2">"surface"</span><span class="p">][</span><span class="s2">"t"</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>[6.85 7.85 9.85]
+</pre></div>
+</div>
+</div>
+</div>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.DataTree.map_over_datasets.html#annoray.DataTree.map_over_datasets" title="annoray.DataTree.map_over_datasets"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.map_over_datasets</span></code></a>(func, *args[, kwargs])</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">func(dataset)</span></code> for every node, as a tree of the results.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.DataTree.pipe.html#annoray.DataTree.pipe" title="annoray.DataTree.pipe"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.pipe</span></code></a>(func, *args, **kwargs)</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">func(self,</span> <span class="pre">*args,</span> <span class="pre">**kwargs)</span></code>.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="memory-and-copying">
+<h2>Memory and copying<a class="headerlink" href="#memory-and-copying" title="Link to this heading">#</a></h2>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="nb">print</span><span class="p">(</span><span class="n">tree</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s2">"float32"</span><span class="p">)[</span><span class="s2">"surface"</span><span class="p">][</span><span class="s2">"t"</span><span class="p">]</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>float32
+</pre></div>
+</div>
+</div>
+</div>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.DataTree.astype.html#annoray.DataTree.astype" title="annoray.DataTree.astype"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.astype</span></code></a>(*args, **kwargs)</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">Dataset.astype</span></code> applied to every node's dataset, as a new tree of the same shape.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.DataTree.load.html#annoray.DataTree.load" title="annoray.DataTree.load"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.load</span></code></a>(**kwargs)</p></td>
+<td><p>Read every lazily loaded value, in place; returns this node.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.DataTree.compute.html#annoray.DataTree.compute" title="annoray.DataTree.compute"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.compute</span></code></a>(**kwargs)</p></td>
+<td><p>A copy with every value read into memory.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.DataTree.persist.html#annoray.DataTree.persist" title="annoray.DataTree.persist"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.persist</span></code></a>(*args, **kwargs)</p></td>
+<td><p>No-op without dask.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.DataTree.chunk.html#annoray.DataTree.chunk" title="annoray.DataTree.chunk"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.chunk</span></code></a>(*args, **kwargs)</p></td>
+<td><p>No-op without dask.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="indexing">
+<h2>Indexing<a class="headerlink" href="#indexing" title="Link to this heading">#</a></h2>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="nb">print</span><span class="p">(</span><span class="n">tree</span><span class="o">.</span><span class="n">isel</span><span class="p">(</span><span class="n">time</span><span class="o">=</span><span class="mi">0</span><span class="p">)[</span><span class="s2">"upper"</span><span class="p">][</span><span class="s2">"t"</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>250.0
+</pre></div>
+</div>
+</div>
+</div>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.DataTree.isel.html#annoray.DataTree.isel" title="annoray.DataTree.isel"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.isel</span></code></a>(*args, **kwargs)</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">Dataset.isel</span></code> applied to every node's dataset, as a new tree of the same shape.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.DataTree.sel.html#annoray.DataTree.sel" title="annoray.DataTree.sel"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.sel</span></code></a>(*args, **kwargs)</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">Dataset.sel</span></code> applied to every node's dataset, as a new tree of the same shape.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.DataTree.head.html#annoray.DataTree.head" title="annoray.DataTree.head"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.head</span></code></a>(*args, **kwargs)</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">Dataset.head</span></code> applied to every node's dataset, as a new tree of the same shape.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.DataTree.tail.html#annoray.DataTree.tail" title="annoray.DataTree.tail"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.tail</span></code></a>(*args, **kwargs)</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">Dataset.tail</span></code> applied to every node's dataset, as a new tree of the same shape.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.DataTree.thin.html#annoray.DataTree.thin" title="annoray.DataTree.thin"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.thin</span></code></a>(*args, **kwargs)</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">Dataset.thin</span></code> applied to every node's dataset, as a new tree of the same shape.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.DataTree.reindex.html#annoray.DataTree.reindex" title="annoray.DataTree.reindex"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.reindex</span></code></a>(*args, **kwargs)</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">Dataset.reindex</span></code> applied to every node's dataset, as a new tree of the same shape.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.DataTree.interp.html#annoray.DataTree.interp" title="annoray.DataTree.interp"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.interp</span></code></a>(*args, **kwargs)</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">Dataset.interp</span></code> applied to every node's dataset, as a new tree of the same shape.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="missing-values">
+<h2>Missing values<a class="headerlink" href="#missing-values" title="Link to this heading">#</a></h2>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="nb">print</span><span class="p">(</span><span class="n">tree</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">tree</span> <span class="o">&gt;</span> <span class="n">ar</span><span class="o">.</span><span class="n">Quantity</span><span class="p">(</span><span class="mf">249.0</span><span class="p">,</span> <span class="s2">"K"</span><span class="p">))[</span><span class="s2">"upper"</span><span class="p">][</span><span class="s2">"t"</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>[250.  nan  nan]
+</pre></div>
+</div>
+</div>
+</div>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.DataTree.isnull.html#annoray.DataTree.isnull" title="annoray.DataTree.isnull"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.isnull</span></code></a>(*args, **kwargs)</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">Dataset.isnull</span></code> applied to every node's dataset, as a new tree of the same shape.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.DataTree.notnull.html#annoray.DataTree.notnull" title="annoray.DataTree.notnull"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.notnull</span></code></a>(*args, **kwargs)</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">Dataset.notnull</span></code> applied to every node's dataset, as a new tree of the same shape.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.DataTree.fillna.html#annoray.DataTree.fillna" title="annoray.DataTree.fillna"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.fillna</span></code></a>(*args, **kwargs)</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">Dataset.fillna</span></code> applied to every node's dataset, as a new tree of the same shape.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.DataTree.dropna.html#annoray.DataTree.dropna" title="annoray.DataTree.dropna"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.dropna</span></code></a>(*args, **kwargs)</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">Dataset.dropna</span></code> applied to every node's dataset, as a new tree of the same shape.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.DataTree.where.html#annoray.DataTree.where" title="annoray.DataTree.where"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.where</span></code></a>(*args, **kwargs)</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">Dataset.where</span></code> applied to every node's dataset, as a new tree of the same shape.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="comparisons">
+<h2>Comparisons<a class="headerlink" href="#comparisons" title="Link to this heading">#</a></h2>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="nb">print</span><span class="p">(</span><span class="n">tree</span><span class="o">.</span><span class="n">equals</span><span class="p">(</span><span class="n">tree</span><span class="o">.</span><span class="n">copy</span><span class="p">()))</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>True
+</pre></div>
+</div>
+</div>
+</div>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.DataTree.equals.html#annoray.DataTree.equals" title="annoray.DataTree.equals"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.equals</span></code></a>(other)</p></td>
+<td><p>Isomorphic, with equal datasets at every node.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.DataTree.identical.html#annoray.DataTree.identical" title="annoray.DataTree.identical"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.identical</span></code></a>(other)</p></td>
+<td><p>Isomorphic, with identical datasets at every node, and the same name.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="aggregation">
+<h2>Aggregation<a class="headerlink" href="#aggregation" title="Link to this heading">#</a></h2>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="nb">print</span><span class="p">(</span><span class="n">tree</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="s2">"time"</span><span class="p">)[</span><span class="s2">"surface"</span><span class="p">][</span><span class="s2">"t"</span><span class="p">]</span><span class="o">.</span><span class="n">item</span><span class="p">())</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>281.3333333333333 K
+</pre></div>
+</div>
+</div>
+</div>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.DataTree.all.html#annoray.DataTree.all" title="annoray.DataTree.all"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.all</span></code></a>(*args, **kwargs)</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">Dataset.all</span></code> applied to every node's dataset, as a new tree of the same shape.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.DataTree.any.html#annoray.DataTree.any" title="annoray.DataTree.any"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.any</span></code></a>(*args, **kwargs)</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">Dataset.any</span></code> applied to every node's dataset, as a new tree of the same shape.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.DataTree.count.html#annoray.DataTree.count" title="annoray.DataTree.count"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.count</span></code></a>(*args, **kwargs)</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">Dataset.count</span></code> applied to every node's dataset, as a new tree of the same shape.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.DataTree.max.html#annoray.DataTree.max" title="annoray.DataTree.max"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.max</span></code></a>(*args, **kwargs)</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">Dataset.max</span></code> applied to every node's dataset, as a new tree of the same shape.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.DataTree.mean.html#annoray.DataTree.mean" title="annoray.DataTree.mean"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.mean</span></code></a>(*args, **kwargs)</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">Dataset.mean</span></code> applied to every node's dataset, as a new tree of the same shape.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.DataTree.median.html#annoray.DataTree.median" title="annoray.DataTree.median"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.median</span></code></a>(*args, **kwargs)</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">Dataset.median</span></code> applied to every node's dataset, as a new tree of the same shape.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.DataTree.min.html#annoray.DataTree.min" title="annoray.DataTree.min"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.min</span></code></a>(*args, **kwargs)</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">Dataset.min</span></code> applied to every node's dataset, as a new tree of the same shape.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.DataTree.prod.html#annoray.DataTree.prod" title="annoray.DataTree.prod"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.prod</span></code></a>(*args, **kwargs)</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">Dataset.prod</span></code> applied to every node's dataset, as a new tree of the same shape.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.DataTree.std.html#annoray.DataTree.std" title="annoray.DataTree.std"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.std</span></code></a>(*args, **kwargs)</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">Dataset.std</span></code> applied to every node's dataset, as a new tree of the same shape.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.DataTree.sum.html#annoray.DataTree.sum" title="annoray.DataTree.sum"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.sum</span></code></a>(*args, **kwargs)</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">Dataset.sum</span></code> applied to every node's dataset, as a new tree of the same shape.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.DataTree.var.html#annoray.DataTree.var" title="annoray.DataTree.var"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.var</span></code></a>(*args, **kwargs)</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">Dataset.var</span></code> applied to every node's dataset, as a new tree of the same shape.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.DataTree.quantile.html#annoray.DataTree.quantile" title="annoray.DataTree.quantile"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.quantile</span></code></a>(*args, **kwargs)</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">Dataset.quantile</span></code> applied to every node's dataset, as a new tree of the same shape.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="cumulative">
+<h2>Cumulative<a class="headerlink" href="#cumulative" title="Link to this heading">#</a></h2>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="nb">print</span><span class="p">(</span><span class="n">tree</span><span class="o">.</span><span class="n">cumsum</span><span class="p">(</span><span class="s2">"time"</span><span class="p">)[</span><span class="s2">"upper"</span><span class="p">][</span><span class="s2">"t"</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>[250.  498.5 745.5]
+</pre></div>
+</div>
+</div>
+</div>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.DataTree.cumsum.html#annoray.DataTree.cumsum" title="annoray.DataTree.cumsum"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.cumsum</span></code></a>(*args, **kwargs)</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">Dataset.cumsum</span></code> applied to every node's dataset, as a new tree of the same shape.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.DataTree.cumprod.html#annoray.DataTree.cumprod" title="annoray.DataTree.cumprod"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.cumprod</span></code></a>(*args, **kwargs)</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">Dataset.cumprod</span></code> applied to every node's dataset, as a new tree of the same shape.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="computation">
+<h2>Computation<a class="headerlink" href="#computation" title="Link to this heading">#</a></h2>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="nb">print</span><span class="p">(</span><span class="n">tree</span><span class="o">.</span><span class="n">diff</span><span class="p">(</span><span class="s2">"time"</span><span class="p">)[</span><span class="s2">"surface"</span><span class="p">][</span><span class="s2">"t"</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>[1. 2.]
+</pre></div>
+</div>
+</div>
+</div>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.DataTree.clip.html#annoray.DataTree.clip" title="annoray.DataTree.clip"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.clip</span></code></a>(*args, **kwargs)</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">Dataset.clip</span></code> applied to every node's dataset, as a new tree of the same shape.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.DataTree.round.html#annoray.DataTree.round" title="annoray.DataTree.round"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.round</span></code></a>(*args, **kwargs)</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">Dataset.round</span></code> applied to every node's dataset, as a new tree of the same shape.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.DataTree.diff.html#annoray.DataTree.diff" title="annoray.DataTree.diff"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.diff</span></code></a>(*args, **kwargs)</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">Dataset.diff</span></code> applied to every node's dataset, as a new tree of the same shape.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.DataTree.shift.html#annoray.DataTree.shift" title="annoray.DataTree.shift"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.shift</span></code></a>(*args, **kwargs)</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">Dataset.shift</span></code> applied to every node's dataset, as a new tree of the same shape.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.DataTree.roll.html#annoray.DataTree.roll" title="annoray.DataTree.roll"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.roll</span></code></a>(*args, **kwargs)</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">Dataset.roll</span></code> applied to every node's dataset, as a new tree of the same shape.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="reshaping-and-renaming">
+<h2>Reshaping and renaming<a class="headerlink" href="#reshaping-and-renaming" title="Link to this heading">#</a></h2>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="nb">print</span><span class="p">(</span><span class="n">tree</span><span class="o">.</span><span class="n">isel</span><span class="p">(</span><span class="n">time</span><span class="o">=</span><span class="nb">slice</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span><span class="o">.</span><span class="n">squeeze</span><span class="p">()[</span><span class="s2">"surface"</span><span class="p">][</span><span class="s2">"t"</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>280.0
+</pre></div>
+</div>
+</div>
+</div>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.DataTree.squeeze.html#annoray.DataTree.squeeze" title="annoray.DataTree.squeeze"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.squeeze</span></code></a>(*args, **kwargs)</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">Dataset.squeeze</span></code> applied to every node's dataset, as a new tree of the same shape.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="input-and-output">
+<h2>Input and output<a class="headerlink" href="#input-and-output" title="Link to this heading">#</a></h2>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">os</span><span class="o">,</span><span class="w"> </span><span class="nn">tempfile</span>
+
+<span class="n">path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">tempfile</span><span class="o">.</span><span class="n">mkdtemp</span><span class="p">(),</span> <span class="s2">"tree.nc"</span><span class="p">)</span>
+<span class="n">tree</span><span class="o">.</span><span class="n">to_netcdf</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">ar</span><span class="o">.</span><span class="n">open_datatree</span><span class="p">(</span><span class="n">path</span><span class="p">)</span><span class="o">.</span><span class="n">groups</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>('/', '/surface', '/upper')
+</pre></div>
+</div>
+</div>
+</div>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.DataTree.to_netcdf.html#annoray.DataTree.to_netcdf" title="annoray.DataTree.to_netcdf"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.to_netcdf</span></code></a>(path[, format])</p></td>
+<td><p>Write this node's subtree as netCDF-4 groups (lazy values stream chunk by chunk).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.DataTree.to_zarr.html#annoray.DataTree.to_zarr" title="annoray.DataTree.to_zarr"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.to_zarr</span></code></a>(store[, mode, ...])</p></td>
+<td><p>Write this node's subtree as a Zarr store, groups as subgroups (<code class="code docutils literal notranslate"><span class="pre">mode</span></code>, <code class="code docutils literal notranslate"><span class="pre">zarr_format</span></code> and <code class="code docutils literal notranslate"><span class="pre">consolidated</span></code> as <code class="code docutils literal notranslate"><span class="pre">Dataset.to_zarr</span></code>).</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.DataTree.to_dict.html#annoray.DataTree.to_dict" title="annoray.DataTree.to_dict"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.to_dict</span></code></a>([relative])</p></td>
+<td><p>Path → each node's own dataset.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.DataTree.to_xarray.html#annoray.DataTree.to_xarray" title="annoray.DataTree.to_xarray"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.to_xarray</span></code></a>()</p></td>
+<td><p>As an <code class="code docutils literal notranslate"><span class="pre">xarray.DataTree</span></code> (needs xarray).</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.DataTree.from_dict.html#annoray.DataTree.from_dict" title="annoray.DataTree.from_dict"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataTree.from_dict</span></code></a>(d[, name])</p></td>
+<td><p>A tree from <code class="code docutils literal notranslate"><span class="pre">{path:</span> <span class="pre">Dataset}</span></code> (<code class="code docutils literal notranslate"><span class="pre">&quot;/&quot;</span></code> for the root; missing parents are empty).</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+</section>
+
+
+                </article>
+              
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="generated/annoray.Dataset.from_dataframe.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">annoray.Dataset.from_dataframe</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="generated/annoray.DataTree.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">annoray.DataTree</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <dialog id="pst-secondary-sidebar-modal"></dialog>
+                <div id="pst-secondary-sidebar" class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+<div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> On this page
+  </div>
+  <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#tree-structure">Tree structure</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#node-contents">Node contents</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#editing">Editing</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#selecting-nodes">Selecting nodes</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#mapping-over-nodes">Mapping over nodes</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#memory-and-copying">Memory and copying</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#indexing">Indexing</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#missing-values">Missing values</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#comparisons">Comparisons</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#aggregation">Aggregation</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#cumulative">Cumulative</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#computation">Computation</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#reshaping-and-renaming">Reshaping and renaming</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#input-and-output">Input and output</a></li>
+</ul>
+  </nav></div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="../_static/scripts/bootstrap.js?digest=18bd87630a240e9c25be"></script>
+<script defer src="../_static/scripts/pydata-sphinx-theme.js?digest=18bd87630a240e9c25be"></script>
+
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item">
+
+  <p class="copyright">
+    
+      © Copyright 2026, Sunip K. Mukherjee.
+      <br/>
+    
+  </p>
+</div>
+      
+        <div class="footer-item">
+
+  <p class="sphinx-version">
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 9.2.0.
+  </p>
+</div>
+      
+    </div>
+  
+  
+  
+    <div class="footer-items__end">
+      
+        <div class="footer-item">
+<p class="theme-version">
+  <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.23.0.
+</p></div>
+      
+    </div>
+  
+</div>
+
+  </footer>
+  </body>
+</html>
