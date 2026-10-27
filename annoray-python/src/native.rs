@@ -172,7 +172,10 @@ pub(crate) fn set_attrs(attrs: &mut annoray::Attrs, d: Option<&Bound<'_, PyAny>>
 /// A variable's values as numpy: a read-only view of the data when it is in memory and
 /// numeric or a date-time or duration (no copy), otherwise converted (CF dates, strings) or
 /// read (lazy data).
-fn values_of<'py>(owner: Bound<'py, PyAny>, var: &Variable) -> PyResult<Bound<'py, PyAny>> {
+pub(crate) fn values_of<'py>(
+    owner: Bound<'py, PyAny>,
+    var: &Variable,
+) -> PyResult<Bound<'py, PyAny>> {
     let py = owner.py();
     if var.is_lazy() {
         let t = py.detach(|| var.to_owned().into_typed()).py_err()?;

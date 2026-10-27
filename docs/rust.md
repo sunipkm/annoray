@@ -10,14 +10,36 @@ The Rust API is documented on docs.rs, versioned with each crates.io release.
 | `annoray-zarr` | [docs.rs/annoray-zarr](https://docs.rs/annoray-zarr) | Pure-Rust Zarr v2/v3 reader and writer for local stores. |
 | `annoray-codecs` | [docs.rs/annoray-codecs](https://docs.rs/annoray-codecs) | Compression codecs shared by the HDF5 and Zarr crates. |
 | `annoray-macros` | [docs.rs/annoray-macros](https://docs.rs/annoray-macros) | `isel!` / `sel!`, re-exported by `annoray`. |
+| `annoray-pyo3` | [docs.rs/annoray-pyo3](https://docs.rs/annoray-pyo3) | Exchange annoray values with the `annoray` Python package from other PyO3 extension modules. |
 
-The standalone crates do not depend on `annoray`:
+The standalone crates do not depend on `annoray`; `annoray-pyo3` builds on it:
 
 ```text
-annoray ──┬── annoray-units
-          ├── annoray-macros
-          ├── annoray-hdf5 ──┐
-          └── annoray-zarr ──┴── annoray-codecs
+annoray-pyo3 ── annoray ──┬── annoray-units
+                          ├── annoray-macros
+                          ├── annoray-hdf5 ──┐
+                          └── annoray-zarr ──┴── annoray-codecs
+```
+
+## Python extension modules
+
+An extension module written with PyO3 exchanges annoray values with the `annoray` Python
+package through `annoray-pyo3`: its function arguments and results are `ArUnit`,
+`ArQuantity`, `ArDataArray`, `ArDataset` and `ArDataTree`, which convert to and from the
+package's own `Unit`, `Quantity`, `DataArray`, `Dataset` and `DataTree` objects. Values cross
+as numpy arrays, copied once into the side that keeps them; `ArDataArrayRef` reads an array's
+numbers in place. The first conversion checks that the installed `annoray` is compatible.
+
+```rust
+use annoray_pyo3::{ArDataArray, ArUnit, unit_error};
+use pyo3::prelude::*;
+
+/// `da` converted to `unit` (an `annoray.Unit` or a unit string) in Rust.
+#[pyfunction]
+fn convert(py: Python<'_>, da: ArDataArray, unit: ArUnit) -> PyResult<ArDataArray> {
+    let out = da.0.to_unit(&unit.0).map_err(|e| unit_error(py, e))?;
+    Ok(ArDataArray(out))
+}
 ```
 
 ## Storage representations

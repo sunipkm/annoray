@@ -91,6 +91,14 @@ jobs:
       - run: pytest annoray-python/tests
         env:
           PYTHONWARNDEFAULTENCODING: "1"
+      # annoray-pyo3: another extension module (its test extension, built here) exchanging
+      # values with the annoray package installed above.
+      - name: annoray-pyo3 round trips
+        run: |
+          pip install ./crates/annoray-pyo3/tests/ext -c ci/constraints.txt
+          pytest crates/annoray-pyo3/tests -W error::DeprecationWarning
+        env:
+          PYTHONWARNDEFAULTENCODING: "1"
       - name: Lint and type-check the Python package
         if: matrix.os == 'ubuntu-latest'
         working-directory: annoray-python

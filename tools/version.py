@@ -32,7 +32,15 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 CARGO = ROOT / "Cargo.toml"
 # Crates published from this workspace, whose `workspace.dependencies` entries carry a version.
-INTERNAL = ("annoray", "annoray-codecs", "annoray-hdf5", "annoray-macros", "annoray-units", "annoray-zarr")
+INTERNAL = (
+    "annoray",
+    "annoray-codecs",
+    "annoray-hdf5",
+    "annoray-macros",
+    "annoray-pyo3",
+    "annoray-units",
+    "annoray-zarr",
+)
 TAG = re.compile(r"v(\d+)\.(\d+)\.(\d+)(?:-pre(\d+))?")
 
 

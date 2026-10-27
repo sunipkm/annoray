@@ -74,10 +74,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "annoray-pyo3"
+version = "0.0.0"
+dependencies = [
+ "annoray",
+ "ndarray",
+ "numpy",
+ "pyo3",
+]
+
+[[package]]
+name = "annoray-pyo3-test"
+version = "0.0.0"
+dependencies = [
+ "annoray",
+ "annoray-pyo3",
+ "ndarray",
+ "pyo3",
+]
+
+[[package]]
 name = "annoray-python"
 version = "0.0.0"
 dependencies = [
  "annoray",
+ "annoray-pyo3",
  "libc",
  "ndarray",
  "numpy",

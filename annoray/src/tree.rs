@@ -95,6 +95,12 @@ impl DataTree {
         &self.children
     }
 
+    /// This node's dataset and its children, by value (nothing is copied).
+    #[must_use]
+    pub fn into_parts(self) -> (Dataset, IndexMap<Name, DataTree>) {
+        (self.dataset, self.children)
+    }
+
     /// The node at a `/`-separated path (`""` or `"/"` for this one).
     ///
     /// # Errors

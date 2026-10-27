@@ -21,45 +21,10 @@ use crate::convert::{attr_from_py, attrs_to_py, io_error, value_error};
 use annoray::io::{Format, RawDataset, WriteOptions, default_backend};
 use annoray::units::{Calendar, CfDate};
 use annoray::{BloscCodec, BloscShuffle, Compression, DType, Dataset, Owned, TypedArray, Variable};
-use pyo3::types::{PyDict, PyString, PyTuple};
+use annoray_pyo3::convert::{into_numpy, numbers_from_numpy};
+use pyo3::types::{PyDict, PyTuple};
 
 // ----- Rust → Python -----
-
-/// Raw values as numpy (strings as an object array).
-fn array_to_py(py: Python<'_>, t: TypedArray<Owned>) -> PyResult<Py<PyAny>> {
-    macro_rules! np {
-        ($a:expr) => {
-            PyArrayDyn::from_owned_array(py, $a).into_any().unbind()
-        };
-    }
-    Ok(match t {
-        TypedArray::F32(a) => np!(a),
-        TypedArray::F64(a) => np!(a),
-        TypedArray::I8(a) => np!(a),
-        TypedArray::I16(a) => np!(a),
-        TypedArray::I32(a) => np!(a),
-        TypedArray::I64(a) => np!(a),
-        TypedArray::U8(a) => np!(a),
-        TypedArray::U16(a) => np!(a),
-        TypedArray::U32(a) => np!(a),
-        TypedArray::U64(a) => np!(a),
-        TypedArray::Bool(a) => np!(a),
-        TypedArray::C64(a) => np!(a),
-        TypedArray::C128(a) => np!(a),
-        TypedArray::Str(a) => {
-            let objs = a.mapv(|s| PyString::new(py, &s).into_any().unbind());
-            PyArrayDyn::from_owned_object_array(py, objs)
-                .into_any()
-                .unbind()
-        }
-        other => {
-            return Err(value_error(format!(
-                "raw data of type {} (expected stored values)",
-                other.dtype()
-            )));
-        }
-    })
-}
 
 /// numpy's name for a stored element type (`S1` for netCDF characters, `O` for strings).
 fn numpy_dtype(d: DType, is_char: bool) -> &'static str {
@@ -227,27 +192,11 @@ impl RawGroup {
         let t = py
             .detach(|| data.read_slice(&start, &count).map_err(|e| e.to_string()))
             .map_err(io_error)?;
-        array_to_py(py, t)
+        Ok(into_numpy(py, t)?.unbind())
     }
 }
 
 // ----- Python → Rust (writing) -----
-
-fn numeric_from_py(data: &Bound<'_, PyAny>) -> PyResult<TypedArray<Owned>> {
-    macro_rules! try_as {
-        ($($t:ty => $var:ident),*) => {
-            $(if let Ok(a) = data.cast::<PyArrayDyn<$t>>() {
-                return Ok(TypedArray::$var(a.readonly().as_array().to_owned()));
-            })*
-        };
-    }
-    try_as!(f64 => F64, f32 => F32, i64 => I64, i32 => I32, i16 => I16, i8 => I8,
-        u64 => U64, u32 => U32, u16 => U16, u8 => U8, bool => Bool,
-        annoray::num_complex::Complex<f64> => C128, annoray::num_complex::Complex<f32> => C64);
-    Err(value_error(
-        "unsupported array type (expected numbers or booleans)",
-    ))
-}
 
 fn i64_array(data: &Bound<'_, PyAny>) -> PyResult<ArrayD<i64>> {
     Ok(data
@@ -267,7 +216,7 @@ fn values_from_py(v: &Bound<'_, PyDict>) -> PyResult<TypedArray<Owned>> {
     let kind: String = get("kind")?.extract()?;
     let data = get("data")?;
     Ok(match kind.as_str() {
-        "num" => numeric_from_py(&data)?,
+        "num" => numbers_from_numpy(&data)?,
         // Nanoseconds since the epoch; i64::MIN is NaT.
         "datetime" => {
             TypedArray::DateTime(i64_array(&data)?.mapv(annoray::Instant::from_unix_nanos))

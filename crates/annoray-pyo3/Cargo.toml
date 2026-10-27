@@ -1,0 +1,33 @@
+[package]
+name = "annoray-pyo3"
+description = "Exchange annoray units, quantities, data arrays, datasets and trees with the annoray Python package from other PyO3 extension modules"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/annoray-pyo3"
+readme = "README.md"
+keywords = ["annoray", "pyo3", "python", "xarray", "units"]
+categories = ["science", "api-bindings"]
+# The tests (an extension module and pytest) run from the repository, not the package.
+exclude = ["tests/"]
+
+[lib]
+# Its code needs a Python interpreter to run: it is tested through an extension module and
+# pytest (tests/), and a Rust test binary would have no libpython to load.
+test = false
+
+[dependencies]
+# Without annoray's default features (the workspace's entry has none): the extension that links
+# this crate chooses them (rayon, codecs).
+annoray.workspace = true
+ndarray.workspace = true
+numpy.workspace = true
+# No PyO3 features here (`abi3-*`, `extension-module`): they belong to the final extension.
+pyo3.workspace = true
+
+[lints]
+workspace = true

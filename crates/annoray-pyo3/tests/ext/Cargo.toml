@@ -1,0 +1,24 @@
+[package]
+name = "annoray-pyo3-test"
+description = "A test extension module for annoray-pyo3: round trips of annoray values through Python"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+name = "annoray_pyo3_test"
+crate-type = ["cdylib"]
+test = false
+doctest = false
+
+[dependencies]
+annoray = { workspace = true, features = ["default"] }
+annoray-pyo3.workspace = true
+ndarray.workspace = true
+# The extension, not annoray-pyo3, chooses PyO3's features.
+pyo3 = { workspace = true, features = ["abi3-py311"] }
+
+[lints]
+workspace = true

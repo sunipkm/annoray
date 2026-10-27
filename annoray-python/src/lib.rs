@@ -5,6 +5,7 @@
 //! - [`units`]: `Unit` and `Quantity`, the Rust unit system in Python.
 //! - [`raw`]: raw file access and writing for the xarray backend engine (`engine="annoray"`).
 //! - [`convert`]: values, labels, indexers and errors between Python and Rust.
+//! - [`interop`]: the exchange format of the `annoray-pyo3` crate, for other extensions.
 
 #![deny(missing_docs)]
 
@@ -16,6 +17,7 @@ mod dataset_ops;
 mod elementwise;
 mod fill;
 mod forward;
+mod interop;
 mod math;
 mod mutate;
 mod native;
@@ -76,6 +78,14 @@ fn _annoray(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(relations::cov, m)?)?;
     m.add_function(wrap_pyfunction!(relations::corr, m)?)?;
     m.add_function(wrap_pyfunction!(utility::full_like, m)?)?;
+    // The exchange format of `annoray-pyo3` (other extension modules' annoray values).
+    m.add_function(wrap_pyfunction!(interop::_interop_protocol, m)?)?;
+    m.add_function(wrap_pyfunction!(interop::_array_from_parts, m)?)?;
+    m.add_function(wrap_pyfunction!(interop::_array_to_parts, m)?)?;
+    m.add_function(wrap_pyfunction!(interop::_dataset_from_parts, m)?)?;
+    m.add_function(wrap_pyfunction!(interop::_dataset_to_parts, m)?)?;
+    m.add_function(wrap_pyfunction!(interop::_tree_from_parts, m)?)?;
+    m.add_function(wrap_pyfunction!(interop::_tree_to_parts, m)?)?;
     m.add("UnitError", m.py().get_type::<convert::UnitError>())?;
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     Ok(())

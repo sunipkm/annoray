@@ -4,6 +4,8 @@ members = [
     "crates/annoray-codecs",
     "crates/annoray-hdf5",
     "crates/annoray-macros",
+    "crates/annoray-pyo3",
+    "crates/annoray-pyo3/tests/ext",
     "crates/annoray-units",
     "crates/annoray-zarr",
     "annoray",
@@ -21,8 +23,10 @@ homepage = "https://github.com/sunipkm/annoray"
 
 [workspace.dependencies]
 libc = "0.2"
-annoray = { path = "annoray", version = "=0.0.0" }
+# Without its default features: members that want them ask (`features = ["default"]`).
+annoray = { path = "annoray", version = "=0.0.0", default-features = false }
 annoray-macros = { path = "crates/annoray-macros", version = "=0.0.0" }
+annoray-pyo3 = { path = "crates/annoray-pyo3", version = "=0.0.0" }
 annoray-units = { path = "crates/annoray-units", version = "=0.0.0" }
 annoray-zarr = { path = "crates/annoray-zarr", version = "=0.0.0" }
 annoray-codecs = { path = "crates/annoray-codecs", version = "=0.0.0" }

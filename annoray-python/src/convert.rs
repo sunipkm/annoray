@@ -4,11 +4,12 @@
 use annoray::ndarray::{ArrayD, IxDyn};
 use annoray::units::Calendar;
 use annoray::{
-    AttrValue, CfDate, CoreError, DType, Indexer, Label, LabelIndexer, Method, Owned,
-    PySlice as PySliceIx, TypedArray, Unit,
+    CfDate, CoreError, DType, Indexer, Label, LabelIndexer, Method, Owned, PySlice as PySliceIx,
+    TypedArray, Unit,
 };
 use annoray::{Duration, Instant, TimeZone};
-use numpy::{PyArrayDyn, PyArrayMethods};
+use annoray_pyo3::convert::{into_numpy, nanos_from_numpy, numbers_from_numpy};
+use numpy::PyArrayDyn;
 use pyo3::exceptions::{PyIndexError, PyKeyError, PyOSError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyBool, PyBytes, PyDict, PyList, PySlice, PyString, PyTuple};
@@ -23,98 +24,7 @@ pub(crate) fn io_error(e: impl std::fmt::Display) -> PyErr {
 
 // ----- attributes -----
 
-/// A 1-D numeric attribute as numpy: a scalar for one value (as netCDF4-python gives), an
-/// array otherwise.
-pub(crate) fn attr_to_py(py: Python<'_>, a: &AttrValue) -> PyResult<Py<PyAny>> {
-    macro_rules! num {
-        ($v:expr) => {{
-            let arr = PyArrayDyn::from_owned_array(
-                py,
-                ArrayD::from_shape_vec(IxDyn(&[$v.len()]), $v.clone()).map_err(value_error)?,
-            );
-            if $v.len() == 1 {
-                arr.get_item(0)?.unbind()
-            } else {
-                arr.into_any().unbind()
-            }
-        }};
-    }
-    Ok(match a {
-        AttrValue::Str(s) => PyString::new(py, s).into_any().unbind(),
-        AttrValue::Strs(v) => PyList::new(py, v)?.into_any().unbind(),
-        AttrValue::I8(v) => num!(v),
-        AttrValue::I16(v) => num!(v),
-        AttrValue::I32(v) => num!(v),
-        AttrValue::I64(v) => num!(v),
-        AttrValue::U8(v) => num!(v),
-        AttrValue::U16(v) => num!(v),
-        AttrValue::U32(v) => num!(v),
-        AttrValue::U64(v) => num!(v),
-        AttrValue::F32(v) => num!(v),
-        AttrValue::F64(v) => num!(v),
-        other => return Err(value_error(format!("unsupported attribute {other:?}"))),
-    })
-}
-
-pub(crate) fn attrs_to_py<'py>(
-    py: Python<'py>,
-    attrs: &annoray::Attrs,
-) -> PyResult<Bound<'py, PyDict>> {
-    let d = PyDict::new(py);
-    for (k, v) in attrs {
-        d.set_item(k.as_str(), attr_to_py(py, v)?)?;
-    }
-    Ok(d)
-}
-
-pub(crate) fn attr_from_py(v: &Bound<'_, PyAny>) -> PyResult<AttrValue> {
-    if let Ok(s) = v.extract::<String>() {
-        return Ok(AttrValue::Str(s));
-    }
-    if let Ok(b) = v.extract::<Vec<u8>>().and_then(|b| {
-        if v.is_instance_of::<pyo3::types::PyBytes>() {
-            Ok(b)
-        } else {
-            Err(PyValueError::new_err(""))
-        }
-    }) {
-        return Ok(AttrValue::Str(String::from_utf8_lossy(&b).into_owned()));
-    }
-    if let Ok(v) = v.extract::<Vec<String>>() {
-        return Ok(AttrValue::Strs(v));
-    }
-    // numpy scalars and arrays (and Python numbers, via numpy).
-    let np = v.py().import("numpy")?;
-    let arr = np
-        .call_method1("atleast_1d", (v,))?
-        .call_method1("ravel", ())?;
-    let kind: String = arr.getattr("dtype")?.getattr("name")?.extract()?;
-    macro_rules! vec_of {
-        ($t:ty, $var:ident) => {
-            AttrValue::$var(arr.call_method0("tolist")?.extract::<Vec<$t>>()?)
-        };
-    }
-    Ok(match kind.as_str() {
-        "int8" => vec_of!(i8, I8),
-        "int16" => vec_of!(i16, I16),
-        "int32" => vec_of!(i32, I32),
-        "int64" => vec_of!(i64, I64),
-        "uint8" => vec_of!(u8, U8),
-        "uint16" => vec_of!(u16, U16),
-        "uint32" => vec_of!(u32, U32),
-        "uint64" => vec_of!(u64, U64),
-        "float32" => vec_of!(f32, F32),
-        "float64" => vec_of!(f64, F64),
-        "bool" => AttrValue::I8(
-            arr.call_method0("tolist")?
-                .extract::<Vec<bool>>()?
-                .into_iter()
-                .map(i8::from)
-                .collect(),
-        ),
-        other => return Err(value_error(format!("unsupported attribute type {other}"))),
-    })
-}
+pub(crate) use annoray_pyo3::convert::{attr_from_py, attr_to_py, attrs_to_py};
 
 // ----- errors -----
 
@@ -192,34 +102,6 @@ fn dtype_attr(arr: &Bound<'_, PyAny>, attr: &str) -> PyResult<String> {
     arr.getattr("dtype")?.getattr(attr)?.extract()
 }
 
-fn numbers_from(arr: &Bound<'_, PyAny>) -> PyResult<TypedArray<Owned>> {
-    macro_rules! try_as {
-        ($($t:ty => $var:ident),*) => {
-            $(if let Ok(a) = arr.cast::<PyArrayDyn<$t>>() {
-                return Ok(TypedArray::$var(a.readonly().as_array().to_owned()));
-            })*
-        };
-    }
-    try_as!(f64 => F64, f32 => F32, i64 => I64, i32 => I32, i16 => I16, i8 => I8,
-        u64 => U64, u32 => U32, u16 => U16, u8 => U8, bool => Bool,
-        annoray::num_complex::Complex<f64> => C128, annoray::num_complex::Complex<f32> => C64);
-    Err(PyTypeError::new_err(format!(
-        "unsupported array type {}",
-        dtype_attr(arr, "str")?
-    )))
-}
-
-fn ns_array(arr: &Bound<'_, PyAny>, unit: &str) -> PyResult<ArrayD<i64>> {
-    let ns = arr
-        .call_method1("astype", (unit,))?
-        .call_method1("view", ("int64",))?;
-    Ok(ns
-        .cast::<PyArrayDyn<i64>>()?
-        .readonly()
-        .as_array()
-        .to_owned())
-}
-
 /// numpy's `datetime64[ns]` values (`i64::MIN` is NaT, as in an [`Instant`]).
 fn datetimes(ns: &ArrayD<i64>) -> ArrayD<Instant> {
     ns.mapv(Instant::from_unix_nanos)
@@ -279,7 +161,7 @@ fn objects_from(arr: &Bound<'_, PyAny>) -> PyResult<TypedArray<Owned>> {
     // datetime.datetime, pandas timestamps, …: whatever numpy can turn into datetime64.
     let np = numpy(arr.py())?;
     if let Ok(dt) = np.call_method1("asarray", (arr, "datetime64[ns]")) {
-        return Ok(TypedArray::DateTime(datetimes(&ns_array(
+        return Ok(TypedArray::DateTime(datetimes(&nanos_from_numpy(
             &dt,
             "datetime64[ns]",
         )?)));
@@ -322,23 +204,22 @@ fn typed_of_array(np: &Bound<'_, PyModule>, obj: Bound<'_, PyAny>) -> PyResult<T
     let kind = dtype_attr(&arr, "kind")?;
     match kind.as_str() {
         "f" | "i" | "u" | "b" | "c" => {
-            // Native byte order, and float16 widened (annoray has no half floats).
+            // float16 widened (annoray has no half floats), and C order; the byte order is
+            // made native in `numbers_from_numpy`.
             if dtype_attr(&arr, "str")? == "<f2" || dtype_attr(&arr, "str")? == ">f2" {
                 arr = arr.call_method1("astype", ("float32",))?;
             }
-            let native = arr.getattr("dtype")?.call_method1("newbyteorder", ("=",))?;
             // (Not `ascontiguousarray`: it turns scalars into 1-element arrays.)
             let kw = PyDict::new(arr.py());
-            kw.set_item("dtype", native)?;
             kw.set_item("order", "C")?;
             arr = np.getattr("asarray")?.call((arr,), Some(&kw))?;
-            numbers_from(&arr)
+            numbers_from_numpy(&arr)
         }
-        "M" => Ok(TypedArray::DateTime(datetimes(&ns_array(
+        "M" => Ok(TypedArray::DateTime(datetimes(&nanos_from_numpy(
             &arr,
             "datetime64[ns]",
         )?))),
-        "m" => Ok(TypedArray::TimeDelta(timedeltas(&ns_array(
+        "m" => Ok(TypedArray::TimeDelta(timedeltas(&nanos_from_numpy(
             &arr,
             "timedelta64[ns]",
         )?))),
@@ -377,12 +258,6 @@ fn cftime_to_py<'py>(py: Python<'py>, d: &CfDate) -> PyResult<Bound<'py, PyAny>>
     )
 }
 
-fn ns_to_numpy<'py>(py: Python<'py>, ns: ArrayD<i64>, dtype: &str) -> PyResult<Bound<'py, PyAny>> {
-    PyArrayDyn::from_owned_array(py, ns)
-        .into_any()
-        .call_method1("view", (dtype,))
-}
-
 /// The width numpy's fixed-width text type needs for `a`: the most characters (code
 /// points) in an element, at least 1 (as numpy gives `<U1` for empty strings).
 pub(crate) fn text_width(a: &ndarray::ArrayViewD<'_, String>) -> usize {
@@ -417,28 +292,8 @@ pub(crate) fn text_to_py<'py>(
 
 /// Owned values as a numpy array (moved, not copied, for numbers).
 pub(crate) fn typed_to_py(py: Python<'_>, t: TypedArray<Owned>) -> PyResult<Bound<'_, PyAny>> {
-    macro_rules! np {
-        ($a:expr) => {
-            Ok(PyArrayDyn::from_owned_array(py, $a).into_any())
-        };
-    }
     match t {
-        TypedArray::F32(a) => np!(a),
-        TypedArray::F64(a) => np!(a),
-        TypedArray::I8(a) => np!(a),
-        TypedArray::I16(a) => np!(a),
-        TypedArray::I32(a) => np!(a),
-        TypedArray::I64(a) => np!(a),
-        TypedArray::U8(a) => np!(a),
-        TypedArray::U16(a) => np!(a),
-        TypedArray::U32(a) => np!(a),
-        TypedArray::U64(a) => np!(a),
-        TypedArray::Bool(a) => np!(a),
-        TypedArray::C64(a) => np!(a),
-        TypedArray::C128(a) => np!(a),
         TypedArray::Str(a) => text_to_py(py, &a.view()),
-        TypedArray::DateTime(a) => ns_to_numpy(py, a.mapv(Instant::unix_nanos), "datetime64[ns]"),
-        TypedArray::TimeDelta(a) => ns_to_numpy(py, a.mapv(Duration::nanos), "timedelta64[ns]"),
         TypedArray::CfDate(a) => {
             let mut objs = Vec::with_capacity(a.len());
             for d in &a {
@@ -447,10 +302,7 @@ pub(crate) fn typed_to_py(py: Python<'_>, t: TypedArray<Owned>) -> PyResult<Boun
             let arr = ArrayD::from_shape_vec(IxDyn(a.shape()), objs).map_err(value_error)?;
             Ok(PyArrayDyn::from_owned_object_array(py, arr).into_any())
         }
-        other => Err(PyTypeError::new_err(format!(
-            "values of type {} cannot be converted",
-            other.dtype()
-        ))),
+        t => into_numpy(py, t),
     }
 }
 
@@ -507,7 +359,7 @@ pub(crate) fn label_from_py(v: &Bound<'_, PyAny>) -> PyResult<Label> {
         "i" | "u" => Ok(Label::Int(arr.call_method0("item")?.extract()?)),
         "f" => Ok(Label::Float(arr.call_method0("item")?.extract()?)),
         "M" => {
-            let ns = ns_array(&arr, "datetime64[ns]")?;
+            let ns = nanos_from_numpy(&arr, "datetime64[ns]")?;
             Ok(Label::DateTime(
                 datetimes(&ns)
                     .iter()
@@ -517,7 +369,7 @@ pub(crate) fn label_from_py(v: &Bound<'_, PyAny>) -> PyResult<Label> {
             ))
         }
         "m" => {
-            let ns = ns_array(&arr, "timedelta64[ns]")?;
+            let ns = nanos_from_numpy(&arr, "timedelta64[ns]")?;
             Ok(Label::TimeDelta(
                 timedeltas(&ns)
                     .iter()
@@ -529,7 +381,7 @@ pub(crate) fn label_from_py(v: &Bound<'_, PyAny>) -> PyResult<Label> {
         "O" => {
             // datetime.datetime and friends.
             let dt = np.call_method1("asarray", (v, "datetime64[ns]"))?;
-            let ns = ns_array(&dt, "datetime64[ns]")?;
+            let ns = nanos_from_numpy(&dt, "datetime64[ns]")?;
             Ok(Label::DateTime(
                 datetimes(&ns)
                     .iter()
