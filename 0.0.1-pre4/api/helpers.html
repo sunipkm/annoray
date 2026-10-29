@@ -1,0 +1,1033 @@
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../" data-theme="auto">
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>GroupBy, windows and weights &#8212; annoray</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "auto";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "auto";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../_static/styles/theme.css?digest=18bd87630a240e9c25be" rel="stylesheet" />
+<link href="../_static/styles/pydata-sphinx-theme.css?digest=18bd87630a240e9c25be" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../_static/mystnb.11b39860a7a0cbfd473a3ad8a317855267ff0bd372690045ca344a6b62be495e.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
+  
+  <!-- So that users can add custom icons -->
+  <script defer src="../_static/scripts/fontawesome.js?digest=18bd87630a240e9c25be"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=18bd87630a240e9c25be" />
+<link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=18bd87630a240e9c25be" />
+
+    <script src="../_static/documentation_options.js?v=6158cd60"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../_static/copybutton.js?v=f281be69"></script>
+    <script src="../_static/design-tabs.js?v=f930bc37"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'api/helpers';</script>
+    <script>
+        DOCUMENTATION_OPTIONS.theme_version = '0.23.0';
+        DOCUMENTATION_OPTIONS.theme_switcher_json_url = 'https://sunipkm.github.io/annoray/switcher.json';
+        DOCUMENTATION_OPTIONS.theme_switcher_version_match = '0.0.1-pre4';
+        DOCUMENTATION_OPTIONS.show_version_warning_banner =
+            false;
+        </script>
+    <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="annoray.GroupBy" href="generated/annoray.GroupBy.html" />
+    <link rel="prev" title="annoray.dims.Concentration" href="generated/annoray.dims.Concentration.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="color-scheme" content="light dark"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="0.0.1-pre4" />
+  
+    
+    <script src="../_static/searchtools.js"></script>
+    <script src="../_static/language_data.js"></script>
+    <script src="../searchindex.js"></script>
+  
+  </head>
+  <body data-default-mode="auto">
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+  
+  
+  
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header id="pst-header" class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button type="button" class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-3 navbar-header-items__start">
+    
+      <div class="navbar-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../index.html">
+  
+  
+  
+  
+  
+  
+    <p class="title logo__title">annoray</p>
+  
+</a></div>
+    
+  </div>
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    <div class="me-auto navbar-header-items__center">
+      
+        <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../getting-started/installation.html">
+    Installation
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../getting-started/overview.html">
+    Overview
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../getting-started/examples.html">
+    Examples
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../xarray-differences.html">
+    Differences from xarray
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../user-guide/index.html">
+    User guide
+  </a>
+</li>
+
+            <li class="nav-item dropdown">
+                <button class="btn dropdown-toggle nav-item" type="button"
+                data-bs-toggle="dropdown" aria-expanded="false"
+                aria-controls="pst-nav-more-links">
+                    More
+                </button>
+                <ul id="pst-nav-more-links" class="dropdown-menu">
+                    
+<li class=" current active">
+  <a class="nav-link dropdown-item nav-internal" href="index.html">
+    API reference
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="../rust.html">
+    Rust crates
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="../performance.html">
+    Performance
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-external" href="https://docs.rs/annoray">
+    Rust API
+  </a>
+</li>
+
+                </ul>
+            </li>
+            
+  </ul>
+</nav></div>
+      
+    </div>
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button type="button" class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+        </div>
+      
+      
+        <div class="navbar-item">
+<div class="version-switcher__container dropdown pst-js-only">
+  <button id="pst-version-switcher-button-2"
+    type="button"
+    class="version-switcher__button btn btn-sm dropdown-toggle"
+    data-bs-toggle="dropdown"
+    aria-haspopup="listbox"
+    aria-controls="pst-version-switcher-list-2"
+    aria-label="Version switcher list"
+  >
+    Choose version  <!-- this text may get changed later by javascript -->
+    <span class="caret"></span>
+  </button>
+  <div id="pst-version-switcher-list-2"
+    class="version-switcher__menu dropdown-menu list-group-flush py-0"
+    role="listbox" aria-labelledby="pst-version-switcher-button-2">
+    <!-- dropdown will be populated by javascript on page load -->
+  </div>
+</div></div>
+      
+        <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button type="button" class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+      
+        <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/sunipkm/annoray" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-square-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
+        </li>
+</ul></div>
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button type="button" class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+    </div>
+  
+
+  
+    <button type="button" class="pst-navbar-icon sidebar-toggle secondary-toggle" aria-label="On this page">
+      <span class="fa-solid fa-outdent"></span>
+    </button>
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../getting-started/installation.html">
+    Installation
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../getting-started/overview.html">
+    Overview
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../getting-started/examples.html">
+    Examples
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../xarray-differences.html">
+    Differences from xarray
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../user-guide/index.html">
+    User guide
+  </a>
+</li>
+
+
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="index.html">
+    API reference
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../rust.html">
+    Rust crates
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../performance.html">
+    Performance
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-external" href="https://docs.rs/annoray">
+    Rust API
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+<div class="version-switcher__container dropdown pst-js-only">
+  <button id="pst-version-switcher-button-3"
+    type="button"
+    class="version-switcher__button btn btn-sm dropdown-toggle"
+    data-bs-toggle="dropdown"
+    aria-haspopup="listbox"
+    aria-controls="pst-version-switcher-list-3"
+    aria-label="Version switcher list"
+  >
+    Choose version  <!-- this text may get changed later by javascript -->
+    <span class="caret"></span>
+  </button>
+  <div id="pst-version-switcher-list-3"
+    class="version-switcher__menu dropdown-menu list-group-flush py-0"
+    role="listbox" aria-labelledby="pst-version-switcher-button-3">
+    <!-- dropdown will be populated by javascript on page load -->
+  </div>
+</div></div>
+        
+          <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button type="button" class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+        
+          <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/sunipkm/annoray" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-square-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
+        </li>
+</ul></div>
+        
+      </div>
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item pst-sidebar-collapse"><button type="button" id="pst-collapse-sidebar-button" aria-expanded="true" aria-controls="pst-primary-sidebar">
+  <svg class="pst-icon" role="img" aria-hidden="true" focusable="false" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+    <path fill="currentColor" d="M3 15.5C2.36232 15.5 1.74874 15.2564 1.28478 14.8189C0.820828 14.3815 0.541576 13.7832 0.504167 13.1467L0.5 13L0.5 3C0.499965 2.36232 0.743605 1.74874 1.18107 1.28478C1.61854 0.820828 2.21676 0.541576 2.85333 0.504167L3 0.5L13 0.5C13.6377 0.499965 14.2513 0.743605 14.7152 1.18107C15.1792 1.61854 15.4584 2.21676 15.4958 2.85333L15.5 3L15.5 13C15.5 13.6377 15.2564 14.2513 14.8189 14.7152C14.3815 15.1792 13.7832 15.4584 13.1467 15.4958L13 15.5L3 15.5ZM3 13.8333L10.5 13.8333L10.5 2.16667L3 2.16667C2.79589 2.16669 2.59889 2.24163 2.44636 2.37726C2.29383 2.5129 2.19638 2.69979 2.1725 2.9025L2.16667 3L2.16667 13C2.16669 13.2041 2.24163 13.4011 2.37726 13.5536C2.5129 13.7062 2.69979 13.8036 2.9025 13.8275L3 13.8333ZM6.65583 10.325L6.5775 10.2558L4.91083 8.58917C4.76735 8.44567 4.68116 8.25476 4.66843 8.05223C4.65569 7.84971 4.71729 7.6495 4.84167 7.48917L4.91083 7.41083L6.5775 5.74417C6.72747 5.59471 6.9287 5.50794 7.14032 5.50148C7.35194 5.49502 7.55809 5.56935 7.7169 5.70937C7.8757 5.8494 7.97525 6.04463 7.99533 6.25539C8.01541 6.46616 7.95451 6.67667 7.825 6.84417L7.75583 6.9225L6.67917 8L7.75583 9.0775C7.89931 9.22099 7.98551 9.41191 7.99824 9.61443C8.01097 9.81695 7.94938 10.0172 7.825 10.1775L7.75583 10.2558C7.61234 10.3993 7.42142 10.4855 7.2189 10.4982C7.01638 10.511 6.81617 10.4494 6.65583 10.325Z"/>
+  </svg>
+  <span class="pst-collapse-sidebar-label">Collapse Sidebar</span>
+  <span class="pst-expand-sidebar-label">Expand Sidebar</span>
+</button></div>
+        <div class="sidebar-primary-item">
+
+<nav class="bd-docs-nav bd-links"
+     aria-label="Section Navigation">
+  <p class="bd-links__title" role="heading" aria-level="1">Section Navigation</p>
+  <div class="bd-toc-item navbar-nav"><ul class="current nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="dataarray.html">DataArray</a></li>
+<li class="toctree-l1"><a class="reference internal" href="dataset.html">Dataset</a></li>
+<li class="toctree-l1"><a class="reference internal" href="datatree.html">DataTree</a></li>
+<li class="toctree-l1"><a class="reference internal" href="functions.html">Top-level functions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="units.html">Units</a></li>
+<li class="toctree-l1 current active has-children"><a aria-current="page" class="current reference internal" href="#">GroupBy, windows and weights</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.GroupBy.html">annoray.GroupBy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.GroupBy.mean.html">annoray.GroupBy.mean</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.GroupBy.sum.html">annoray.GroupBy.sum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.GroupBy.std.html">annoray.GroupBy.std</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.GroupBy.var.html">annoray.GroupBy.var</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.GroupBy.min.html">annoray.GroupBy.min</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.GroupBy.max.html">annoray.GroupBy.max</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.GroupBy.median.html">annoray.GroupBy.median</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.GroupBy.prod.html">annoray.GroupBy.prod</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.GroupBy.count.html">annoray.GroupBy.count</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.GroupBy.all.html">annoray.GroupBy.all</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.GroupBy.any.html">annoray.GroupBy.any</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.GroupBy.argmin.html">annoray.GroupBy.argmin</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.GroupBy.argmax.html">annoray.GroupBy.argmax</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.GroupBy.first.html">annoray.GroupBy.first</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.GroupBy.last.html">annoray.GroupBy.last</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.GroupBy.quantile.html">annoray.GroupBy.quantile</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.GroupBy.map.html">annoray.GroupBy.map</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.GroupBy.reduce.html">annoray.GroupBy.reduce</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Rolling.html">annoray.Rolling</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Rolling.mean.html">annoray.Rolling.mean</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Rolling.sum.html">annoray.Rolling.sum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Rolling.std.html">annoray.Rolling.std</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Rolling.var.html">annoray.Rolling.var</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Rolling.min.html">annoray.Rolling.min</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Rolling.max.html">annoray.Rolling.max</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Rolling.median.html">annoray.Rolling.median</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Rolling.prod.html">annoray.Rolling.prod</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Rolling.count.html">annoray.Rolling.count</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Rolling.all.html">annoray.Rolling.all</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Rolling.any.html">annoray.Rolling.any</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Rolling.argmin.html">annoray.Rolling.argmin</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Rolling.argmax.html">annoray.Rolling.argmax</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Rolling.construct.html">annoray.Rolling.construct</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Rolling.reduce.html">annoray.Rolling.reduce</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.RollingExp.html">annoray.RollingExp</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.RollingExp.mean.html">annoray.RollingExp.mean</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.RollingExp.sum.html">annoray.RollingExp.sum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.RollingExp.std.html">annoray.RollingExp.std</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.RollingExp.var.html">annoray.RollingExp.var</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.RollingExp.count.html">annoray.RollingExp.count</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.RollingExp.cov.html">annoray.RollingExp.cov</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.RollingExp.corr.html">annoray.RollingExp.corr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Coarsen.html">annoray.Coarsen</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Coarsen.mean.html">annoray.Coarsen.mean</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Coarsen.sum.html">annoray.Coarsen.sum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Coarsen.std.html">annoray.Coarsen.std</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Coarsen.var.html">annoray.Coarsen.var</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Coarsen.min.html">annoray.Coarsen.min</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Coarsen.max.html">annoray.Coarsen.max</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Coarsen.median.html">annoray.Coarsen.median</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Coarsen.prod.html">annoray.Coarsen.prod</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Coarsen.count.html">annoray.Coarsen.count</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Coarsen.construct.html">annoray.Coarsen.construct</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Weighted.html">annoray.Weighted</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Weighted.mean.html">annoray.Weighted.mean</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Weighted.sum.html">annoray.Weighted.sum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Weighted.std.html">annoray.Weighted.std</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Weighted.var.html">annoray.Weighted.var</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Weighted.quantile.html">annoray.Weighted.quantile</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generated/annoray.Weighted.sum_of_weights.html">annoray.Weighted.sum_of_weights</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1"><a class="reference internal" href="schema.html">Schemas</a></li>
+<li class="toctree-l1"><a class="reference internal" href="testing.html">Testing</a></li>
+</ul>
+</div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+<nav aria-label="Breadcrumb" class="d-print-none">
+  <ul class="bd-breadcrumbs">
+    
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="../index.html" class="nav-link" aria-label="Home">
+        <i class="fa-solid fa-home"></i>
+      </a>
+    </li>
+    
+    <li class="breadcrumb-item"><a href="index.html" class="nav-link">API reference</a></li>
+    
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">GroupBy, windows and weights</span></li>
+  </ul>
+</nav>
+</div>
+      
+    </div>
+  
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section id="groupby-windows-and-weights">
+<h1>GroupBy, windows and weights<a class="headerlink" href="#groupby-windows-and-weights" title="Link to this heading">#</a></h1>
+<p>Objects returned by <code class="xref py py-meth docutils literal notranslate"><span class="pre">DataArray.groupby()</span></code> / <code class="xref py py-meth docutils literal notranslate"><span class="pre">DataArray.resample()</span></code>,
+<code class="xref py py-meth docutils literal notranslate"><span class="pre">DataArray.rolling()</span></code>, <code class="xref py py-meth docutils literal notranslate"><span class="pre">DataArray.rolling_exp()</span></code>, <code class="xref py py-meth docutils literal notranslate"><span class="pre">DataArray.coarsen()</span></code> and
+<code class="xref py py-meth docutils literal notranslate"><span class="pre">DataArray.weighted()</span></code> (and their <code class="docutils literal notranslate"><span class="pre">Dataset</span></code> counterparts). Each reduction returns a new
+object with the grouped or windowed dimension reduced.</p>
+<p>Each section has a short example; the examples share this setup:</p>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">annoray</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">ar</span>
+
+<span class="n">hourly</span> <span class="o">=</span> <span class="n">ar</span><span class="o">.</span><span class="n">DataArray</span><span class="p">(</span>
+    <span class="mf">288.0</span> <span class="o">+</span> <span class="mf">5.0</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">48</span><span class="p">)</span> <span class="o">*</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span> <span class="o">/</span> <span class="mi">24</span><span class="p">),</span>
+    <span class="n">dims</span><span class="o">=</span><span class="s2">"time"</span><span class="p">,</span>
+    <span class="n">coords</span><span class="o">=</span><span class="p">{</span><span class="s2">"time"</span><span class="p">:</span> <span class="n">ar</span><span class="o">.</span><span class="n">date_range</span><span class="p">(</span><span class="s2">"2026-07-01"</span><span class="p">,</span> <span class="mi">48</span><span class="p">,</span> <span class="s2">"h"</span><span class="p">)},</span>
+    <span class="n">units</span><span class="o">=</span><span class="s2">"K"</span><span class="p">,</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+</div>
+</div>
+<section id="groupby">
+<h2>GroupBy<a class="headerlink" href="#groupby" title="Link to this heading">#</a></h2>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">by_hour</span> <span class="o">=</span> <span class="n">hourly</span><span class="o">.</span><span class="n">groupby</span><span class="p">(</span><span class="s2">"time.hour"</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">by_hour</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span><span class="o">.</span><span class="n">sizes</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">hourly</span><span class="o">.</span><span class="n">resample</span><span class="p">(</span><span class="n">time</span><span class="o">=</span><span class="s2">"1D"</span><span class="p">)</span><span class="o">.</span><span class="n">max</span><span class="p">()</span><span class="o">.</span><span class="n">values</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">hourly</span><span class="o">.</span><span class="n">resample</span><span class="p">(</span><span class="n">time</span><span class="o">=</span><span class="s2">"1D"</span><span class="p">)</span><span class="o">.</span><span class="n">quantile</span><span class="p">(</span><span class="mf">0.5</span><span class="p">)</span><span class="o">.</span><span class="n">values</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>{'hour': 24}
+[293. 293.]
+[288. 288.]
+</pre></div>
+</div>
+</div>
+</div>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.GroupBy.html#annoray.GroupBy" title="annoray.GroupBy"><code class="xref py py-obj docutils literal notranslate"><span class="pre">GroupBy</span></code></a>()</p></td>
+<td><p>Groups of a data array or dataset (from <code class="code docutils literal notranslate"><span class="pre">groupby</span></code>, <code class="code docutils literal notranslate"><span class="pre">groupby_bins</span></code> or <code class="code docutils literal notranslate"><span class="pre">resample</span></code>).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.GroupBy.mean.html#annoray.GroupBy.mean" title="annoray.GroupBy.mean"><code class="xref py py-obj docutils literal notranslate"><span class="pre">GroupBy.mean</span></code></a>([dim, axis, skipna, ddof, ...])</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">mean</span></code> over <code class="code docutils literal notranslate"><span class="pre">dim</span></code> (all dimensions by default).</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.GroupBy.sum.html#annoray.GroupBy.sum" title="annoray.GroupBy.sum"><code class="xref py py-obj docutils literal notranslate"><span class="pre">GroupBy.sum</span></code></a>([dim, axis, skipna, ddof, ...])</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">sum</span></code> over <code class="code docutils literal notranslate"><span class="pre">dim</span></code> (all dimensions by default).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.GroupBy.std.html#annoray.GroupBy.std" title="annoray.GroupBy.std"><code class="xref py py-obj docutils literal notranslate"><span class="pre">GroupBy.std</span></code></a>([dim, axis, skipna, ddof, ...])</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">std</span></code> over <code class="code docutils literal notranslate"><span class="pre">dim</span></code> (all dimensions by default).</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.GroupBy.var.html#annoray.GroupBy.var" title="annoray.GroupBy.var"><code class="xref py py-obj docutils literal notranslate"><span class="pre">GroupBy.var</span></code></a>([dim, axis, skipna, ddof, ...])</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">var</span></code> over <code class="code docutils literal notranslate"><span class="pre">dim</span></code> (all dimensions by default).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.GroupBy.min.html#annoray.GroupBy.min" title="annoray.GroupBy.min"><code class="xref py py-obj docutils literal notranslate"><span class="pre">GroupBy.min</span></code></a>([dim, axis, skipna, ddof, ...])</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">min</span></code> over <code class="code docutils literal notranslate"><span class="pre">dim</span></code> (all dimensions by default).</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.GroupBy.max.html#annoray.GroupBy.max" title="annoray.GroupBy.max"><code class="xref py py-obj docutils literal notranslate"><span class="pre">GroupBy.max</span></code></a>([dim, axis, skipna, ddof, ...])</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">max</span></code> over <code class="code docutils literal notranslate"><span class="pre">dim</span></code> (all dimensions by default).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.GroupBy.median.html#annoray.GroupBy.median" title="annoray.GroupBy.median"><code class="xref py py-obj docutils literal notranslate"><span class="pre">GroupBy.median</span></code></a>([dim, axis, skipna, ddof, ...])</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">median</span></code> over <code class="code docutils literal notranslate"><span class="pre">dim</span></code> (all dimensions by default).</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.GroupBy.prod.html#annoray.GroupBy.prod" title="annoray.GroupBy.prod"><code class="xref py py-obj docutils literal notranslate"><span class="pre">GroupBy.prod</span></code></a>([dim, axis, skipna, ddof, ...])</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">prod</span></code> over <code class="code docutils literal notranslate"><span class="pre">dim</span></code> (all dimensions by default).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.GroupBy.count.html#annoray.GroupBy.count" title="annoray.GroupBy.count"><code class="xref py py-obj docutils literal notranslate"><span class="pre">GroupBy.count</span></code></a>([dim, axis, skipna, ddof, ...])</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">count</span></code> over <code class="code docutils literal notranslate"><span class="pre">dim</span></code> (all dimensions by default).</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.GroupBy.all.html#annoray.GroupBy.all" title="annoray.GroupBy.all"><code class="xref py py-obj docutils literal notranslate"><span class="pre">GroupBy.all</span></code></a>([dim, axis, skipna, ddof, ...])</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">all</span></code> over <code class="code docutils literal notranslate"><span class="pre">dim</span></code> (all dimensions by default).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.GroupBy.any.html#annoray.GroupBy.any" title="annoray.GroupBy.any"><code class="xref py py-obj docutils literal notranslate"><span class="pre">GroupBy.any</span></code></a>([dim, axis, skipna, ddof, ...])</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">any</span></code> over <code class="code docutils literal notranslate"><span class="pre">dim</span></code> (all dimensions by default).</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.GroupBy.argmin.html#annoray.GroupBy.argmin" title="annoray.GroupBy.argmin"><code class="xref py py-obj docutils literal notranslate"><span class="pre">GroupBy.argmin</span></code></a>([dim, axis, skipna, ddof, ...])</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">argmin</span></code> over <code class="code docutils literal notranslate"><span class="pre">dim</span></code> (all dimensions by default).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.GroupBy.argmax.html#annoray.GroupBy.argmax" title="annoray.GroupBy.argmax"><code class="xref py py-obj docutils literal notranslate"><span class="pre">GroupBy.argmax</span></code></a>([dim, axis, skipna, ddof, ...])</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">argmax</span></code> over <code class="code docutils literal notranslate"><span class="pre">dim</span></code> (all dimensions by default).</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.GroupBy.first.html#annoray.GroupBy.first" title="annoray.GroupBy.first"><code class="xref py py-obj docutils literal notranslate"><span class="pre">GroupBy.first</span></code></a>()</p></td>
+<td><p>The first element of each group.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.GroupBy.last.html#annoray.GroupBy.last" title="annoray.GroupBy.last"><code class="xref py py-obj docutils literal notranslate"><span class="pre">GroupBy.last</span></code></a>()</p></td>
+<td><p>The last element of each group.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.GroupBy.quantile.html#annoray.GroupBy.quantile" title="annoray.GroupBy.quantile"><code class="xref py py-obj docutils literal notranslate"><span class="pre">GroupBy.quantile</span></code></a>(q[, dim])</p></td>
+<td><p>Quantiles of each group (over the grouped dimension by default).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.GroupBy.map.html#annoray.GroupBy.map" title="annoray.GroupBy.map"><code class="xref py py-obj docutils literal notranslate"><span class="pre">GroupBy.map</span></code></a>(func[, args, shortcut])</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">func(group,</span> <span class="pre">*args,</span> <span class="pre">**kwargs)</span></code> for every group, combined: results that keep the grouped dimension go back to the original order; others are stacked along the group dimension (xarray's <code class="code docutils literal notranslate"><span class="pre">GroupBy.map</span></code>).</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.GroupBy.reduce.html#annoray.GroupBy.reduce" title="annoray.GroupBy.reduce"><code class="xref py py-obj docutils literal notranslate"><span class="pre">GroupBy.reduce</span></code></a>(func[, dim])</p></td>
+<td><p><code class="code docutils literal notranslate"><span class="pre">func(values,</span> <span class="pre">axis=…)</span></code> over each group (the grouped dimension by default).</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="rolling">
+<h2>Rolling<a class="headerlink" href="#rolling" title="Link to this heading">#</a></h2>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">r</span> <span class="o">=</span> <span class="n">hourly</span><span class="o">.</span><span class="n">rolling</span><span class="p">(</span><span class="n">time</span><span class="o">=</span><span class="mi">6</span><span class="p">,</span> <span class="n">center</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span><span class="o">.</span><span class="n">values</span><span class="p">[</span><span class="mi">2</span><span class="p">:</span><span class="mi">6</span><span class="p">])</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">construct</span><span class="p">(</span><span class="s2">"window"</span><span class="p">)</span><span class="o">.</span><span class="n">sizes</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>[         nan 290.74823088 291.58156421 292.17081986]
+{'time': 48, 'window': 6}
+</pre></div>
+</div>
+</div>
+</div>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Rolling.html#annoray.Rolling" title="annoray.Rolling"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Rolling</span></code></a>()</p></td>
+<td><p>Moving windows along one dimension.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Rolling.mean.html#annoray.Rolling.mean" title="annoray.Rolling.mean"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Rolling.mean</span></code></a>()</p></td>
+<td><p>Moving <code class="code docutils literal notranslate"><span class="pre">mean</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Rolling.sum.html#annoray.Rolling.sum" title="annoray.Rolling.sum"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Rolling.sum</span></code></a>()</p></td>
+<td><p>Moving <code class="code docutils literal notranslate"><span class="pre">sum</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Rolling.std.html#annoray.Rolling.std" title="annoray.Rolling.std"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Rolling.std</span></code></a>()</p></td>
+<td><p>Moving <code class="code docutils literal notranslate"><span class="pre">std</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Rolling.var.html#annoray.Rolling.var" title="annoray.Rolling.var"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Rolling.var</span></code></a>()</p></td>
+<td><p>Moving <code class="code docutils literal notranslate"><span class="pre">var</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Rolling.min.html#annoray.Rolling.min" title="annoray.Rolling.min"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Rolling.min</span></code></a>()</p></td>
+<td><p>Moving <code class="code docutils literal notranslate"><span class="pre">min</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Rolling.max.html#annoray.Rolling.max" title="annoray.Rolling.max"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Rolling.max</span></code></a>()</p></td>
+<td><p>Moving <code class="code docutils literal notranslate"><span class="pre">max</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Rolling.median.html#annoray.Rolling.median" title="annoray.Rolling.median"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Rolling.median</span></code></a>()</p></td>
+<td><p>Moving <code class="code docutils literal notranslate"><span class="pre">median</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Rolling.prod.html#annoray.Rolling.prod" title="annoray.Rolling.prod"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Rolling.prod</span></code></a>()</p></td>
+<td><p>Moving <code class="code docutils literal notranslate"><span class="pre">prod</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Rolling.count.html#annoray.Rolling.count" title="annoray.Rolling.count"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Rolling.count</span></code></a>()</p></td>
+<td><p>Moving <code class="code docutils literal notranslate"><span class="pre">count</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Rolling.all.html#annoray.Rolling.all" title="annoray.Rolling.all"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Rolling.all</span></code></a>()</p></td>
+<td><p>Moving <code class="code docutils literal notranslate"><span class="pre">all</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Rolling.any.html#annoray.Rolling.any" title="annoray.Rolling.any"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Rolling.any</span></code></a>()</p></td>
+<td><p>Moving <code class="code docutils literal notranslate"><span class="pre">any</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Rolling.argmin.html#annoray.Rolling.argmin" title="annoray.Rolling.argmin"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Rolling.argmin</span></code></a>()</p></td>
+<td><p>Moving <code class="code docutils literal notranslate"><span class="pre">argmin</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Rolling.argmax.html#annoray.Rolling.argmax" title="annoray.Rolling.argmax"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Rolling.argmax</span></code></a>()</p></td>
+<td><p>Moving <code class="code docutils literal notranslate"><span class="pre">argmax</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Rolling.construct.html#annoray.Rolling.construct" title="annoray.Rolling.construct"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Rolling.construct</span></code></a>(window_dim)</p></td>
+<td><p>The windows as a new trailing dimension (NaN-padded).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Rolling.reduce.html#annoray.Rolling.reduce" title="annoray.Rolling.reduce"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Rolling.reduce</span></code></a>(op)</p></td>
+<td><p>Reduce each window with the named operation (<code class="code docutils literal notranslate"><span class="pre">&quot;mean&quot;</span></code>, …).</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="rollingexp">
+<h2>RollingExp<a class="headerlink" href="#rollingexp" title="Link to this heading">#</a></h2>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="nb">print</span><span class="p">(</span><span class="n">hourly</span><span class="o">.</span><span class="n">rolling_exp</span><span class="p">(</span><span class="n">time</span><span class="o">=</span><span class="mi">12</span><span class="p">)</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span><span class="o">.</span><span class="n">values</span><span class="p">[</span><span class="o">-</span><span class="mi">3</span><span class="p">:])</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>[285.31358199 285.34227285 285.55213148]
+</pre></div>
+</div>
+</div>
+</div>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.RollingExp.html#annoray.RollingExp" title="annoray.RollingExp"><code class="xref py py-obj docutils literal notranslate"><span class="pre">RollingExp</span></code></a>()</p></td>
+<td><p>Exponentially weighted moving statistics along one dimension (<code class="code docutils literal notranslate"><span class="pre">rolling_exp</span></code>).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.RollingExp.mean.html#annoray.RollingExp.mean" title="annoray.RollingExp.mean"><code class="xref py py-obj docutils literal notranslate"><span class="pre">RollingExp.mean</span></code></a>([keep_attrs])</p></td>
+<td><p>The exponentially weighted moving mean.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.RollingExp.sum.html#annoray.RollingExp.sum" title="annoray.RollingExp.sum"><code class="xref py py-obj docutils literal notranslate"><span class="pre">RollingExp.sum</span></code></a>([keep_attrs])</p></td>
+<td><p>The exponentially weighted moving sum.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.RollingExp.std.html#annoray.RollingExp.std" title="annoray.RollingExp.std"><code class="xref py py-obj docutils literal notranslate"><span class="pre">RollingExp.std</span></code></a>([keep_attrs])</p></td>
+<td><p>The exponentially weighted moving standard deviation.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.RollingExp.var.html#annoray.RollingExp.var" title="annoray.RollingExp.var"><code class="xref py py-obj docutils literal notranslate"><span class="pre">RollingExp.var</span></code></a>([keep_attrs])</p></td>
+<td><p>The exponentially weighted moving variance (bias-corrected; numerically stable).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.RollingExp.count.html#annoray.RollingExp.count" title="annoray.RollingExp.count"><code class="xref py py-obj docutils literal notranslate"><span class="pre">RollingExp.count</span></code></a>([keep_attrs])</p></td>
+<td><p>The decayed count of values.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.RollingExp.cov.html#annoray.RollingExp.cov" title="annoray.RollingExp.cov"><code class="xref py py-obj docutils literal notranslate"><span class="pre">RollingExp.cov</span></code></a>(other[, keep_attrs])</p></td>
+<td><p>The exponentially weighted moving covariance with <code class="code docutils literal notranslate"><span class="pre">other</span></code> (a DataArray).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.RollingExp.corr.html#annoray.RollingExp.corr" title="annoray.RollingExp.corr"><code class="xref py py-obj docutils literal notranslate"><span class="pre">RollingExp.corr</span></code></a>(other[, keep_attrs])</p></td>
+<td><p>The exponentially weighted moving correlation with <code class="code docutils literal notranslate"><span class="pre">other</span></code> (a DataArray).</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="coarsen">
+<h2>Coarsen<a class="headerlink" href="#coarsen" title="Link to this heading">#</a></h2>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="nb">print</span><span class="p">(</span><span class="n">hourly</span><span class="o">.</span><span class="n">coarsen</span><span class="p">(</span><span class="n">time</span><span class="o">=</span><span class="mi">6</span><span class="p">)</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span><span class="o">.</span><span class="n">values</span><span class="p">[:</span><span class="mi">4</span><span class="p">])</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>[290.74823088 291.58156421 285.25176912 284.41843579]
+</pre></div>
+</div>
+</div>
+</div>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Coarsen.html#annoray.Coarsen" title="annoray.Coarsen"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Coarsen</span></code></a>()</p></td>
+<td><p>Block reductions: from <code class="code docutils literal notranslate"><span class="pre">coarsen</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Coarsen.mean.html#annoray.Coarsen.mean" title="annoray.Coarsen.mean"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Coarsen.mean</span></code></a>()</p></td>
+<td><p>The <code class="code docutils literal notranslate"><span class="pre">mean</span></code> of each window.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Coarsen.sum.html#annoray.Coarsen.sum" title="annoray.Coarsen.sum"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Coarsen.sum</span></code></a>()</p></td>
+<td><p>The <code class="code docutils literal notranslate"><span class="pre">sum</span></code> of each window.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Coarsen.std.html#annoray.Coarsen.std" title="annoray.Coarsen.std"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Coarsen.std</span></code></a>()</p></td>
+<td><p>The <code class="code docutils literal notranslate"><span class="pre">std</span></code> of each window.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Coarsen.var.html#annoray.Coarsen.var" title="annoray.Coarsen.var"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Coarsen.var</span></code></a>()</p></td>
+<td><p>The <code class="code docutils literal notranslate"><span class="pre">var</span></code> of each window.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Coarsen.min.html#annoray.Coarsen.min" title="annoray.Coarsen.min"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Coarsen.min</span></code></a>()</p></td>
+<td><p>The <code class="code docutils literal notranslate"><span class="pre">min</span></code> of each window.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Coarsen.max.html#annoray.Coarsen.max" title="annoray.Coarsen.max"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Coarsen.max</span></code></a>()</p></td>
+<td><p>The <code class="code docutils literal notranslate"><span class="pre">max</span></code> of each window.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Coarsen.median.html#annoray.Coarsen.median" title="annoray.Coarsen.median"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Coarsen.median</span></code></a>()</p></td>
+<td><p>The <code class="code docutils literal notranslate"><span class="pre">median</span></code> of each window.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Coarsen.prod.html#annoray.Coarsen.prod" title="annoray.Coarsen.prod"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Coarsen.prod</span></code></a>()</p></td>
+<td><p>The <code class="code docutils literal notranslate"><span class="pre">prod</span></code> of each window.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Coarsen.count.html#annoray.Coarsen.count" title="annoray.Coarsen.count"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Coarsen.count</span></code></a>()</p></td>
+<td><p>The <code class="code docutils literal notranslate"><span class="pre">count</span></code> of each window.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Coarsen.construct.html#annoray.Coarsen.construct" title="annoray.Coarsen.construct"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Coarsen.construct</span></code></a>([window_dim])</p></td>
+<td><p>The windows as dimensions: <code class="code docutils literal notranslate"><span class="pre">da.coarsen(x=2).construct(x=(&quot;x_coarse&quot;,</span> <span class="pre">&quot;x_fine&quot;))</span></code>.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="weighted">
+<h2>Weighted<a class="headerlink" href="#weighted" title="Link to this heading">#</a></h2>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">weights</span> <span class="o">=</span> <span class="n">ar</span><span class="o">.</span><span class="n">DataArray</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">48</span><span class="p">)</span> <span class="o">%</span> <span class="mi">24</span> <span class="o">&lt;</span> <span class="mi">12</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">),</span> <span class="n">dims</span><span class="o">=</span><span class="s2">"time"</span><span class="p">)</span>
+<span class="n">w</span> <span class="o">=</span> <span class="n">hourly</span><span class="o">.</span><span class="n">weighted</span><span class="p">(</span><span class="n">weights</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="s2">"time"</span><span class="p">)</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span> <span class="n">w</span><span class="o">.</span><span class="n">sum_of_weights</span><span class="p">()</span><span class="o">.</span><span class="n">item</span><span class="p">())</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>289.0549658489897 K 72.0
+</pre></div>
+</div>
+</div>
+</div>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Weighted.html#annoray.Weighted" title="annoray.Weighted"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Weighted</span></code></a>()</p></td>
+<td><p>Weighted reductions: from <code class="code docutils literal notranslate"><span class="pre">DataArray.weighted</span></code> / <code class="code docutils literal notranslate"><span class="pre">Dataset.weighted</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Weighted.mean.html#annoray.Weighted.mean" title="annoray.Weighted.mean"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Weighted.mean</span></code></a>([dim])</p></td>
+<td><p>The weighted mean.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Weighted.sum.html#annoray.Weighted.sum" title="annoray.Weighted.sum"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Weighted.sum</span></code></a>([dim])</p></td>
+<td><p>The weighted sum (unit of data × weights).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Weighted.std.html#annoray.Weighted.std" title="annoray.Weighted.std"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Weighted.std</span></code></a>([dim])</p></td>
+<td><p>The weighted standard deviation.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Weighted.var.html#annoray.Weighted.var" title="annoray.Weighted.var"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Weighted.var</span></code></a>([dim])</p></td>
+<td><p>The weighted variance (no degrees-of-freedom correction).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/annoray.Weighted.quantile.html#annoray.Weighted.quantile" title="annoray.Weighted.quantile"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Weighted.quantile</span></code></a>(q, *[, dim, skipna])</p></td>
+<td><p>Weighted quantiles (xarray's algorithm: Kish's effective sample size, linear).</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/annoray.Weighted.sum_of_weights.html#annoray.Weighted.sum_of_weights" title="annoray.Weighted.sum_of_weights"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Weighted.sum_of_weights</span></code></a>([dim])</p></td>
+<td><p>The sum of the weights where the data is not NaN.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+</section>
+
+
+                </article>
+              
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="generated/annoray.dims.Concentration.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">annoray.dims.Concentration</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="generated/annoray.GroupBy.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">annoray.GroupBy</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <dialog id="pst-secondary-sidebar-modal"></dialog>
+                <div id="pst-secondary-sidebar" class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+<div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> On this page
+  </div>
+  <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#groupby">GroupBy</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#rolling">Rolling</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#rollingexp">RollingExp</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#coarsen">Coarsen</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#weighted">Weighted</a></li>
+</ul>
+  </nav></div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="../_static/scripts/bootstrap.js?digest=18bd87630a240e9c25be"></script>
+<script defer src="../_static/scripts/pydata-sphinx-theme.js?digest=18bd87630a240e9c25be"></script>
+
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item">
+
+  <p class="copyright">
+    
+      © Copyright 2026, Sunip K. Mukherjee.
+      <br/>
+    
+  </p>
+</div>
+      
+        <div class="footer-item">
+
+  <p class="sphinx-version">
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 9.2.0.
+  </p>
+</div>
+      
+    </div>
+  
+  
+  
+    <div class="footer-items__end">
+      
+        <div class="footer-item">
+<p class="theme-version">
+  <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.23.0.
+</p></div>
+      
+    </div>
+  
+</div>
+
+  </footer>
+  </body>
+</html>

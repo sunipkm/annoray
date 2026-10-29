@@ -1,0 +1,1062 @@
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="./" data-theme="auto">
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Differences from xarray &#8212; annoray</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "auto";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "auto";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="_static/styles/theme.css?digest=18bd87630a240e9c25be" rel="stylesheet" />
+<link href="_static/styles/pydata-sphinx-theme.css?digest=18bd87630a240e9c25be" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="_static/mystnb.11b39860a7a0cbfd473a3ad8a317855267ff0bd372690045ca344a6b62be495e.css" />
+    <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="_static/sphinx-design.min.css?v=95c83b7e" />
+  
+  <!-- So that users can add custom icons -->
+  <script defer src="_static/scripts/fontawesome.js?digest=18bd87630a240e9c25be"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="_static/scripts/bootstrap.js?digest=18bd87630a240e9c25be" />
+<link rel="preload" as="script" href="_static/scripts/pydata-sphinx-theme.js?digest=18bd87630a240e9c25be" />
+
+    <script src="_static/documentation_options.js?v=6158cd60"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="_static/copybutton.js?v=f281be69"></script>
+    <script src="_static/design-tabs.js?v=f930bc37"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'xarray-differences';</script>
+    <script>
+        DOCUMENTATION_OPTIONS.theme_version = '0.23.0';
+        DOCUMENTATION_OPTIONS.theme_switcher_json_url = 'https://sunipkm.github.io/annoray/switcher.json';
+        DOCUMENTATION_OPTIONS.theme_switcher_version_match = '0.0.1-pre4';
+        DOCUMENTATION_OPTIONS.show_version_warning_banner =
+            false;
+        </script>
+    <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="User guide" href="user-guide/index.html" />
+    <link rel="prev" title="Examples" href="getting-started/examples.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="color-scheme" content="light dark"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="0.0.1-pre4" />
+  
+    
+    <script src="_static/searchtools.js"></script>
+    <script src="_static/language_data.js"></script>
+    <script src="searchindex.js"></script>
+  
+  </head>
+  <body data-default-mode="auto">
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+  
+  
+  
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header id="pst-header" class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button type="button" class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-3 navbar-header-items__start">
+    
+      <div class="navbar-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="index.html">
+  
+  
+  
+  
+  
+  
+    <p class="title logo__title">annoray</p>
+  
+</a></div>
+    
+  </div>
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    <div class="me-auto navbar-header-items__center">
+      
+        <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="getting-started/installation.html">
+    Installation
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="getting-started/overview.html">
+    Overview
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="getting-started/examples.html">
+    Examples
+  </a>
+</li>
+
+
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="#" aria-current="page">
+    Differences from xarray
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="user-guide/index.html">
+    User guide
+  </a>
+</li>
+
+            <li class="nav-item dropdown">
+                <button class="btn dropdown-toggle nav-item" type="button"
+                data-bs-toggle="dropdown" aria-expanded="false"
+                aria-controls="pst-nav-more-links">
+                    More
+                </button>
+                <ul id="pst-nav-more-links" class="dropdown-menu">
+                    
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="api/index.html">
+    API reference
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="rust.html">
+    Rust crates
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="performance.html">
+    Performance
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-external" href="https://docs.rs/annoray">
+    Rust API
+  </a>
+</li>
+
+                </ul>
+            </li>
+            
+  </ul>
+</nav></div>
+      
+    </div>
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button type="button" class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+        </div>
+      
+      
+        <div class="navbar-item">
+<div class="version-switcher__container dropdown pst-js-only">
+  <button id="pst-version-switcher-button-2"
+    type="button"
+    class="version-switcher__button btn btn-sm dropdown-toggle"
+    data-bs-toggle="dropdown"
+    aria-haspopup="listbox"
+    aria-controls="pst-version-switcher-list-2"
+    aria-label="Version switcher list"
+  >
+    Choose version  <!-- this text may get changed later by javascript -->
+    <span class="caret"></span>
+  </button>
+  <div id="pst-version-switcher-list-2"
+    class="version-switcher__menu dropdown-menu list-group-flush py-0"
+    role="listbox" aria-labelledby="pst-version-switcher-button-2">
+    <!-- dropdown will be populated by javascript on page load -->
+  </div>
+</div></div>
+      
+        <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button type="button" class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+      
+        <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/sunipkm/annoray" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-square-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
+        </li>
+</ul></div>
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button type="button" class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+    </div>
+  
+
+  
+    <button type="button" class="pst-navbar-icon sidebar-toggle secondary-toggle" aria-label="On this page">
+      <span class="fa-solid fa-outdent"></span>
+    </button>
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="getting-started/installation.html">
+    Installation
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="getting-started/overview.html">
+    Overview
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="getting-started/examples.html">
+    Examples
+  </a>
+</li>
+
+
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="#" aria-current="page">
+    Differences from xarray
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="user-guide/index.html">
+    User guide
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="api/index.html">
+    API reference
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="rust.html">
+    Rust crates
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="performance.html">
+    Performance
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-external" href="https://docs.rs/annoray">
+    Rust API
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+<div class="version-switcher__container dropdown pst-js-only">
+  <button id="pst-version-switcher-button-3"
+    type="button"
+    class="version-switcher__button btn btn-sm dropdown-toggle"
+    data-bs-toggle="dropdown"
+    aria-haspopup="listbox"
+    aria-controls="pst-version-switcher-list-3"
+    aria-label="Version switcher list"
+  >
+    Choose version  <!-- this text may get changed later by javascript -->
+    <span class="caret"></span>
+  </button>
+  <div id="pst-version-switcher-list-3"
+    class="version-switcher__menu dropdown-menu list-group-flush py-0"
+    role="listbox" aria-labelledby="pst-version-switcher-button-3">
+    <!-- dropdown will be populated by javascript on page load -->
+  </div>
+</div></div>
+        
+          <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button type="button" class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+        
+          <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/sunipkm/annoray" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-square-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
+        </li>
+</ul></div>
+        
+      </div>
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item pst-sidebar-collapse"><button type="button" id="pst-collapse-sidebar-button" aria-expanded="true" aria-controls="pst-primary-sidebar">
+  <svg class="pst-icon" role="img" aria-hidden="true" focusable="false" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+    <path fill="currentColor" d="M3 15.5C2.36232 15.5 1.74874 15.2564 1.28478 14.8189C0.820828 14.3815 0.541576 13.7832 0.504167 13.1467L0.5 13L0.5 3C0.499965 2.36232 0.743605 1.74874 1.18107 1.28478C1.61854 0.820828 2.21676 0.541576 2.85333 0.504167L3 0.5L13 0.5C13.6377 0.499965 14.2513 0.743605 14.7152 1.18107C15.1792 1.61854 15.4584 2.21676 15.4958 2.85333L15.5 3L15.5 13C15.5 13.6377 15.2564 14.2513 14.8189 14.7152C14.3815 15.1792 13.7832 15.4584 13.1467 15.4958L13 15.5L3 15.5ZM3 13.8333L10.5 13.8333L10.5 2.16667L3 2.16667C2.79589 2.16669 2.59889 2.24163 2.44636 2.37726C2.29383 2.5129 2.19638 2.69979 2.1725 2.9025L2.16667 3L2.16667 13C2.16669 13.2041 2.24163 13.4011 2.37726 13.5536C2.5129 13.7062 2.69979 13.8036 2.9025 13.8275L3 13.8333ZM6.65583 10.325L6.5775 10.2558L4.91083 8.58917C4.76735 8.44567 4.68116 8.25476 4.66843 8.05223C4.65569 7.84971 4.71729 7.6495 4.84167 7.48917L4.91083 7.41083L6.5775 5.74417C6.72747 5.59471 6.9287 5.50794 7.14032 5.50148C7.35194 5.49502 7.55809 5.56935 7.7169 5.70937C7.8757 5.8494 7.97525 6.04463 7.99533 6.25539C8.01541 6.46616 7.95451 6.67667 7.825 6.84417L7.75583 6.9225L6.67917 8L7.75583 9.0775C7.89931 9.22099 7.98551 9.41191 7.99824 9.61443C8.01097 9.81695 7.94938 10.0172 7.825 10.1775L7.75583 10.2558C7.61234 10.3993 7.42142 10.4855 7.2189 10.4982C7.01638 10.511 6.81617 10.4494 6.65583 10.325Z"/>
+  </svg>
+  <span class="pst-collapse-sidebar-label">Collapse Sidebar</span>
+  <span class="pst-expand-sidebar-label">Expand Sidebar</span>
+</button></div>
+        <div class="sidebar-primary-item">
+
+<nav class="bd-docs-nav bd-links"
+     aria-label="Section Navigation">
+  <p class="bd-links__title" role="heading" aria-level="1">Section Navigation</p>
+  <div class="bd-toc-item navbar-nav"></div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+<nav aria-label="Breadcrumb" class="d-print-none">
+  <ul class="bd-breadcrumbs">
+    
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="index.html" class="nav-link" aria-label="Home">
+        <i class="fa-solid fa-home"></i>
+      </a>
+    </li>
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">Differences from xarray</span></li>
+  </ul>
+</nav>
+</div>
+      
+    </div>
+  
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section id="differences-from-xarray">
+<h1>Differences from xarray<a class="headerlink" href="#differences-from-xarray" title="Link to this heading">#</a></h1>
+<p>annoray follows xarray’s data model and API closely enough that most xarray code runs
+unchanged against <code class="docutils literal notranslate"><span class="pre">import</span> <span class="pre">annoray</span> <span class="pre">as</span> <span class="pre">ar</span></code>. Where it differs, the difference is deliberate:
+xarray behaviours that silently produce wrong results (unchecked casts, unit-blind
+arithmetic, writes that reach some objects and not others) are replaced by checked behaviour
+that raises an error naming the explicit alternative. Known xarray bugs are not reproduced.</p>
+<p>This page lists the differences by topic. Each entry gives annoray’s behaviour, then xarray’s.</p>
+<section id="data-model-and-assignment">
+<h2>Data model and assignment<a class="headerlink" href="#data-model-and-assignment" title="Link to this heading">#</a></h2>
+<p>Data are immutable from Python; containers are not. A <code class="docutils literal notranslate"><span class="pre">DataArray</span></code>’s data and unit are fixed
+for its lifetime (its coordinates, attributes and name can change), while a <code class="docutils literal notranslate"><span class="pre">Dataset</span></code> is a
+mutable collection whose variables are replaced, never written into.</p>
+<ul class="simple">
+<li><p><strong>Values are immutable from Python.</strong> <code class="docutils literal notranslate"><span class="pre">da[...]</span> <span class="pre">=</span> <span class="pre">v</span></code>, <code class="docutils literal notranslate"><span class="pre">da.loc[...]</span> <span class="pre">=</span> <span class="pre">v</span></code> and
+<code class="docutils literal notranslate"><span class="pre">da.values[...]</span> <span class="pre">=</span> <span class="pre">v</span></code> raise <code class="docutils literal notranslate"><span class="pre">TypeError</span></code>; <code class="docutils literal notranslate"><span class="pre">.values</span></code> is a read-only NumPy view of the Rust
+buffer. <code class="docutils literal notranslate"><span class="pre">da.put(value,</span> <span class="pre">**positions)</span></code> and <code class="docutils literal notranslate"><span class="pre">da.put_sel(value,</span> <span class="pre">method=,</span> <span class="pre">tolerance=,</span> <span class="pre">**labels)</span></code>
+return an updated copy and leave the original unchanged.</p>
+<ul>
+<li><p><em>xarray:</em> in-place writes. Whether a write also reaches other objects depends on how they
+were selected: basic indexing gives views, fancy indexing gives copies. Chained assignment
+(<code class="docutils literal notranslate"><span class="pre">ds.sel(...)[&quot;v&quot;][0]</span> <span class="pre">=</span> <span class="pre">1</span></code>) is silently lost.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">put</span></code> is stricter than xarray assignment:</p>
+<ul>
+<li><p>positions must be in range and not repeated;</p></li>
+<li><p>a dimension coordinate of <code class="docutils literal notranslate"><span class="pre">value</span></code> must match the target at the selected positions;</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">value</span></code> is converted into the target’s unit;</p></li>
+<li><p>the element type never changes (<code class="docutils literal notranslate"><span class="pre">2.5</span></code> into an <code class="docutils literal notranslate"><span class="pre">int32</span></code> array is an error, not <code class="docutils literal notranslate"><span class="pre">2</span></code>).</p></li>
+</ul>
+</li>
+<li><p>Bulk edits: <code class="docutils literal notranslate"><span class="pre">arr</span> <span class="pre">=</span> <span class="pre">da.values.copy()</span></code>, edit <code class="docutils literal notranslate"><span class="pre">arr</span></code>, then <code class="docutils literal notranslate"><span class="pre">da.copy(data=arr)</span></code>. Datasets
+have no <code class="docutils literal notranslate"><span class="pre">put</span></code>: <code class="docutils literal notranslate"><span class="pre">ds[&quot;v&quot;]</span> <span class="pre">=</span> <span class="pre">ds[&quot;v&quot;].put(...)</span></code> replaces the variable in place, and
+<code class="docutils literal notranslate"><span class="pre">ds.assign(v=ds[&quot;v&quot;].put(...))</span></code> returns a new dataset. Arrays taken from the dataset
+earlier keep their values either way.</p></li>
+<li><p>In Rust, data is mutated in place through <code class="docutils literal notranslate"><span class="pre">data_mut</span></code> / <code class="docutils literal notranslate"><span class="pre">isel_mut</span></code>, where the borrow
+checker rules out aliasing.</p></li>
+</ul>
+</li>
+<li><p><strong>Containers are assignable.</strong> These work as in xarray: <code class="docutils literal notranslate"><span class="pre">ds[&quot;v&quot;]</span> <span class="pre">=</span> <span class="pre">...</span></code>, <code class="docutils literal notranslate"><span class="pre">del</span> <span class="pre">ds[&quot;v&quot;]</span></code>,
+<code class="docutils literal notranslate"><span class="pre">ds.update(...)</span></code>, <code class="docutils literal notranslate"><span class="pre">ds.coords[k]</span> <span class="pre">=</span> <span class="pre">...</span></code>, <code class="docutils literal notranslate"><span class="pre">da.coords[k]</span> <span class="pre">=</span> <span class="pre">...</span></code>, <code class="docutils literal notranslate"><span class="pre">da.name</span> <span class="pre">=</span> <span class="pre">...</span></code>, and edits of
+<code class="docutils literal notranslate"><span class="pre">attrs</span></code> and <code class="docutils literal notranslate"><span class="pre">encoding</span></code>.</p>
+<ul>
+<li><p>Every edit is validated before anything changes, so a refused edit leaves the object as
+it was.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">attrs</span></code>, <code class="docutils literal notranslate"><span class="pre">coords</span></code> and <code class="docutils literal notranslate"><span class="pre">encoding</span></code> are live <code class="docutils literal notranslate"><span class="pre">dict</span></code> subclasses.</p></li>
+<li><p>Attributes that are not edited keep their exact netCDF types (<code class="docutils literal notranslate"><span class="pre">int16</span></code>, <code class="docutils literal notranslate"><span class="pre">float32</span></code>, arrays).</p></li>
+</ul>
+</li>
+<li><p><strong>Arrays taken from a dataset are linked copies.</strong> <code class="docutils literal notranslate"><span class="pre">ds[&quot;v&quot;].attrs[...]</span> <span class="pre">=</span> <span class="pre">...</span></code> writes
+through to the dataset, unless the dataset has since replaced <code class="docutils literal notranslate"><span class="pre">v</span></code>.</p>
+<ul>
+<li><p><em>xarray:</em> the array shares the whole variable with the dataset.</p></li>
+</ul>
+</li>
+<li><p><strong>Single-coordinate indexes only.</strong> Label lookups run on the dimension coordinate; there
+are no separate index objects.</p>
+<ul>
+<li><p>These raise an error with a hint:</p>
+<ul>
+<li><p>MultiIndexes: <code class="docutils literal notranslate"><span class="pre">set_index</span></code> with several coordinates or <code class="docutils literal notranslate"><span class="pre">append=True</span></code>;</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">to_stacked_array</span></code>;</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">set_xindex</span></code>;</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">reset_index</span></code> without <code class="docutils literal notranslate"><span class="pre">drop=True</span></code>.</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">stack</span></code> / <code class="docutils literal notranslate"><span class="pre">unstack</span></code> work without a tuple-valued coordinate.</p></li>
+</ul>
+</li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">broadcast</span></code> / <code class="docutils literal notranslate"><span class="pre">broadcast_like</span></code> return copies.</strong></p>
+<ul>
+<li><p><em>xarray:</em> read-only views.</p></li>
+</ul>
+</li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">rename_vars</span></code> on a dimension coordinate makes it a plain coordinate.</strong></p>
+<ul>
+<li><p><em>xarray:</em> keeps it as an index under the new name.</p></li>
+</ul>
+</li>
+</ul>
+</section>
+<section id="units">
+<h2>Units<a class="headerlink" href="#units" title="Link to this heading">#</a></h2>
+<p>Units belong to the data, not to an attribute: <code class="docutils literal notranslate"><span class="pre">da.units</span></code> is a unit, and a CF <code class="docutils literal notranslate"><span class="pre">units</span></code>
+attribute is decoded into it when a file is opened.</p>
+<ul class="simple">
+<li><p><strong>Values stay in their declared unit.</strong> <code class="docutils literal notranslate"><span class="pre">mm</span></code> data is never normalised to <code class="docutils literal notranslate"><span class="pre">m</span></code>.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">+</span></code>, <code class="docutils literal notranslate"><span class="pre">-</span></code> and comparisons check dimensions.</strong></p>
+<ul>
+<li><p>Operands with the same dimension but a different scale (<code class="docutils literal notranslate"><span class="pre">m</span></code> and <code class="docutils literal notranslate"><span class="pre">km</span></code>) are an error by
+default.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">UnitPolicy::AutoRescale</span></code> (Rust) converts to the left operand’s unit instead.</p></li>
+</ul>
+</li>
+<li><p><strong>Bare numbers next to unitful data.</strong></p>
+<ul>
+<li><p>A bare number is accepted only as <code class="docutils literal notranslate"><span class="pre">0</span></code> (for ratio-scale and logarithmic units) or NaN.</p></li>
+<li><p>Any other value must be given as a <code class="docutils literal notranslate"><span class="pre">Quantity</span></code>. This applies to comparisons, <code class="docutils literal notranslate"><span class="pre">where</span></code>,
+<code class="docutils literal notranslate"><span class="pre">fillna</span></code>, <code class="docutils literal notranslate"><span class="pre">clip</span></code>, <code class="docutils literal notranslate"><span class="pre">isin</span></code>, <code class="docutils literal notranslate"><span class="pre">put</span></code> and <code class="docutils literal notranslate"><span class="pre">query</span></code>. For example, <code class="docutils literal notranslate"><span class="pre">da</span> <span class="pre">&gt;</span> <span class="pre">280</span></code> on kelvin data raises <code class="docutils literal notranslate"><span class="pre">UnitError</span></code>;
+<code class="docutils literal notranslate"><span class="pre">da</span> <span class="pre">&gt;</span> <span class="pre">ar.Quantity(280,</span> <span class="pre">&quot;K&quot;)</span></code> works.</p></li>
+<li><p><em>xarray:</em> compares the stored numbers, whatever the unit.</p></li>
+</ul>
+</li>
+<li><p><strong>Affine and logarithmic units.</strong></p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">degC</span> <span class="pre">-</span> <span class="pre">degC</span></code> is a kelvin-sized step; <code class="docutils literal notranslate"><span class="pre">degC</span> <span class="pre">+</span> <span class="pre">degC</span></code>, products of °C and sums of °C are
+errors.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">dB</span></code> and other logarithmic units convert only between the same reference.</p></li>
+</ul>
+</li>
+<li><p><strong>NumPy ufuncs.</strong> The unit-aware ufuncs run in Rust. Others raise <code class="docutils literal notranslate"><span class="pre">TypeError</span></code> on data with a
+unit instead of dropping the unit.</p></li>
+<li><p><strong>Math functions.</strong> Transcendental functions need dimensionless input. <code class="docutils literal notranslate"><span class="pre">sin</span></code>, <code class="docutils literal notranslate"><span class="pre">cos</span></code> and
+<code class="docutils literal notranslate"><span class="pre">tan</span></code> take angles. Inverse trigonometric functions of unitful input return radians.</p></li>
+<li><p><strong>Python scalars.</strong> <code class="docutils literal notranslate"><span class="pre">float(da)</span></code> and <code class="docutils literal notranslate"><span class="pre">int(da)</span></code> work only on dimensionless data. <code class="docutils literal notranslate"><span class="pre">da.item()</span></code>
+returns a <code class="docutils literal notranslate"><span class="pre">Quantity</span></code> when there is a unit.</p></li>
+<li><p><strong>Calculus.</strong></p>
+<ul>
+<li><p>Derivatives carry the data unit per coordinate unit.</p></li>
+<li><p>With a time coordinate, the step is in seconds (or <code class="docutils literal notranslate"><span class="pre">time_unit</span></code>) and the result carries
+that unit.</p></li>
+<li><p><em>xarray:</em> nanoseconds, with no unit.</p></li>
+</ul>
+</li>
+<li><p><strong>Comparing and combining.</strong></p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">equals</span></code> converts units (1 km equals 1000 m); <code class="docutils literal notranslate"><span class="pre">identical</span></code> requires the same unit.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">concat</span></code>, <code class="docutils literal notranslate"><span class="pre">merge</span></code> and <code class="docutils literal notranslate"><span class="pre">combine_first</span></code> convert compatible units into the first object’s
+unit.</p></li>
+</ul>
+</li>
+</ul>
+</section>
+<section id="element-types">
+<h2>Element types<a class="headerlink" href="#element-types" title="Link to this heading">#</a></h2>
+<ul class="simple">
+<li><p><strong>No unchecked casts.</strong></p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">astype</span></code> raises <code class="docutils literal notranslate"><span class="pre">ValueError</span></code> (“cannot convert …”) for NaN or ±∞ converted to an
+integer, for values out of range (300 as <code class="docutils literal notranslate"><span class="pre">uint8</span></code>), and for finite <code class="docutils literal notranslate"><span class="pre">float64</span></code> values
+beyond <code class="docutils literal notranslate"><span class="pre">float32</span></code>’s range.</p></li>
+<li><p><em>NumPy:</em> <code class="docutils literal notranslate"><span class="pre">INT_MIN</span></code>, saturation or wrap-around (300 as <code class="docutils literal notranslate"><span class="pre">uint8</span></code> is 44).</p></li>
+</ul>
+</li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">full_like</span></code></strong> with an integer or boolean template needs an exact fill.</p>
+<ul>
+<li><p><em>NumPy:</em> truncates <code class="docutils literal notranslate"><span class="pre">0.5</span></code> to <code class="docutils literal notranslate"><span class="pre">0</span></code>.</p></li>
+</ul>
+</li>
+<li><p><strong>Integer arithmetic is overflow-checked.</strong> Integer sums are exact (<code class="docutils literal notranslate"><span class="pre">int64</span></code> / <code class="docutils literal notranslate"><span class="pre">uint64</span></code>).</p></li>
+<li><p><strong>Label types are not mixed.</strong> Integer and float coordinates, or coordinates in different
+units, are not aligned by value; the error asks for an explicit conversion.</p></li>
+<li><p><strong>Plain Python numbers are weak scalars</strong> (NEP 50): <code class="docutils literal notranslate"><span class="pre">float32</span></code> data stays <code class="docutils literal notranslate"><span class="pre">float32</span></code> in
+<code class="docutils literal notranslate"><span class="pre">da</span> <span class="pre">*</span> <span class="pre">2.0</span></code>.</p></li>
+<li><p><strong>NumPy reductions</strong> (<code class="docutils literal notranslate"><span class="pre">np.sum(da,</span> <span class="pre">...)</span></code>) refuse <code class="docutils literal notranslate"><span class="pre">out=</span></code> and <code class="docutils literal notranslate"><span class="pre">dtype=</span></code> arguments.</p></li>
+<li><p><strong>Complex numbers have no order.</strong> <code class="docutils literal notranslate"><span class="pre">min</span></code>, <code class="docutils literal notranslate"><span class="pre">max</span></code>, <code class="docutils literal notranslate"><span class="pre">argmin</span></code>/<code class="docutils literal notranslate"><span class="pre">argmax</span></code>, <code class="docutils literal notranslate"><span class="pre">median</span></code>, <code class="docutils literal notranslate"><span class="pre">quantile</span></code>,
+<code class="docutils literal notranslate"><span class="pre">rank</span></code>, sorting by them and <code class="docutils literal notranslate"><span class="pre">&lt;</span></code>/<code class="docutils literal notranslate"><span class="pre">&gt;</span></code> are errors; <code class="docutils literal notranslate"><span class="pre">==</span></code> and <code class="docutils literal notranslate"><span class="pre">!=</span></code> are defined.</p>
+<ul>
+<li><p><em>NumPy:</em> orders complex numbers by real part, then imaginary part.</p></li>
+</ul>
+</li>
+<li><p><strong>Complex to real keeps the imaginary part.</strong> <code class="docutils literal notranslate"><span class="pre">astype</span></code> to a real type raises <code class="docutils literal notranslate"><span class="pre">ValueError</span></code>
+for a value whose imaginary part is not zero; <code class="docutils literal notranslate"><span class="pre">.real</span></code>, <code class="docutils literal notranslate"><span class="pre">.imag</span></code> and <code class="docutils literal notranslate"><span class="pre">abs</span></code> take the parts
+explicitly.</p>
+<ul>
+<li><p><em>NumPy:</em> emits a <code class="docutils literal notranslate"><span class="pre">ComplexWarning</span></code> and discards the imaginary part.</p></li>
+</ul>
+</li>
+<li><p><strong>Complex data with a unit with an offset</strong> (°C, °F) cannot be converted (<code class="docutils literal notranslate"><span class="pre">to</span></code>): the offset has
+no meaning for a complex number. Units without one scale both parts.</p></li>
+</ul>
+</section>
+<section id="indexing-and-selection">
+<h2>Indexing and selection<a class="headerlink" href="#indexing-and-selection" title="Link to this heading">#</a></h2>
+<ul class="simple">
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">.loc[...]</span></code> is read-only.</strong> Use <code class="docutils literal notranslate"><span class="pre">put_sel</span></code> to write by label.</p></li>
+<li><p><strong>Rust selection macros.</strong> <code class="docutils literal notranslate"><span class="pre">isel!</span></code> / <code class="docutils literal notranslate"><span class="pre">sel!</span></code> take Python slice syntax and return <code class="docutils literal notranslate"><span class="pre">Result</span></code>;
+they never panic.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">interp</span></code>.</strong></p>
+<ul>
+<li><p>No extrapolation by default.</p></li>
+<li><p>A NaN target gives NaN.</p></li>
+<li><p>Text coordinates along the interpolated dimension are dropped.</p></li>
+<li><p>annoray additions: log-scale interpolation (<code class="docutils literal notranslate"><span class="pre">method=&quot;log_coord&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;log_value&quot;</span></code>,
+<code class="docutils literal notranslate"><span class="pre">&quot;loglog&quot;</span></code>) and extrapolation choices (<code class="docutils literal notranslate"><span class="pre">extrapolate=&quot;edge&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;extend&quot;</span></code>, or a number for
+a power law).</p></li>
+</ul>
+</li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">query</span></code></strong> uses a restricted expression evaluator: no <code class="docutils literal notranslate"><span class="pre">eval</span></code>, no pandas. Calls are limited
+to <code class="docutils literal notranslate"><span class="pre">Q(...)</span></code> quantities and <code class="docutils literal notranslate"><span class="pre">.str</span></code> methods.</p></li>
+</ul>
+</section>
+<section id="alignment-and-combining">
+<h2>Alignment and combining<a class="headerlink" href="#alignment-and-combining" title="Link to this heading">#</a></h2>
+<ul class="simple">
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">concat</span></code> / <code class="docutils literal notranslate"><span class="pre">merge</span></code> use xarray’s new defaults:</strong> <code class="docutils literal notranslate"><span class="pre">join=&quot;exact&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">compat=&quot;override&quot;</span></code>,
+<code class="docutils literal notranslate"><span class="pre">coords=&quot;minimal&quot;</span></code>. <code class="docutils literal notranslate"><span class="pre">ConcatOptions::legacy()</span></code> / <code class="docutils literal notranslate"><span class="pre">MergeOptions::legacy()</span></code> (Rust) restore
+the old outer-join behaviour.</p></li>
+<li><p><strong>Dataset with DataArray arithmetic</strong> does not merge the array’s attributes into the
+dataset’s global attributes.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">groupby</span></code> on a dataset</strong> keeps variables without the grouped dimension as they are.</p>
+<ul>
+<li><p><em>xarray:</em> repeats them for every group.</p></li>
+</ul>
+</li>
+</ul>
+</section>
+<section id="computation">
+<h2>Computation<a class="headerlink" href="#computation" title="Link to this heading">#</a></h2>
+<ul class="simple">
+<li><p><strong>Attributes are kept everywhere</strong>, matching xarray 2026’s <code class="docutils literal notranslate"><span class="pre">keep_attrs</span></code> default. Binary
+operations merge both operands’ attributes and drop keys whose values conflict.</p></li>
+<li><p><strong>NaT is skipped by every reduction</strong>, including <code class="docutils literal notranslate"><span class="pre">min</span></code> / <code class="docutils literal notranslate"><span class="pre">max</span></code> of dates.</p></li>
+<li><p><strong>Empty bins</strong> (<code class="docutils literal notranslate"><span class="pre">resample</span></code>, <code class="docutils literal notranslate"><span class="pre">groupby_bins</span></code>) reduce as empty arrays do: sum 0, count 0, mean
+NaN.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">resample</span></code></strong> accepts unsorted times and NaT; NaT belongs to no bin.</p>
+<ul>
+<li><p><em>xarray:</em> requires a monotonic index.</p></li>
+</ul>
+</li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">rolling_exp</span></code></strong> is native Rust, with no numba or numbagg dependency.</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">var</span></code>, <code class="docutils literal notranslate"><span class="pre">std</span></code>, <code class="docutils literal notranslate"><span class="pre">cov</span></code> and <code class="docutils literal notranslate"><span class="pre">corr</span></code> use a numerically robust shifted algorithm. numbagg’s
+<code class="docutils literal notranslate"><span class="pre">E[x²]</span> <span class="pre">−</span> <span class="pre">E[x]²</span></code> loses every digit when values are large compared with their spread.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">min_weight=</span></code> is honoured.</p></li>
+<li><p><em>xarray:</em> silently ignores <code class="docutils literal notranslate"><span class="pre">min_weight=</span></code>.</p></li>
+</ul>
+</li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">polyfit</span></code></strong></p>
+<ul>
+<li><p>Residuals and covariance are computed per lane from the points actually used.</p></li>
+<li><p>Lanes with too few points, or that are rank-deficient, give NaN instead of raising.</p></li>
+<li><p>The solver is an internal SVD, with no LAPACK.</p></li>
+</ul>
+</li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">interpolate_na</span></code></strong></p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">max_gap</span></code> works without a coordinate.</p></li>
+<li><p>The scipy-only methods are not provided: quadratic, polynomial, spline, barycentric and
+krogh.</p></li>
+</ul>
+</li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">diff(n</span> <span class="pre">&gt;</span> <span class="pre">1,</span> <span class="pre">label=&quot;lower&quot;)</span></code></strong> applies the label at every step.</p>
+<ul>
+<li><p><em>xarray:</em> drops it after the first step.</p></li>
+</ul>
+</li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">isin(set)</span></code></strong> treats the set as its elements.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">weighted</span></code></strong> rejects NaN weights.</p></li>
+<li><p><strong>No dask: everything computes eagerly.</strong> Data opened from files stays lazy until used:
+elementwise operations compose, and reductions stream through the data under a memory
+budget (<code class="docutils literal notranslate"><span class="pre">ar.set_stream_bytes</span></code>).</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">chunk</span></code>, <code class="docutils literal notranslate"><span class="pre">persist</span></code> and <code class="docutils literal notranslate"><span class="pre">unify_chunks</span></code> do nothing, and <code class="docutils literal notranslate"><span class="pre">chunks=</span></code> is accepted and ignored.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">set_options</span></code> accepts xarray’s display and performance options without effect.
+Options that would change results are accepted only at annoray’s fixed values.</p></li>
+</ul>
+</li>
+</ul>
+</section>
+<section id="time-and-calendars">
+<h2>Time and calendars<a class="headerlink" href="#time-and-calendars" title="Link to this heading">#</a></h2>
+<ul class="simple">
+<li><p><strong>Time zones.</strong> A date-time variable carries a time zone (<code class="docutils literal notranslate"><span class="pre">.dt.tz</span></code>, <code class="docutils literal notranslate"><span class="pre">.dt.tz_convert</span></code>,
+<code class="docutils literal notranslate"><span class="pre">.dt.tz_localize</span></code>), kept through operations, written to files as a <code class="docutils literal notranslate"><span class="pre">time_zone</span></code> attribute
+and read back. Its components, resampling bins (local midnight), date-string selection and
+display are wall-clock times in the zone; the values stay UTC <code class="docutils literal notranslate"><span class="pre">datetime64[ns]</span></code>. Date-times
+in different zones are not concatenated, merged or aligned.</p>
+<ul>
+<li><p><em>xarray:</em> no zones; pandas’ timezone-aware data become object arrays of <code class="docutils literal notranslate"><span class="pre">Timestamp</span></code>s.</p></li>
+</ul>
+</li>
+<li><p><strong>Times with a zone convert exactly.</strong> whenever’s <code class="docutils literal notranslate"><span class="pre">Instant</span></code>, <code class="docutils literal notranslate"><span class="pre">ZonedDateTime</span></code> and
+<code class="docutils literal notranslate"><span class="pre">OffsetDateTime</span></code>, timezone-aware <code class="docutils literal notranslate"><span class="pre">datetime</span></code>s and pandas times become UTC instants in whole
+nanoseconds, keeping a shared zone; <code class="docutils literal notranslate"><span class="pre">whenever.PlainDateTime</span></code> and mixes of times with and
+without a zone are refused. <code class="docutils literal notranslate"><span class="pre">.dt.to_whenever()</span></code> gives whenever objects back.</p>
+<ul>
+<li><p><em>NumPy:</em> <code class="docutils literal notranslate"><span class="pre">UserWarning:</span> <span class="pre">no</span> <span class="pre">explicit</span> <span class="pre">representation</span> <span class="pre">of</span> <span class="pre">timezones</span> <span class="pre">available</span> <span class="pre">for</span> <span class="pre">np.datetime64</span></code> for aware <code class="docutils literal notranslate"><span class="pre">datetime</span></code>s; a <code class="docutils literal notranslate"><span class="pre">ZonedDateTime</span></code> becomes midnight of its date, and
+an <code class="docutils literal notranslate"><span class="pre">Instant</span></code> an error.</p></li>
+</ul>
+</li>
+<li><p><strong>Dates in the standard calendar</strong> decode to <code class="docutils literal notranslate"><span class="pre">datetime64[ns]</span></code> when they are within its
+range, 1678–2262; otherwise to CF dates, never silently shifted. Data read when opened
+(dimension coordinates, or everything with <code class="docutils literal notranslate"><span class="pre">lazy=False</span></code>) are checked value by value. Lazy
+data are decided by their first and last values, as xarray decides; a value in between
+outside the range is an error when the data are read.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">months</span> <span class="pre">since</span></code> / <code class="docutils literal notranslate"><span class="pre">years</span> <span class="pre">since</span></code> units are rejected</strong>, as cftime does.</p></li>
+<li><p><strong>Masked integer times in non-standard calendars</strong> decode to NaT.</p>
+<ul>
+<li><p><em>xarray:</em> raises <code class="docutils literal notranslate"><span class="pre">OverflowError</span></code> inside cftime.</p></li>
+</ul>
+</li>
+<li><p><strong>Durations.</strong> Variables with time units but no <code class="docutils literal notranslate"><span class="pre">since</span></code> stay quantities; <code class="docutils literal notranslate"><span class="pre">to_timedelta()</span></code>
+converts them.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">date_range</span></code></strong> in non-standard calendars supports fixed steps and period starts only.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">convert_calendar</span></code></strong> does not support <code class="docutils literal notranslate"><span class="pre">align_on=&quot;random&quot;</span></code>.</p></li>
+</ul>
+</section>
+<section id="text">
+<h2>Text<a class="headerlink" href="#text" title="Link to this heading">#</a></h2>
+<ul class="simple">
+<li><p><strong>Text is NumPy fixed-width <code class="docutils literal notranslate"><span class="pre">&lt;U{n}</span></code></strong> everywhere: <code class="docutils literal notranslate"><span class="pre">.values</span></code>, coordinates, <code class="docutils literal notranslate"><span class="pre">to_xarray</span></code>,
+and pandas and dict conversions.</p>
+<ul>
+<li><p><em>xarray:</em> object arrays, <code class="docutils literal notranslate"><span class="pre">&lt;U</span></code>, or <code class="docutils literal notranslate"><span class="pre">StringDType</span></code>, depending on the source.</p></li>
+</ul>
+</li>
+<li><p><strong>Text has no missing value.</strong> <code class="docutils literal notranslate"><span class="pre">reindex</span></code> and <code class="docutils literal notranslate"><span class="pre">pad</span></code> fill text with <code class="docutils literal notranslate"><span class="pre">&quot;&quot;</span></code>.</p>
+<ul>
+<li><p><em>xarray:</em> NaN objects.</p></li>
+</ul>
+</li>
+<li><p><strong>The <code class="docutils literal notranslate"><span class="pre">.str</span></code> accessor</strong></p>
+<ul>
+<li><p>refuses <code class="docutils literal notranslate"><span class="pre">encode</span></code>, <code class="docutils literal notranslate"><span class="pre">decode</span></code> and <code class="docutils literal notranslate"><span class="pre">findall</span></code> (there is no bytes type) and <code class="docutils literal notranslate"><span class="pre">split(dim=None)</span></code>;</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">extractall</span></code> labels its dimensions by what they index (xarray swaps <code class="docutils literal notranslate"><span class="pre">group_dim</span></code> and
+<code class="docutils literal notranslate"><span class="pre">match_dim</span></code>).</p></li>
+</ul>
+</li>
+</ul>
+</section>
+<section id="i-o-and-encoding">
+<h2>I/O and encoding<a class="headerlink" href="#i-o-and-encoding" title="Link to this heading">#</a></h2>
+<ul class="simple">
+<li><p><strong>Writing over an open file replaces it.</strong> The new file is written beside the old one and
+renamed over it, so datasets still open on the old file keep reading it, and a dataset can
+be written back to the file it was opened from.</p>
+<ul>
+<li><p><em>xarray:</em> writing over a file that a dataset still has open fails (HDF5 will not truncate
+an open file); the dataset has to be loaded and closed first.</p></li>
+</ul>
+</li>
+<li><p><strong>Pure-Rust backends:</strong> netCDF-3 (CDF-1/2/5), netCDF-4/HDF5 and Zarr v2/v3 are read and
+written without the C libraries. <code class="docutils literal notranslate"><span class="pre">engine</span></code> accepts only these formats, and unknown keywords
+are errors.</p></li>
+<li><p><strong>netCDF-3 writes types xarray refuses.</strong> Unsigned integers are stored with
+<code class="docutils literal notranslate"><span class="pre">_Unsigned=&quot;true&quot;</span></code>, and <code class="docutils literal notranslate"><span class="pre">int64</span></code> is narrowed to <code class="docutils literal notranslate"><span class="pre">int32</span></code> when the values fit.</p></li>
+<li><p><strong>Stacked dimensions</strong> are written as CF “compression by gathering” (the cf_xarray layout)
+and decoded back.</p></li>
+<li><p><strong>Files are flushed to the operating system on close, not <code class="docutils literal notranslate"><span class="pre">fsync</span></code>ed</strong>, as netCDF-C’s
+<code class="docutils literal notranslate"><span class="pre">nc_close</span></code> does.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">to_netcdf(mode=&quot;a&quot;)</span></code></strong> writes a temporary file and moves it over the original, so a
+failed append leaves the file as it was. With <code class="docutils literal notranslate"><span class="pre">append_dim</span></code> or <code class="docutils literal notranslate"><span class="pre">region</span></code> (xarray has these
+for Zarr only) the file is written in place instead: see
+<a class="reference internal" href="user-guide/io.html#writing-in-place"><span class="std std-ref">Writing in place</span></a> and <code class="docutils literal notranslate"><span class="pre">NetcdfWriter</span></code>.</p></li>
+<li><p><strong>Opening</strong> also takes the bytes of a file and binary file-like objects (read whole).</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">decode_coords=&quot;all&quot;</span></code></strong> keeps a CF attribute that names a variable the file lacks, with a
+warning. <em>xarray:</em> drops the attribute.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">close()</span></code> and <code class="docutils literal notranslate"><span class="pre">with</span></code> blocks do nothing.</strong> Files are memory-mapped and released with the
+object.</p></li>
+<li><p><strong>HDF5.</strong></p>
+<ul>
+<li><p>Compound variables are read as one variable per field (<code class="docutils literal notranslate"><span class="pre">var.field</span></code>) and variable-length
+variables as CF contiguous ragged arrays; both are written back in their own form.
+Reference, opaque and top-level array types are reported as unsupported, not misread.</p></li>
+<li><p>Enumerations keep their names (in <code class="docutils literal notranslate"><span class="pre">encoding[&quot;dtype&quot;].metadata</span></code>, as in xarray); h5py’s
+booleans read as booleans.</p></li>
+<li><p>Virtual datasets are read; a missing source file is an error. <em>HDF5:</em> fills its part
+with the fill value.</p></li>
+<li><p>bzip2, BloscLZ, LZF, Bitshuffle, n-bit, scale-offset, szip, Blosc2, ZFP, SZ and SZ3
+chunks are read but not written.</p></li>
+</ul>
+</li>
+<li><p><strong>Zarr.</strong></p>
+<ul>
+<li><p>Local directory stores only.</p></li>
+<li><p>Appending and region writes are not supported. Complex numbers are <code class="docutils literal notranslate"><span class="pre">&lt;c8</span></code>/<code class="docutils literal notranslate"><span class="pre">&lt;c16</span></code> (v2) and
+<code class="docutils literal notranslate"><span class="pre">complex64</span></code>/<code class="docutils literal notranslate"><span class="pre">complex128</span></code> (v3), with <code class="docutils literal notranslate"><span class="pre">[re,</span> <span class="pre">im]</span></code> fill values.</p></li>
+<li><p>Arrays without dimension names are skipped with a warning.</p></li>
+</ul>
+</li>
+</ul>
+</section>
+<section id="datatree">
+<h2>DataTree<a class="headerlink" href="#datatree" title="Link to this heading">#</a></h2>
+<ul class="simple">
+<li><p><strong>Nodes are views of a shared tree.</strong> Edits by path are validated before anything changes.</p>
+<ul>
+<li><p>A node removed from its tree is no longer reachable through views taken before the
+removal; take <code class="docutils literal notranslate"><span class="pre">copy()</span></code> first.</p></li>
+<li><p><em>xarray:</em> the removed node lives on as its own tree.</p></li>
+</ul>
+</li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">tree[&quot;a/v&quot;]</span></code> returns a copy</strong>, so editing its attributes does not change the tree.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">where</span></code> on DataTree</strong> is an annoray addition.</p></li>
+</ul>
+</section>
+<section id="python-api">
+<h2>Python API<a class="headerlink" href="#python-api" title="Link to this heading">#</a></h2>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">import</span> <span class="pre">annoray</span></code> loads neither xarray nor pandas. The dependencies are NumPy and
+matplotlib (imported only for plotting); xarray and astropy are optional extras.</p></li>
+<li><p>xarray’s <code class="docutils literal notranslate"><span class="pre">Variable</span></code>, <code class="docutils literal notranslate"><span class="pre">IndexVariable</span></code>, <code class="docutils literal notranslate"><span class="pre">Coordinates</span></code> and <code class="docutils literal notranslate"><span class="pre">CFTimeIndex</span></code> classes are not
+provided.</p></li>
+<li><p>Unknown attributes cannot be set on objects. Accessors registered with
+<code class="docutils literal notranslate"><span class="pre">register_*_accessor</span></code> work.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">len()</span></code> of a 0-d array raises <code class="docutils literal notranslate"><span class="pre">TypeError</span></code>.</p></li>
+</ul>
+</section>
+<section id="not-supported">
+<h2>Not supported<a class="headerlink" href="#not-supported" title="Link to this heading">#</a></h2>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">curvefit</span></code> (it wraps scipy’s <code class="docutils literal notranslate"><span class="pre">curve_fit</span></code>; annoray does not depend on scipy).</p></li>
+<li><p>MultiIndexes, <code class="docutils literal notranslate"><span class="pre">to_stacked_array</span></code>, <code class="docutils literal notranslate"><span class="pre">set_xindex</span></code>, <code class="docutils literal notranslate"><span class="pre">unstack(sparse=True)</span></code>.</p></li>
+<li><p>Remote Zarr stores, Zarr appends and region writes.</p></li>
+<li><p>SZ and SZ3 chunks of integer data; SZ’s non-regression 2-D/3-D Lorenzo path and its
+point-wise relative mode without acceleration (not written with the default settings).</p></li>
+<li><p>Writing in place to HDF5 datasets indexed by fixed or extensible arrays or version-2
+B-trees (files written with h5py’s <code class="docutils literal notranslate"><span class="pre">libver=&quot;latest&quot;</span></code>).</p></li>
+<li><p>dask arrays.</p></li>
+<li><p>Free-threaded CPython builds.</p></li>
+<li><p>Plotting with cftime axes, <code class="docutils literal notranslate"><span class="pre">hue_style</span></code> / marker-size legends, <code class="docutils literal notranslate"><span class="pre">lines()</span></code> and faceted <code class="docutils literal notranslate"><span class="pre">hist</span></code>.</p></li>
+</ul>
+</section>
+</section>
+
+
+                </article>
+              
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="getting-started/examples.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">Examples</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="user-guide/index.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">User guide</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <dialog id="pst-secondary-sidebar-modal"></dialog>
+                <div id="pst-secondary-sidebar" class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+<div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> On this page
+  </div>
+  <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#data-model-and-assignment">Data model and assignment</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#units">Units</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#element-types">Element types</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#indexing-and-selection">Indexing and selection</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#alignment-and-combining">Alignment and combining</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#computation">Computation</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#time-and-calendars">Time and calendars</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#text">Text</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#i-o-and-encoding">I/O and encoding</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#datatree">DataTree</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#python-api">Python API</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#not-supported">Not supported</a></li>
+</ul>
+  </nav></div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="_static/scripts/bootstrap.js?digest=18bd87630a240e9c25be"></script>
+<script defer src="_static/scripts/pydata-sphinx-theme.js?digest=18bd87630a240e9c25be"></script>
+
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item">
+
+  <p class="copyright">
+    
+      © Copyright 2026, Sunip K. Mukherjee.
+      <br/>
+    
+  </p>
+</div>
+      
+        <div class="footer-item">
+
+  <p class="sphinx-version">
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 9.2.0.
+  </p>
+</div>
+      
+    </div>
+  
+  
+  
+    <div class="footer-items__end">
+      
+        <div class="footer-item">
+<p class="theme-version">
+  <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.23.0.
+</p></div>
+      
+    </div>
+  
+</div>
+
+  </footer>
+  </body>
+</html>

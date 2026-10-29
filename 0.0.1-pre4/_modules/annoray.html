@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../" data-theme="auto">
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>annoray &#8212; annoray</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "auto";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "auto";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../_static/styles/theme.css?digest=18bd87630a240e9c25be" rel="stylesheet" />
+<link href="../_static/styles/pydata-sphinx-theme.css?digest=18bd87630a240e9c25be" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../_static/mystnb.11b39860a7a0cbfd473a3ad8a317855267ff0bd372690045ca344a6b62be495e.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
+  
+  <!-- So that users can add custom icons -->
+  <script defer src="../_static/scripts/fontawesome.js?digest=18bd87630a240e9c25be"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=18bd87630a240e9c25be" />
+<link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=18bd87630a240e9c25be" />
+
+    <script src="../_static/documentation_options.js?v=6158cd60"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../_static/copybutton.js?v=f281be69"></script>
+    <script src="../_static/design-tabs.js?v=f930bc37"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = '_modules/annoray';</script>
+    <script>
+        DOCUMENTATION_OPTIONS.theme_version = '0.23.0';
+        DOCUMENTATION_OPTIONS.theme_switcher_json_url = 'https://sunipkm.github.io/annoray/switcher.json';
+        DOCUMENTATION_OPTIONS.theme_switcher_version_match = '0.0.1-pre4';
+        DOCUMENTATION_OPTIONS.show_version_warning_banner =
+            false;
+        </script>
+    <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="color-scheme" content="light dark"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="0.0.1-pre4" />
+  
+    
+    <script src="../_static/searchtools.js"></script>
+    <script src="../_static/language_data.js"></script>
+    <script src="../searchindex.js"></script>
+  
+  </head>
+  <body data-default-mode="auto">
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+  
+  
+  
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header id="pst-header" class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button type="button" class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-3 navbar-header-items__start">
+    
+      <div class="navbar-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../index.html">
+  
+  
+  
+  
+  
+  
+    <p class="title logo__title">annoray</p>
+  
+</a></div>
+    
+  </div>
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    <div class="me-auto navbar-header-items__center">
+      
+        <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../getting-started/installation.html">
+    Installation
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../getting-started/overview.html">
+    Overview
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../getting-started/examples.html">
+    Examples
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../xarray-differences.html">
+    Differences from xarray
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../user-guide/index.html">
+    User guide
+  </a>
+</li>
+
+            <li class="nav-item dropdown">
+                <button class="btn dropdown-toggle nav-item" type="button"
+                data-bs-toggle="dropdown" aria-expanded="false"
+                aria-controls="pst-nav-more-links">
+                    More
+                </button>
+                <ul id="pst-nav-more-links" class="dropdown-menu">
+                    
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="../api/index.html">
+    API reference
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="../rust.html">
+    Rust crates
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="../performance.html">
+    Performance
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-external" href="https://docs.rs/annoray">
+    Rust API
+  </a>
+</li>
+
+                </ul>
+            </li>
+            
+  </ul>
+</nav></div>
+      
+    </div>
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button type="button" class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+        </div>
+      
+      
+        <div class="navbar-item">
+<div class="version-switcher__container dropdown pst-js-only">
+  <button id="pst-version-switcher-button-2"
+    type="button"
+    class="version-switcher__button btn btn-sm dropdown-toggle"
+    data-bs-toggle="dropdown"
+    aria-haspopup="listbox"
+    aria-controls="pst-version-switcher-list-2"
+    aria-label="Version switcher list"
+  >
+    Choose version  <!-- this text may get changed later by javascript -->
+    <span class="caret"></span>
+  </button>
+  <div id="pst-version-switcher-list-2"
+    class="version-switcher__menu dropdown-menu list-group-flush py-0"
+    role="listbox" aria-labelledby="pst-version-switcher-button-2">
+    <!-- dropdown will be populated by javascript on page load -->
+  </div>
+</div></div>
+      
+        <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button type="button" class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+      
+        <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/sunipkm/annoray" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-square-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
+        </li>
+</ul></div>
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button type="button" class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+    </div>
+  
+
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+        
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar hide-on-wide">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../getting-started/installation.html">
+    Installation
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../getting-started/overview.html">
+    Overview
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../getting-started/examples.html">
+    Examples
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../xarray-differences.html">
+    Differences from xarray
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../user-guide/index.html">
+    User guide
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../api/index.html">
+    API reference
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../rust.html">
+    Rust crates
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../performance.html">
+    Performance
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-external" href="https://docs.rs/annoray">
+    Rust API
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+<div class="version-switcher__container dropdown pst-js-only">
+  <button id="pst-version-switcher-button-3"
+    type="button"
+    class="version-switcher__button btn btn-sm dropdown-toggle"
+    data-bs-toggle="dropdown"
+    aria-haspopup="listbox"
+    aria-controls="pst-version-switcher-list-3"
+    aria-label="Version switcher list"
+  >
+    Choose version  <!-- this text may get changed later by javascript -->
+    <span class="caret"></span>
+  </button>
+  <div id="pst-version-switcher-list-3"
+    class="version-switcher__menu dropdown-menu list-group-flush py-0"
+    role="listbox" aria-labelledby="pst-version-switcher-button-3">
+    <!-- dropdown will be populated by javascript on page load -->
+  </div>
+</div></div>
+        
+          <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button type="button" class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+        
+          <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/sunipkm/annoray" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-square-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
+        </li>
+</ul></div>
+        
+      </div>
+    
+  </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+<nav aria-label="Breadcrumb" class="d-print-none">
+  <ul class="bd-breadcrumbs">
+    
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="../index.html" class="nav-link" aria-label="Home">
+        <i class="fa-solid fa-home"></i>
+      </a>
+    </li>
+    
+    <li class="breadcrumb-item"><a href="index.html" class="nav-link">Module code</a></li>
+    
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">annoray</span></li>
+  </ul>
+</nav>
+</div>
+      
+    </div>
+  
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <h1>Source code for annoray</h1><div class="highlight"><pre>
+<span></span><span class="sd">"""annoray: annotated arrays: labelled, units-aware N-dimensional arrays, in Rust.</span>
+
+<span class="sd">    import annoray as ar</span>
+
+<span class="sd">    ds = ar.open_dataset("data.nc")               # lazy: values stay on disk until used</span>
+<span class="sd">    t = ds["temp"].sel(time="2020-01").mean("time")</span>
+<span class="sd">    t.to("degF")                                   # units are tracked and checked</span>
+<span class="sd">    ds.to_netcdf("out.nc")                         # pure-Rust netCDF/HDF5 writers</span>
+
+<span class="sd">annoray does not need xarray. With xarray installed (``pip install annoray[xarray]``), the</span>
+<span class="sd">two interoperate: ``xr.open_dataset(path, engine="annoray")`` reads with annoray's readers,</span>
+<span class="sd">``ds.to_xarray()`` / ``ar.from_xarray(obj)`` convert (units become ``"units"`` attributes),</span>
+<span class="sd">and ``ar.to_netcdf(xr_dataset, path)`` writes an xarray dataset with annoray's writers.</span>
+<span class="sd">"""</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">importlib.metadata</span><span class="w"> </span><span class="kn">import</span> <span class="n">version</span> <span class="k">as</span> <span class="n">_version</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">annoray</span><span class="w"> </span><span class="kn">import</span> <span class="n">dims</span><span class="p">,</span> <span class="n">testing</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">annoray._accessors</span><span class="w"> </span><span class="kn">import</span> <span class="n">register_dataarray_accessor</span><span class="p">,</span> <span class="n">register_dataset_accessor</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">annoray._annoray</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">Coarsen</span><span class="p">,</span>
+    <span class="n">DataArray</span><span class="p">,</span>
+    <span class="n">Dataset</span><span class="p">,</span>
+    <span class="n">DataTree</span><span class="p">,</span>
+    <span class="n">Dimension</span><span class="p">,</span>
+    <span class="n">GroupBy</span><span class="p">,</span>
+    <span class="n">NetcdfWriter</span><span class="p">,</span>
+    <span class="n">Quantity</span><span class="p">,</span>
+    <span class="n">ReadLimitError</span><span class="p">,</span>
+    <span class="n">Rolling</span><span class="p">,</span>
+    <span class="n">RollingExp</span><span class="p">,</span>
+    <span class="n">Schema</span><span class="p">,</span>
+    <span class="n">SchemaError</span><span class="p">,</span>
+    <span class="n">Unit</span><span class="p">,</span>
+    <span class="n">UnitError</span><span class="p">,</span>
+    <span class="n">Weighted</span><span class="p">,</span>
+    <span class="n">broadcast</span><span class="p">,</span>
+    <span class="n">combine_by_coords</span><span class="p">,</span>
+    <span class="n">concat</span><span class="p">,</span>
+    <span class="n">corr</span><span class="p">,</span>
+    <span class="n">cov</span><span class="p">,</span>
+    <span class="n">decode_cf</span><span class="p">,</span>
+    <span class="n">dot</span><span class="p">,</span>
+    <span class="n">from_xarray</span><span class="p">,</span>
+    <span class="n">full_like</span><span class="p">,</span>
+    <span class="n">intern_cap</span><span class="p">,</span>
+    <span class="n">interned</span><span class="p">,</span>
+    <span class="n">merge</span><span class="p">,</span>
+    <span class="n">polyval</span><span class="p">,</span>
+    <span class="n">set_intern_cap</span><span class="p">,</span>
+    <span class="n">set_stream_bytes</span><span class="p">,</span>
+    <span class="n">stream_bytes</span><span class="p">,</span>
+    <span class="n">where</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">annoray._astropy</span><span class="w"> </span><span class="kn">import</span> <span class="n">from_astropy</span><span class="p">,</span> <span class="n">to_astropy</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">annoray._functions</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">align</span><span class="p">,</span>
+    <span class="n">cftime_range</span><span class="p">,</span>
+    <span class="n">combine_nested</span><span class="p">,</span>
+    <span class="n">cross</span><span class="p">,</span>
+    <span class="n">date_range</span><span class="p">,</span>
+    <span class="n">get_options</span><span class="p">,</span>
+    <span class="n">infer_freq</span><span class="p">,</span>
+    <span class="n">map_blocks</span><span class="p">,</span>
+    <span class="n">open_dataarray</span><span class="p">,</span>
+    <span class="n">save_mfdataset</span><span class="p">,</span>
+    <span class="n">set_options</span><span class="p">,</span>
+    <span class="n">show_versions</span><span class="p">,</span>
+    <span class="n">unify_chunks</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">annoray._io</span><span class="w"> </span><span class="kn">import</span> <span class="n">load_dataarray</span><span class="p">,</span> <span class="n">load_dataset</span><span class="p">,</span> <span class="n">open_dataset</span><span class="p">,</span> <span class="n">open_mfdataset</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">annoray._tree</span><span class="w"> </span><span class="kn">import</span> <span class="n">group_subtrees</span><span class="p">,</span> <span class="n">open_datatree</span><span class="p">,</span> <span class="n">open_groups</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">annoray._tree</span><span class="w"> </span><span class="kn">import</span> <span class="n">map_over_datasets_fn</span> <span class="k">as</span> <span class="n">map_over_datasets</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">annoray._ufunc</span><span class="w"> </span><span class="kn">import</span> <span class="n">apply_ufunc</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">annoray.dims</span><span class="w"> </span><span class="kn">import</span> <span class="n">dimension</span>
+
+<span class="c1"># As pip reports it (PEP 440: 0.2.1.dev7, not Cargo's 0.2.1-dev.7); see tools/version.py.</span>
+<span class="n">__version__</span> <span class="o">=</span> <span class="n">_version</span><span class="p">(</span><span class="s2">"annoray"</span><span class="p">)</span>
+
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="s2">"Coarsen"</span><span class="p">,</span>
+    <span class="s2">"DataArray"</span><span class="p">,</span>
+    <span class="s2">"DataTree"</span><span class="p">,</span>
+    <span class="s2">"Dataset"</span><span class="p">,</span>
+    <span class="s2">"Dimension"</span><span class="p">,</span>
+    <span class="s2">"GroupBy"</span><span class="p">,</span>
+    <span class="s2">"NetcdfWriter"</span><span class="p">,</span>
+    <span class="s2">"Quantity"</span><span class="p">,</span>
+    <span class="s2">"ReadLimitError"</span><span class="p">,</span>
+    <span class="s2">"Rolling"</span><span class="p">,</span>
+    <span class="s2">"RollingExp"</span><span class="p">,</span>
+    <span class="s2">"Schema"</span><span class="p">,</span>
+    <span class="s2">"SchemaError"</span><span class="p">,</span>
+    <span class="s2">"Unit"</span><span class="p">,</span>
+    <span class="s2">"UnitError"</span><span class="p">,</span>
+    <span class="s2">"Weighted"</span><span class="p">,</span>
+    <span class="s2">"__version__"</span><span class="p">,</span>
+    <span class="s2">"align"</span><span class="p">,</span>
+    <span class="s2">"apply_ufunc"</span><span class="p">,</span>
+    <span class="s2">"broadcast"</span><span class="p">,</span>
+    <span class="s2">"cftime_range"</span><span class="p">,</span>
+    <span class="s2">"combine_by_coords"</span><span class="p">,</span>
+    <span class="s2">"combine_nested"</span><span class="p">,</span>
+    <span class="s2">"concat"</span><span class="p">,</span>
+    <span class="s2">"corr"</span><span class="p">,</span>
+    <span class="s2">"cov"</span><span class="p">,</span>
+    <span class="s2">"cross"</span><span class="p">,</span>
+    <span class="s2">"date_range"</span><span class="p">,</span>
+    <span class="s2">"decode_cf"</span><span class="p">,</span>
+    <span class="s2">"dimension"</span><span class="p">,</span>
+    <span class="s2">"dims"</span><span class="p">,</span>
+    <span class="s2">"dot"</span><span class="p">,</span>
+    <span class="s2">"from_astropy"</span><span class="p">,</span>
+    <span class="s2">"from_xarray"</span><span class="p">,</span>
+    <span class="s2">"full_like"</span><span class="p">,</span>
+    <span class="s2">"get_options"</span><span class="p">,</span>
+    <span class="s2">"group_subtrees"</span><span class="p">,</span>
+    <span class="s2">"infer_freq"</span><span class="p">,</span>
+    <span class="s2">"intern_cap"</span><span class="p">,</span>
+    <span class="s2">"interned"</span><span class="p">,</span>
+    <span class="s2">"load_dataarray"</span><span class="p">,</span>
+    <span class="s2">"load_dataset"</span><span class="p">,</span>
+    <span class="s2">"map_blocks"</span><span class="p">,</span>
+    <span class="s2">"map_over_datasets"</span><span class="p">,</span>
+    <span class="s2">"merge"</span><span class="p">,</span>
+    <span class="s2">"ones_like"</span><span class="p">,</span>
+    <span class="s2">"open_dataarray"</span><span class="p">,</span>
+    <span class="s2">"open_dataset"</span><span class="p">,</span>
+    <span class="s2">"open_datatree"</span><span class="p">,</span>
+    <span class="s2">"open_groups"</span><span class="p">,</span>
+    <span class="s2">"open_mfdataset"</span><span class="p">,</span>
+    <span class="s2">"open_zarr"</span><span class="p">,</span>
+    <span class="s2">"polyval"</span><span class="p">,</span>
+    <span class="s2">"register_dataarray_accessor"</span><span class="p">,</span>
+    <span class="s2">"register_dataset_accessor"</span><span class="p">,</span>
+    <span class="s2">"save_mfdataset"</span><span class="p">,</span>
+    <span class="s2">"set_intern_cap"</span><span class="p">,</span>
+    <span class="s2">"set_options"</span><span class="p">,</span>
+    <span class="s2">"set_stream_bytes"</span><span class="p">,</span>
+    <span class="s2">"show_versions"</span><span class="p">,</span>
+    <span class="s2">"stream_bytes"</span><span class="p">,</span>
+    <span class="s2">"testing"</span><span class="p">,</span>
+    <span class="s2">"to_astropy"</span><span class="p">,</span>
+    <span class="s2">"to_netcdf"</span><span class="p">,</span>
+    <span class="s2">"to_zarr"</span><span class="p">,</span>
+    <span class="s2">"unify_chunks"</span><span class="p">,</span>
+    <span class="s2">"where"</span><span class="p">,</span>
+    <span class="s2">"zeros_like"</span><span class="p">,</span>
+<span class="p">]</span>
+
+
+<div class="viewcode-block" id="zeros_like">
+<a class="viewcode-back" href="../api/generated/annoray.zeros_like.html#annoray.zeros_like">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">zeros_like</span><span class="p">(</span><span class="n">other</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""A DataArray or Dataset shaped like ``other``, filled with 0 (in ``other``'s unit)."""</span>
+    <span class="k">return</span> <span class="n">full_like</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="ones_like">
+<a class="viewcode-back" href="../api/generated/annoray.ones_like.html#annoray.ones_like">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">ones_like</span><span class="p">(</span><span class="n">other</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""A DataArray or Dataset shaped like ``other``, filled with 1 (in ``other``'s unit)."""</span>
+    <span class="k">return</span> <span class="n">full_like</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="open_zarr">
+<a class="viewcode-back" href="../api/generated/annoray.open_zarr.html#annoray.open_zarr">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">open_zarr</span><span class="p">(</span><span class="n">store</span><span class="p">,</span> <span class="n">group</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Open a Zarr store (v2 or v3 directory) lazily and CF-decode it; `open_dataset`</span>
+<span class="sd">    recognises stores too."""</span>
+    <span class="k">return</span> <span class="n">open_dataset</span><span class="p">(</span><span class="n">store</span><span class="p">,</span> <span class="n">group</span><span class="o">=</span><span class="n">group</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="to_zarr">
+<a class="viewcode-back" href="../api/generated/annoray.to_zarr.html#annoray.to_zarr">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">to_zarr</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">store</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Write an annoray ``Dataset`` (or ``DataArray``, as a one-variable dataset) as a Zarr</span>
+<span class="sd">    store; see ``Dataset.to_zarr``."""</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">DataArray</span><span class="p">):</span>
+        <span class="n">obj</span> <span class="o">=</span> <span class="n">obj</span><span class="o">.</span><span class="n">to_dataset</span><span class="p">()</span>
+    <span class="n">obj</span><span class="o">.</span><span class="n">to_zarr</span><span class="p">(</span><span class="n">store</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="to_netcdf">
+<a class="viewcode-back" href="../api/generated/annoray.to_netcdf.html#annoray.to_netcdf">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">to_netcdf</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Write an annoray ``Dataset`` or ``DataTree`` (or, with xarray installed, an</span>
+<span class="sd">    ``xarray.Dataset``) with annoray's pure-Rust writers."""</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="p">(</span><span class="n">Dataset</span><span class="p">,</span> <span class="n">DataTree</span><span class="p">)):</span>
+        <span class="n">obj</span><span class="o">.</span><span class="n">to_netcdf</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">return</span>
+    <span class="c1"># xarray objects: the interop writer imports xarray only now.</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">annoray.writer</span><span class="w"> </span><span class="kn">import</span> <span class="n">to_netcdf</span> <span class="k">as</span> <span class="n">xr_to_netcdf</span>
+
+    <span class="n">xr_to_netcdf</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+</pre></div>
+
+                </article>
+              
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="../_static/scripts/bootstrap.js?digest=18bd87630a240e9c25be"></script>
+<script defer src="../_static/scripts/pydata-sphinx-theme.js?digest=18bd87630a240e9c25be"></script>
+
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item">
+
+  <p class="copyright">
+    
+      © Copyright 2026, Sunip K. Mukherjee.
+      <br/>
+    
+  </p>
+</div>
+      
+        <div class="footer-item">
+
+  <p class="sphinx-version">
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 9.2.0.
+  </p>
+</div>
+      
+    </div>
+  
+  
+  
+    <div class="footer-items__end">
+      
+        <div class="footer-item">
+<p class="theme-version">
+  <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.23.0.
+</p></div>
+      
+    </div>
+  
+</div>
+
+  </footer>
+  </body>
+</html>

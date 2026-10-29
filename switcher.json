@@ -1,9 +1,14 @@
 [
   {
+    "version": "0.0.1-pre4",
+    "url": "https://sunipkm.github.io/annoray/0.0.1-pre4/",
+    "name": "0.0.1-pre4 (pre-release)",
+    "preferred": true
+  },
+  {
     "version": "0.0.1-pre3",
     "url": "https://sunipkm.github.io/annoray/0.0.1-pre3/",
-    "name": "0.0.1-pre3 (pre-release)",
-    "preferred": true
+    "name": "0.0.1-pre3 (pre-release)"
   },
   {
     "version": "0.0.1-pre2",
