@@ -35,6 +35,11 @@ print(ds["temperature"].is_lazy, ds["temperature"].units)
 print(ar.load_dataset(os.path.join(tmp, "t.nc"))["temperature"].is_lazy)
 ```
 
+`open_dataset`, `open_datatree` and `open_mfdataset` take `limits=` for files from untrusted
+sources (`"untrusted"`, or a dict of limits; see
+[files from untrusted sources](../user-guide/io.md)); a file that breaches them raises
+{class}`ReadLimitError`.
+
 ```{eval-rst}
 .. currentmodule:: annoray
 
@@ -53,6 +58,7 @@ print(ar.load_dataset(os.path.join(tmp, "t.nc"))["temperature"].is_lazy)
    to_netcdf
    to_zarr
    save_mfdataset
+   ReadLimitError
 ```
 
 ## Writing in place
