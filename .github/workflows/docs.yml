@@ -66,8 +66,32 @@ jobs:
         env:
           DOCS_VERSION: ${{ steps.v.outputs.version }}
         run: sphinx-build -b html -W --keep-going -d docs/_build/doctrees docs docs/_build/html
-      - uses: actions/upload-artifact@v4
+      # GitHub's artifact service sometimes times out past the action's own retries (five, within
+      # a minute): two more tries, after one and then two minutes, before the job fails.
+      - id: upload-docs-1
+        uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
           name: docs-html
           path: docs/_build/html
           retention-days: 7
+      - if: steps.upload-docs-1.outcome == 'failure'
+        run: sleep 60
+      - id: upload-docs-2
+        if: steps.upload-docs-1.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        continue-on-error: true
+        with:
+          name: docs-html
+          path: docs/_build/html
+          retention-days: 7
+          overwrite: true
+      - if: steps.upload-docs-2.outcome == 'failure'
+        run: sleep 120
+      - if: steps.upload-docs-2.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: docs-html
+          path: docs/_build/html
+          retention-days: 7
+          overwrite: true
