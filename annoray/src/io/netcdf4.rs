@@ -920,11 +920,33 @@ pub fn read_bytes(bytes: Vec<u8>) -> Result<RawDataset<'static>> {
 /// # Errors
 /// [`IoError::Backend`] for unreadable files.
 pub fn read_file_bytes(bytes: annoray_hdf5::FileBytes, lazy: bool) -> Result<RawDataset<'static>> {
+    read_file_bytes_limited(bytes, lazy, None)
+}
+
+/// [`read_file_bytes`], every read of the HDF5 file (those made while opening included) held
+/// to `load_limit` bytes.
+pub(crate) fn read_file_bytes_limited(
+    bytes: annoray_hdf5::FileBytes,
+    lazy: bool,
+    load_limit: Option<u64>,
+) -> Result<RawDataset<'static>> {
     read_group(
-        &File::from_file_bytes(bytes)?.root()?,
+        &limited(File::from_file_bytes(bytes)?, load_limit).root()?,
         &Scope::default(),
         lazy,
     )
+}
+
+/// `f` with its load limit lowered to `limit`.
+fn limited(f: File, limit: Option<u64>) -> File {
+    match limit {
+        Some(l) => f.with_load_limit(
+            usize::try_from(l)
+                .unwrap_or(usize::MAX)
+                .min(annoray_hdf5::MAX_LOAD_BYTES),
+        ),
+        None => f,
+    }
 }
 
 // ----- writing -----
@@ -1779,6 +1801,15 @@ impl Backend for Netcdf4 {
 
     fn read_lazy(&self, path: &Path) -> Result<RawDataset<'static>> {
         read_group(&File::open(path)?.root()?, &Scope::default(), true)
+    }
+
+    fn read_lazy_limited(
+        &self,
+        path: &Path,
+        limits: &crate::io::ReadLimits,
+    ) -> Result<RawDataset<'static>> {
+        let f = limited(File::open(path)?, limits.max_read_bytes);
+        read_group(&f.root()?, &Scope::default(), true)
     }
 
     /// Loaded numeric variables are written slice by slice from where they are, not copied.

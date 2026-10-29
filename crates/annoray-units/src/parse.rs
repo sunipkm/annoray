@@ -200,11 +200,17 @@ fn exponent_follows(_input: &str, it: &mut Peekable<CharIndices<'_>>) -> bool {
     it.peek().is_some_and(|(_, c)| c.is_ascii_digit())
 }
 
+/// The deepest parentheses nest: the parser recurses into each, so a bound keeps hostile
+/// input (`((((…`) from exhausting the stack.
+const MAX_NESTING: usize = 64;
+
 struct Parser<'a, 'f> {
     input: &'a str,
     toks: Vec<Lexed>,
     i: usize,
     lookup: &'f dyn Fn(&str) -> Option<Unit>,
+    /// Parentheses open around the current position.
+    depth: usize,
 }
 
 impl Parser<'_, '_> {
@@ -224,6 +230,17 @@ impl Parser<'_, '_> {
 
     fn err(&self, reason: impl Into<String>) -> UnitError {
         err(self.input, self.pos(), reason)
+    }
+
+    /// A product inside parentheses, one level deeper.
+    fn nested(&mut self) -> Result<Unit, UnitError> {
+        if self.depth >= MAX_NESTING {
+            return Err(self.err(format!("parentheses nest deeper than {MAX_NESTING} levels")));
+        }
+        self.depth = self.depth.saturating_add(1);
+        let u = self.product();
+        self.depth = self.depth.saturating_sub(1);
+        u
     }
 
     fn product(&mut self) -> Result<Unit, UnitError> {
@@ -288,7 +305,7 @@ impl Parser<'_, '_> {
                 ))
             }
             Some(Tok::LParen) => {
-                let u = self.product()?;
+                let u = self.nested()?;
                 match self.bump() {
                     Some(Tok::RParen) => Ok(u),
                     _ => Err(self.err("expected ')'")),
@@ -307,7 +324,7 @@ impl Parser<'_, '_> {
                 if let (true, Some(base)) = (is_log_call, log) {
                     self.bump(); // (
                     self.bump(); // re
-                    let reference = self.product()?;
+                    let reference = self.nested()?;
                     return match self.bump() {
                         Some(Tok::RParen) => Unit::log(base, &reference),
                         _ => Err(self.err("expected ')'")),
@@ -363,6 +380,7 @@ pub(crate) fn parse_with(
             toks,
             i: 0,
             lookup,
+            depth: 0,
         };
         let u = p.product()?;
         if p.i < p.toks.len() {
@@ -457,6 +475,18 @@ mod tests {
                 }
             ]
         );
+    }
+
+    #[test]
+    fn nesting_is_bounded() {
+        let reg = crate::registry::registry();
+        let lookup = |id: &str| reg.lookup(id);
+        let deep = |n: usize| format!("{}m{}", "(".repeat(n), ")".repeat(n));
+        assert!(parse_with(&deep(MAX_NESTING), &lookup).is_ok());
+        let e = parse_with(&deep(MAX_NESTING + 1), &lookup).unwrap_err();
+        assert!(e.to_string().contains("nest deeper"), "{e}");
+        // Far deeper than the stack would allow without the bound.
+        assert!(parse_with(&"(".repeat(1_000_000), &lookup).is_err());
     }
 
     #[test]

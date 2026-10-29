@@ -41,7 +41,8 @@ glob = "0.3"
 numpy = "0.29"
 pyo3 = "0.29"
 rayon = "1.10"
-serde_json = "1"
+# Correctly rounded float parsing: Zarr attributes and fill values read back bit for bit.
+serde_json = { version = "1", features = ["float_roundtrip"] }
 ruzstd = { version = "0.9", default-features = false, features = ["std"] }
 lz4_flex = { version = "0.14", default-features = false, features = ["safe-decode", "safe-encode", "std"] }
 ndarray = "0.17"

@@ -42,8 +42,11 @@ fn usizes(v: Option<&Value>, what: &str) -> Result<Vec<usize>, Error> {
         .ok_or_else(|| bad(format!("{what} is not a list of sizes")))
 }
 
+/// Parsed metadata. Python's bare `NaN`/`Infinity` tokens (zarr-python writes them in
+/// attributes) are read as markers ([`crate::special_float`]).
 pub(crate) fn json_of(bytes: &[u8], key: &str) -> Result<Value, Error> {
-    serde_json::from_slice(bytes).map_err(|e| bad(format!("{key}: {e}")))
+    serde_json::from_slice(&crate::json::quote_bare_tokens(bytes))
+        .map_err(|e| bad(format!("{key}: {e}")))
 }
 
 impl Array {
@@ -588,8 +591,11 @@ impl Array {
     }
 }
 
+/// Metadata as text, markers written as bare tokens (as zarr-python writes non-finite
+/// attributes).
 pub(crate) fn pretty(v: &Value) -> Result<Vec<u8>, Error> {
-    serde_json::to_vec_pretty(v).map_err(|e| bad(e.to_string()))
+    let text = serde_json::to_string_pretty(v).map_err(|e| bad(e.to_string()))?;
+    Ok(crate::json::unquote_markers(text).into_bytes())
 }
 
 /// Advance a C-order counter over `lo..=hi`; false once it wraps.

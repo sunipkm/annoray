@@ -49,7 +49,7 @@ fn travel_time(
 ) -> PyResult<ArQuantity<Time>> {
     // Quantity's operators check units and return a `Result`; they never panic.
     #[allow(clippy::arithmetic_side_effects)]
-    let time = (&distance.0 / &speed.0).map_err(|e| unit_error(py, e))?;
+    let time = (distance.0 / speed.0).map_err(|e| unit_error(py, e))?;
     Ok(ArQuantity(time))
 }
 
@@ -237,6 +237,7 @@ fn make_samples() -> PyResult<ArDataset> {
     *ds.attrs_mut() = [
         ("title", AttrValue::Str("samples".into())),
         ("history", AttrValue::Strs(vec!["one".into(), "two".into()])),
+        ("note", AttrValue::Strs(vec!["only ångström".into()])),
         ("i8", AttrValue::I8(vec![-1])),
         ("i16", AttrValue::I16(vec![1, 2])),
         ("i32", AttrValue::I32(vec![3])),

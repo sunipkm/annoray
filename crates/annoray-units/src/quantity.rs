@@ -9,7 +9,7 @@ use std::ops::{Add, Div, Mul, Neg, Sub};
 use num_complex::Complex;
 
 use crate::dims::{Dimensional, Prod, Quot};
-use crate::{Converter, Unit, UnitError, UnitPolicy};
+use crate::{Converter, Unit, UnitError, UnitId, UnitPolicy};
 
 /// The dimension of a [`Quantity`] known only at run time (as for units read from files).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
@@ -147,13 +147,30 @@ impl Scalar for Complex<f64> {
     }
 }
 
-/// Something that names a unit: a [`Unit`], or a string to parse.
-pub trait IntoUnit {
+/// Something that names a unit: a [`Unit`], a [`UnitId`], or a string to parse.
+pub trait IntoUnit: Sized {
     /// The unit.
     ///
     /// # Errors
     /// [`UnitError`] if a string does not parse.
     fn into_unit(self) -> Result<Unit, UnitError>;
+
+    /// The unit, interned.
+    ///
+    /// # Errors
+    /// As for [`into_unit`](Self::into_unit), and [`UnitError::InternFull`].
+    fn into_unit_id(self) -> Result<UnitId, UnitError> {
+        UnitId::intern(self.into_unit()?)
+    }
+}
+
+impl IntoUnit for UnitId {
+    fn into_unit(self) -> Result<Unit, UnitError> {
+        Ok(self.unit().clone())
+    }
+    fn into_unit_id(self) -> Result<UnitId, UnitError> {
+        Ok(self)
+    }
 }
 
 impl IntoUnit for Unit {
@@ -172,11 +189,17 @@ impl IntoUnit for &str {
     fn into_unit(self) -> Result<Unit, UnitError> {
         self.parse()
     }
+    fn into_unit_id(self) -> Result<UnitId, UnitError> {
+        UnitId::parse(self)
+    }
 }
 
 impl IntoUnit for &String {
     fn into_unit(self) -> Result<Unit, UnitError> {
         self.parse()
+    }
+    fn into_unit_id(self) -> Result<UnitId, UnitError> {
+        UnitId::parse(self)
     }
 }
 
@@ -193,6 +216,9 @@ impl IntoUnit for &String {
 /// `Quantity<Dyn>` (the default) checks dimensions at run time, for units only known then.
 /// Typed and dynamic quantities meet through [`dynamic`](Self::dynamic) and
 /// [`cast`](Self::cast).
+///
+/// A quantity is `Copy`: its unit is a [`UnitId`], interned when the quantity is made (from a
+/// string, parsed once per spelling).
 ///
 /// The number is an `f64` (the default) or, for `Quantity<K, Complex<f64>>`, a complex number:
 /// conversion scales both parts (a unit with an offset, such as °C, is refused), and complex
@@ -227,18 +253,20 @@ impl IntoUnit for &String {
 /// ```
 pub struct Quantity<K: Kind = Dyn, T: Scalar = f64> {
     value: T,
-    unit: Unit,
+    unit: UnitId,
     kind: PhantomData<K>,
 }
 
 impl<K: Kind, T: Scalar> Clone for Quantity<K, T> {
     fn clone(&self) -> Self {
-        Self::raw(self.value, self.unit.clone())
+        *self
     }
 }
 
+impl<K: Kind, T: Scalar> Copy for Quantity<K, T> {}
+
 impl<K: Kind, T: Scalar> Quantity<K, T> {
-    fn raw(value: T, unit: Unit) -> Self {
+    const fn raw(value: T, unit: UnitId) -> Self {
         Self {
             value,
             unit,
@@ -246,13 +274,14 @@ impl<K: Kind, T: Scalar> Quantity<K, T> {
         }
     }
 
-    /// `value` in `unit` (a [`Unit`] or a string).
+    /// `value` in `unit` (a [`Unit`], a [`UnitId`] or a string).
     ///
     /// # Errors
     /// [`UnitError`] if the unit does not parse, or ([`UnitError::Incompatible`]) is not of
-    /// this quantity's dimension.
+    /// this quantity's dimension; [`UnitError::InternFull`] for a new unit when the table of
+    /// interned units is full.
     pub fn new(value: T, unit: impl IntoUnit) -> Result<Self, UnitError> {
-        let unit = unit.into_unit()?;
+        let unit = unit.into_unit_id()?;
         K::check(&unit)?;
         Ok(Self::raw(value, unit))
     }
@@ -265,25 +294,32 @@ impl<K: Kind, T: Scalar> Quantity<K, T> {
 
     /// The unit.
     #[must_use]
-    pub const fn unit(&self) -> &Unit {
-        &self.unit
+    pub fn unit(&self) -> &'static Unit {
+        self.unit.unit()
+    }
+
+    /// The unit's handle.
+    #[must_use]
+    pub const fn unit_id(&self) -> UnitId {
+        self.unit
     }
 
     /// The value and the unit.
     #[must_use]
     pub fn into_parts(self) -> (T, Unit) {
-        (self.value, self.unit)
+        (self.value, self.unit.into())
     }
 
     /// The same quantity in another unit of its dimension.
     ///
     /// # Errors
     /// [`UnitError`] if the unit does not parse or measures something else;
-    /// [`UnitError::ComplexOffset`] for a complex quantity and a unit with an offset.
+    /// [`UnitError::ComplexOffset`] for a complex quantity and a unit with an offset;
+    /// [`UnitError::InternFull`].
     pub fn to(&self, unit: impl IntoUnit) -> Result<Self, UnitError> {
-        let unit = unit.into_unit()?;
+        let unit = unit.into_unit_id()?;
         let c = self.unit.converter_to(&unit)?;
-        Ok(Self::raw(self.value.convert(&c, &self.unit, &unit)?, unit))
+        Ok(Self::raw(self.value.convert(&c, self.unit(), &unit)?, unit))
     }
 
     /// As a quantity whose dimension is checked at run time.
@@ -304,18 +340,20 @@ impl<K: Kind, T: Scalar> Quantity<K, T> {
     /// `self^n` (dimension checked at run time; for a typed result, multiply).
     ///
     /// # Errors
-    /// [`UnitError`] for non-linear units (absolute temperatures, …).
+    /// [`UnitError`] for non-linear units (absolute temperatures, …);
+    /// [`UnitError::InternFull`].
     pub fn powi(&self, n: i32) -> Result<Quantity<Dyn, T>, UnitError> {
-        Ok(Quantity::raw(self.value.powi(n), self.unit.powi(n)?))
+        let unit = self.keep(self.unit.powi(n)?, &[])?;
+        Ok(Quantity::raw(self.value.powi(n), unit))
     }
 
     /// The `n`-th root, the principal one of a complex number (dimension checked at run
     /// time).
     ///
     /// # Errors
-    /// [`UnitError::InexactRoot`] if the unit has no exact root.
+    /// [`UnitError::InexactRoot`] if the unit has no exact root; [`UnitError::InternFull`].
     pub fn root(&self, n: i32) -> Result<Quantity<Dyn, T>, UnitError> {
-        let unit = self.unit.root(n)?;
+        let unit = self.keep(self.unit.root(n)?, &[])?;
         Ok(Quantity::raw(self.value.root(n), unit))
     }
 
@@ -326,14 +364,15 @@ impl<K: Kind, T: Scalar> Quantity<K, T> {
     pub fn as_number(&self) -> Result<T, UnitError> {
         let one = Unit::one();
         self.value
-            .convert(&self.unit.converter_to(&one)?, &self.unit, &one)
+            .convert(&self.unit.converter_to(&one)?, self.unit(), &one)
     }
 
     /// `self + rhs` or `self - rhs` under `policy` (`+`/`-` use the strict policy: the units
     /// must match).
     ///
     /// # Errors
-    /// Unit errors: other dimensions, other scales (strict policy), absolute temperatures.
+    /// Unit errors: other dimensions, other scales (strict policy), absolute temperatures;
+    /// [`UnitError::InternFull`].
     pub fn add_with(&self, rhs: &Self, sub: bool, policy: UnitPolicy) -> Result<Self, UnitError> {
         let plan = if sub {
             self.unit.plan_sub(&rhs.unit, policy)?
@@ -341,17 +380,15 @@ impl<K: Kind, T: Scalar> Quantity<K, T> {
             self.unit.plan_add(&rhs.unit, policy)?
         };
         let a = match &plan.lhs {
-            Some(c) => self.value.convert(c, &self.unit, &plan.result)?,
+            Some(c) => self.value.convert(c, self.unit(), &plan.result)?,
             None => self.value,
         };
         let b = match &plan.rhs {
-            Some(c) => rhs.value.convert(c, &rhs.unit, &plan.result)?,
+            Some(c) => rhs.value.convert(c, rhs.unit(), &plan.result)?,
             None => rhs.value,
         };
-        Ok(Self::raw(
-            if sub { a.minus(b) } else { a.plus(b) },
-            plan.result,
-        ))
+        let unit = self.keep(plan.result, &[rhs.unit])?;
+        Ok(Self::raw(if sub { a.minus(b) } else { a.plus(b) }, unit))
     }
 
     /// The same quantity, as kind `B` (only called where `K` and `B` are the same type).
@@ -359,21 +396,34 @@ impl<K: Kind, T: Scalar> Quantity<K, T> {
         Quantity::raw(self.value, self.unit)
     }
 
-    fn product(&self, value: T, unit: &Unit, div: bool) -> Result<(T, Unit), UnitError> {
+    /// The handle of a result unit: this quantity's or one of `others` when spelled the same
+    /// (no lookup in the table), otherwise interned.
+    fn keep(&self, unit: Unit, others: &[UnitId]) -> Result<UnitId, UnitError> {
+        let same = |id: &UnitId| **id == unit && id.label() == unit.label();
+        match std::iter::once(&self.unit)
+            .chain(others)
+            .find(|id| same(id))
+        {
+            Some(id) => Ok(*id),
+            None => UnitId::intern(unit),
+        }
+    }
+
+    fn product(&self, value: T, unit: UnitId, div: bool) -> Result<(T, UnitId), UnitError> {
         let (v, u) = if div {
-            (self.value.over(value), self.unit.div(unit)?)
+            (self.value.over(value), self.unit.div(&unit)?)
         } else {
-            (self.value.times(value), self.unit.mul(unit)?)
+            (self.value.times(value), self.unit.mul(&unit)?)
         };
         // A plain number keeps the unit as written (`2 × 3 V` is `6 V`, not `6 kg m2 s-3 A-1`),
         // as for arrays; the product above still refuses absolute temperatures.
         let one = Unit::one();
         let u = if *unit == one {
-            self.unit.clone()
-        } else if self.unit == one && !div {
-            unit.clone()
+            self.unit
+        } else if *self.unit == one && !div {
+            unit
         } else {
-            u
+            self.keep(u, &[unit])?
         };
         Ok((v, u))
     }
@@ -385,11 +435,11 @@ impl<K: Kind, T: Scalar> Quantity<K, T> {
             .plan_cmp(&other.unit, UnitPolicy::AutoRescale)
             .ok()?;
         let a = match &plan.lhs {
-            Some(c) => self.value.convert(c, &self.unit, &plan.result).ok()?,
+            Some(c) => self.value.convert(c, self.unit(), &plan.result).ok()?,
             None => self.value,
         };
         let b = match &plan.rhs {
-            Some(c) => other.value.convert(c, &other.unit, &plan.result).ok()?,
+            Some(c) => other.value.convert(c, other.unit(), &plan.result).ok()?,
             None => other.value,
         };
         Some((a, b))
@@ -410,25 +460,25 @@ impl<K: Kind> Quantity<K, Complex<f64>> {
     /// The real part, in the same unit.
     #[must_use]
     pub fn re(&self) -> Quantity<K> {
-        Quantity::raw(self.value.re, self.unit.clone())
+        Quantity::raw(self.value.re, self.unit)
     }
 
     /// The imaginary part, in the same unit.
     #[must_use]
     pub fn im(&self) -> Quantity<K> {
-        Quantity::raw(self.value.im, self.unit.clone())
+        Quantity::raw(self.value.im, self.unit)
     }
 
     /// The complex conjugate.
     #[must_use]
     pub fn conj(&self) -> Self {
-        Self::raw(self.value.conj(), self.unit.clone())
+        Self::raw(self.value.conj(), self.unit)
     }
 
     /// The magnitude (absolute value), in the same unit.
     #[must_use]
     pub fn norm(&self) -> Quantity<K> {
-        Quantity::raw(self.value.norm(), self.unit.clone())
+        Quantity::raw(self.value.norm(), self.unit)
     }
 
     /// The argument (phase), in radians.
@@ -484,7 +534,7 @@ impl<K: Kind, T: Scalar> Neg for Quantity<K, T> {
 impl<K: Kind, T: Scalar> Neg for &Quantity<K, T> {
     type Output = Quantity<K, T>;
     fn neg(self) -> Quantity<K, T> {
-        Quantity::raw(self.value.negated(), self.unit.clone())
+        Quantity::raw(self.value.negated(), self.unit)
     }
 }
 
@@ -526,14 +576,14 @@ impl<K: Kind> SameDimension<K> for K {}
 impl<A: Kind + SameDimension<B>, B: Kind, T: Scalar> Add<&Quantity<B, T>> for &Quantity<A, T> {
     type Output = Result<Quantity<A, T>, UnitError>;
     fn add(self, rhs: &Quantity<B, T>) -> Self::Output {
-        self.add_with(&rhs.clone().same(), false, UnitPolicy::Strict)
+        self.add_with(&rhs.same(), false, UnitPolicy::Strict)
     }
 }
 
 impl<A: Kind + SameDimension<B>, B: Kind, T: Scalar> Sub<&Quantity<B, T>> for &Quantity<A, T> {
     type Output = Result<Quantity<A, T>, UnitError>;
     fn sub(self, rhs: &Quantity<B, T>) -> Self::Output {
-        self.add_with(&rhs.clone().same(), true, UnitPolicy::Strict)
+        self.add_with(&rhs.same(), true, UnitPolicy::Strict)
     }
 }
 
@@ -547,7 +597,7 @@ where
 {
     type Output = Result<Quantity<Prod<A, B>, T>, UnitError>;
     fn mul(self, rhs: &Quantity<B, T>) -> Self::Output {
-        let (v, u) = self.product(rhs.value, &rhs.unit, false)?;
+        let (v, u) = self.product(rhs.value, rhs.unit, false)?;
         Ok(Quantity::raw(v, u))
     }
 }
@@ -558,7 +608,7 @@ where
 {
     type Output = Result<Quantity<Quot<A, B>, T>, UnitError>;
     fn div(self, rhs: &Quantity<B, T>) -> Self::Output {
-        let (v, u) = self.product(rhs.value, &rhs.unit, true)?;
+        let (v, u) = self.product(rhs.value, rhs.unit, true)?;
         Ok(Quantity::raw(v, u))
     }
 }
@@ -574,14 +624,14 @@ macro_rules! dyn_products {
         impl<'a, 'b, T: Scalar, $($g)*> Mul<&'b Quantity<$r, T>> for &'a Quantity<$l, T> {
             type Output = Result<Quantity<Dyn, T>, UnitError>;
             fn mul(self, rhs: &'b Quantity<$r, T>) -> Self::Output {
-                let (v, u) = self.product(rhs.value, &rhs.unit, false)?;
+                let (v, u) = self.product(rhs.value, rhs.unit, false)?;
                 Ok(Quantity::raw(v, u))
             }
         }
         impl<'a, 'b, T: Scalar, $($g)*> Div<&'b Quantity<$r, T>> for &'a Quantity<$l, T> {
             type Output = Result<Quantity<Dyn, T>, UnitError>;
             fn div(self, rhs: &'b Quantity<$r, T>) -> Self::Output {
-                let (v, u) = self.product(rhs.value, &rhs.unit, true)?;
+                let (v, u) = self.product(rhs.value, rhs.unit, true)?;
                 Ok(Quantity::raw(v, u))
             }
         }
@@ -604,7 +654,7 @@ macro_rules! scalar_products {
         impl<K: Kind> Mul<$num> for &Quantity<K, $t> {
             type Output = Result<Quantity<K, $t>, UnitError>;
             fn mul(self, rhs: $num) -> Self::Output {
-                let (v, u) = self.product(<$t>::from(rhs), &Unit::one(), false)?;
+                let (v, u) = self.product(<$t>::from(rhs), UnitId::one(), false)?;
                 Ok(Quantity::raw(v, u))
             }
         }
@@ -612,7 +662,7 @@ macro_rules! scalar_products {
         impl<K: Kind> Div<$num> for &Quantity<K, $t> {
             type Output = Result<Quantity<K, $t>, UnitError>;
             fn div(self, rhs: $num) -> Self::Output {
-                let (v, u) = self.product(<$t>::from(rhs), &Unit::one(), true)?;
+                let (v, u) = self.product(<$t>::from(rhs), UnitId::one(), true)?;
                 Ok(Quantity::raw(v, u))
             }
         }
@@ -683,28 +733,28 @@ mod tests {
     fn complex_arithmetic_keeps_unit_rules() {
         let a = v(1.0, 2.0);
         let b = v(3.0, -1.0);
-        assert_eq!((&a + &b).unwrap().value(), Complex::new(4.0, 1.0));
-        assert_eq!((&a - &b).unwrap().value(), Complex::new(-2.0, 3.0));
+        assert_eq!((a + b).unwrap().value(), Complex::new(4.0, 1.0));
+        assert_eq!((a - b).unwrap().value(), Complex::new(-2.0, 3.0));
         let mv = Quantity::<Voltage, C>::new(Complex::new(1.0, 0.0), "mV").unwrap();
-        assert!((&a + &mv).is_err()); // V + mV: convert first, as for real quantities
+        assert!((a + mv).is_err()); // V + mV: convert first, as for real quantities
         let sum = a.add_with(&mv, false, UnitPolicy::AutoRescale).unwrap();
         assert_eq!(sum.value(), Complex::new(1.001, 2.0));
         // Products: a typed dimension, a dynamic one, and plain numbers.
-        let p = (&a * &b).unwrap();
+        let p = (a * b).unwrap();
         assert_eq!(p.value(), Complex::new(5.0, 5.0));
         assert_eq!(p.unit().to_string(), "V2");
         let len = Quantity::<Length, C>::new(Complex::new(2.0, 0.0), "m").unwrap();
-        let d = (&a.clone().dynamic() / &len).unwrap();
+        let d = (a.dynamic() / len).unwrap();
         assert_eq!(d.value(), Complex::new(0.5, 1.0));
         assert_eq!((&a * 2.0).unwrap().value(), Complex::new(2.0, 4.0));
         assert_eq!((&a * 2.0).unwrap().unit().to_string(), "V"); // the spelling kept
         assert_eq!(
-            (&a * Complex::new(0.0, 1.0)).unwrap().value(),
+            (a * Complex::new(0.0, 1.0)).unwrap().value(),
             Complex::new(-2.0, 1.0)
         );
         assert_eq!((2.0 * &a).unwrap().value(), Complex::new(2.0, 4.0));
         let two = Quantity::<Dyn, C>::new(Complex::new(2.0, 0.0), "1").unwrap();
-        let twice = (&two * &a.clone().dynamic()).unwrap();
+        let twice = (two * a.dynamic()).unwrap();
         assert_eq!(twice.unit().to_string(), "V"); // a number on the left keeps it too
         assert_eq!((-&a).value(), Complex::new(-1.0, -2.0));
         assert_eq!(a.powi(2).unwrap().value(), Complex::new(-3.0, 4.0));

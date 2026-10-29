@@ -217,6 +217,9 @@ def test_every_element_type_from_rust():
     assert ds.coords["x"].units == "km"
     np.testing.assert_array_equal(ds["duration"].values[[0, 2]], np.array([1, -2], "m8[h]"))
     assert ds.attrs["title"] == "samples" and list(ds.attrs["history"]) == ["one", "two"]
+    # A one-element string array is a plain str (as netCDF4-python gives), longer ones a list.
+    assert ds.attrs["note"] == "only ångström" and isinstance(ds.attrs["note"], str)
+    assert isinstance(ds.attrs["history"], list)
     # And back to Rust and Python again, unchanged; CF dates keep their nanoseconds (which
     # Python's cftime objects cannot show) through Python and back.
     same_dataset(ext.dataset_roundtrip(ds), ds)

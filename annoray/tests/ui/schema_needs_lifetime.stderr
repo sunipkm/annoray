@@ -1,0 +1,7 @@
+error: Schema needs a lifetime parameter (`struct Name<'a>`): its fields borrow from the dataset
+ --> tests/ui/schema_needs_lifetime.rs:1:10
+  |
+1 | #[derive(annoray::schema::Schema)]
+  |          ^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: this error originates in the derive macro `annoray::schema::Schema` (in Nightly builds, run with -Z macro-backtrace for more info)

@@ -1,0 +1,40 @@
+[package]
+name = "annoray-fuzz"
+version = "0.0.0"
+edition = "2024"
+publish = false
+description = "cargo-fuzz targets for annoray's readers and unit parser"
+
+[package.metadata]
+cargo-fuzz = true
+
+# Its own workspace: built with nightly and libFuzzer, apart from the published crates.
+[workspace]
+
+[dependencies]
+libfuzzer-sys = "0.4"
+annoray = { path = "../annoray", default-features = false, features = ["zstd", "lz4", "netcdf4"] }
+
+[[bin]]
+name = "read_bytes"
+path = "fuzz_targets/read_bytes.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "hdf5"
+path = "fuzz_targets/hdf5.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "units"
+path = "fuzz_targets/units.rs"
+test = false
+doc = false
+bench = false
+
+[profile.release]
+debug = 1

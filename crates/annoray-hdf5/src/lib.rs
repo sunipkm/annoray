@@ -1394,9 +1394,12 @@ impl Dataset {
             .try_fold(Ck::from(1usize), |a, d| Some(a * *d))
             .and_then(Ck::usize)
             .ok_or_else(|| bad("chunk too large"))?;
+        // A chunk is decoded whole for any read that touches it: it is held to the load limit
+        // too, so a compressed chunk cannot expand past it.
         let expected = (Ck::from(chunk_elems) * esize)
             .usize()
-            .ok_or_else(|| bad("chunk too large"))?;
+            .filter(|t| *t <= self.file.load_limit)
+            .ok_or_else(|| bad(format!("{}: chunk too large to load", self.path)))?;
         let stored = usize::try_from(c.size).map_err(|_| bad("chunk too large"))?;
         let raw = self.file.cursor(c.addr)?.bytes(stored)?;
         let data: std::borrow::Cow<'_, [u8]> = if self.filters.is_empty() {

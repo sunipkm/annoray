@@ -1,5 +1,6 @@
 //! `Dataset` → raw netCDF (the inverse of `decode`), shaped for a target format.
 
+use crate::Compress;
 use crate::io::{Format, RawDataset, RawDim, RawVariable, Storage};
 use crate::{
     AttrValue, Attrs, DType, DatasetBase, LazySource, NaT, Name, Owned, Repr, TypedArray,
@@ -18,14 +19,41 @@ use crate::cf::{CfError, Result};
 pub struct EncodeOptions {
     /// The target format; decides which types and features are available.
     pub format: Format,
+    /// Compression for variables whose encoding sets none ([`Compress`]).
+    pub compress: Option<Compress>,
 }
 
 impl EncodeOptions {
     /// Options for a format.
     #[must_use]
     pub const fn format(format: Format) -> Self {
-        Self { format }
+        Self {
+            format,
+            compress: None,
+        }
     }
+
+    /// Compress every variable whose encoding sets no compression (see [`Compress`]).
+    #[must_use]
+    pub const fn compress(mut self, c: Compress) -> Self {
+        self.compress = Some(c);
+        self
+    }
+}
+
+/// `c` applied to an encoded variable whose encoding set no compression.
+fn default_compression(raw: &mut RawVariable<'_>, c: &Compress, format: Format) {
+    let s = &mut raw.storage;
+    let filterable = !raw.dims.is_empty()
+        && raw.data.dtype() != DType::Str
+        && s.ragged.is_none()
+        && raw.data.shape().iter().product::<usize>() >= c.min_elements;
+    if format.is_netcdf3() || !filterable || s.deflate.is_some() || s.compression.is_some() {
+        return;
+    }
+    s.deflate = c.deflate;
+    s.compression = c.codec;
+    s.shuffle |= c.shuffle;
 }
 
 fn invalid(var: &str, reason: impl Into<String>) -> CfError {
@@ -613,6 +641,7 @@ fn encodable_lazily<R: Repr>(v: &VariableBase<R>, format: Format) -> bool {
 /// first element, and its values are encoded as they are read.
 /// One variable CF-encoded on its own (values, attributes, on-disk dimensions), for writing
 /// into an existing file.
+#[cfg(feature = "netcdf4")]
 pub(crate) fn encode_variable<'a, R: Repr>(
     name: &str,
     v: &'a VariableBase<R>,
@@ -814,11 +843,17 @@ fn encode_plain<'a, S: Repr>(
     };
 
     for (name, c) in ds.coords() {
-        let e = encode_maybe_lazy(name, c, format)?;
+        let mut e = encode_maybe_lazy(name, c, format)?;
+        if let Some(c) = &opts.compress {
+            default_compression(&mut e.raw, c, format);
+        }
         add(&mut raw, name, e)?;
     }
     for (name, v) in ds.data_vars() {
         let mut e = encode_maybe_lazy(name, v, format)?;
+        if let Some(c) = &opts.compress {
+            default_compression(&mut e.raw, c, format);
+        }
         let mine: Vec<&str> = aux
             .iter()
             .filter(|(_, cd)| cd.iter().all(|d| v.dims().contains(d)))

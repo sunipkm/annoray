@@ -280,11 +280,13 @@ pub(crate) fn slice_of(
     crate::array::typed_map!(a, x => x.slice_each_axis(|ax| range(ax.axis.index())).to_owned())
 }
 
+#[cfg(feature = "netcdf4")]
 /// Values already in memory, served slice by slice: a writer that streams slices takes them
 /// from here without first copying the whole array.
 #[derive(Debug)]
 pub(crate) struct Held(pub(crate) TypedArray<Owned>);
 
+#[cfg(feature = "netcdf4")]
 impl LazySource for Held {
     fn dtype(&self) -> DType {
         self.0.dtype()
@@ -385,13 +387,62 @@ impl RawDataset<'_> {
 pub struct WriteOptions {
     /// File format.
     pub format: Format,
+    /// Compression for variables whose encoding sets none (netCDF-4 / HDF5).
+    pub compress: Option<crate::Compress>,
 }
 
 impl WriteOptions {
     /// Options for a given format.
     #[must_use]
     pub fn format(format: Format) -> Self {
-        Self { format }
+        Self {
+            format,
+            compress: None,
+        }
+    }
+
+    /// Compress every variable whose encoding sets no compression (see [`Compress`]).
+    ///
+    /// A single variable's storage is set on a view of the dataset instead, which borrows the
+    /// values: its encoding is the view's own.
+    ///
+    /// ```
+    /// use annoray::io::{Format, ToNetcdf, WriteOptions};
+    /// use annoray::ndarray::{ArrayD, IxDyn};
+    /// use annoray::{Compress, Compression, Dataset, Variable};
+    ///
+    /// let values = ArrayD::from_shape_fn(IxDyn(&[100, 50]), |ix| (ix[0] + ix[1]) as f64);
+    /// let ds = Dataset::new()
+    ///     .with_var("t", Variable::new(["y", "x"], values.clone())?)?
+    ///     .with_var("p", Variable::new(["y", "x"], values)?)?;
+    ///
+    /// // Every variable of 256 values or more: deflate level 4 with shuffle.
+    /// let opts = WriteOptions::format(Format::Netcdf4).compress(Compress::deflate(4));
+    /// let path = std::env::temp_dir().join("annoray-doc-compress.nc");
+    /// ds.to_netcdf_with(&path, &opts)?;
+    ///
+    /// // One variable otherwise, without copying the dataset.
+    /// let mut view = ds.view();
+    /// let p = view.encoding_of_mut("p")?;
+    /// p.compression = Some(Compression::Lz4);
+    /// p.chunks = Some(vec![25, 50]);
+    /// view.to_netcdf_with(&path, &opts)?;
+    /// # std::fs::remove_file(&path)?;
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    ///
+    /// [`Compress`]: crate::Compress
+    #[must_use]
+    pub fn compress(mut self, c: crate::Compress) -> Self {
+        self.compress = Some(c);
+        self
+    }
+
+    /// The options for CF-encoding a dataset to write with these.
+    pub(crate) fn encode_options(&self) -> crate::cf::EncodeOptions {
+        let mut e = crate::cf::EncodeOptions::format(self.format);
+        e.compress = self.compress;
+        e
     }
 }
 
@@ -413,6 +464,25 @@ pub trait Backend {
     /// [`IoError::Backend`] for unreadable files.
     fn read_lazy(&self, path: &Path) -> Result<RawDataset<'static>> {
         self.read(path)
+    }
+
+    /// [`read_lazy`](Self::read_lazy) under read limits, for backends that read some values
+    /// while opening (the netCDF-4 reader reads strings, compound and variable-length
+    /// variables then): those reads are held to [`ReadLimits::max_read_bytes`]. Opening
+    /// checks the rest of the limits afterwards.
+    ///
+    /// [`ReadLimits::max_read_bytes`]: crate::io::ReadLimits::max_read_bytes
+    ///
+    /// # Errors
+    /// As for [`read_lazy`](Self::read_lazy); `CoreError::Limit` or a backend error for a read
+    /// over the limit.
+    fn read_lazy_limited(
+        &self,
+        path: &Path,
+        limits: &crate::io::ReadLimits,
+    ) -> Result<RawDataset<'static>> {
+        let _ = limits;
+        self.read_lazy(path)
     }
 
     /// Write a dataset (and its groups), replacing any existing file.

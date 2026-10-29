@@ -431,6 +431,33 @@ impl<S: Repr> VariableBase<S> {
         }
     }
 
+    /// The values as one slice, in row-major order: borrowed when they are stored that way,
+    /// copied otherwise (after `transpose`, a strided or reversed selection, …). Lazy values
+    /// are read, as for [`data`](Self::data).
+    ///
+    /// ```
+    /// use annoray::Variable;
+    /// use annoray::ndarray::array;
+    /// use std::borrow::Cow;
+    ///
+    /// let v = Variable::new(["y", "x"], array![[1.0, 2.0], [3.0, 4.0]].into_dyn())?;
+    /// assert!(matches!(v.values_slice::<f64>()?, Cow::Borrowed(&[1.0, 2.0, 3.0, 4.0])));
+    /// let t = v.transpose(&["x", "y"])?;
+    /// assert_eq!(*t.values_slice::<f64>()?, [1.0, 3.0, 2.0, 4.0]); // copied, in order
+    /// # Ok::<(), annoray::CoreError>(())
+    /// ```
+    ///
+    /// # Errors
+    /// [`CoreError::DTypeMismatch`] if the data is not of element type `T`; read errors of
+    /// lazy values.
+    pub fn values_slice<T: Element>(&self) -> Result<std::borrow::Cow<'_, [T]>> {
+        let a = self.data::<T>()?;
+        Ok(match a.to_slice() {
+            Some(s) => std::borrow::Cow::Borrowed(s),
+            None => std::borrow::Cow::Owned(a.iter().cloned().collect()),
+        })
+    }
+
     /// A shared view of the whole variable.
     #[must_use]
     pub fn view(&self) -> VariableView<'_> {

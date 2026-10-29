@@ -167,6 +167,16 @@ ar.set_stream_bytes(16 * 2**20)  # reductions of lazy data read 16 MiB at a time
 ar.set_stream_bytes(64 * 2**20)
 ```
 
+The units quantities hold are interned: kept once per spelling in a process-wide table that
+only grows, capped at 65,536 units by default. Past the cap, a quantity in a new unit is a
+`UnitError`; units already interned keep working.
+
+```{code-cell} python
+print(ar.interned(), ar.intern_cap())
+ar.set_intern_cap(10_000)  # a tighter bound, for a service reading untrusted files
+ar.set_intern_cap(65_536)
+```
+
 ```{eval-rst}
 .. currentmodule:: annoray
 
@@ -175,6 +185,9 @@ ar.set_stream_bytes(64 * 2**20)
 
    set_stream_bytes
    stream_bytes
+   set_intern_cap
+   intern_cap
+   interned
    set_options
    get_options
    show_versions

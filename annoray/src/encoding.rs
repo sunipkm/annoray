@@ -74,6 +74,85 @@ pub struct Encoding {
     pub level_of: Option<(Name, usize)>,
 }
 
+/// Compression for every variable of a netCDF-4 / HDF5 file whose own [`Encoding`] sets
+/// none (no `deflate`, no `compression`), given when writing
+/// ([`WriteOptions::compress`](crate::io::WriteOptions::compress)) instead of in each
+/// variable's encoding. Neither the dataset nor its values are changed or copied.
+///
+/// Variables with fewer than [`min_elements`](Self::min_elements) values (scalars and small
+/// coordinates, where filters cost more than they save), strings and variable-length
+/// variables, which netCDF-C cannot filter, are written as they are. Chunk shapes come from each
+/// variable's encoding, or netCDF-C's defaults. netCDF-3 files have no compression: the
+/// option is ignored for them.
+///
+/// ```
+/// use annoray::Compress;
+/// use annoray::io::{Format, WriteOptions};
+///
+/// let opts = WriteOptions::format(Format::Netcdf4).compress(Compress::deflate(4));
+/// assert_eq!(opts.compress.map(|c| c.min_elements), Some(256));
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct Compress {
+    /// Deflate (zlib) level, 1–9; `None` when [`codec`](Self::codec) is set.
+    pub deflate: Option<u8>,
+    /// A codec other than deflate (filter plugins: Zstandard, LZ4, Blosc).
+    pub codec: Option<Compression>,
+    /// The byte-shuffle filter before compressing (on by default).
+    pub shuffle: bool,
+    /// The fewest values a variable needs to be compressed (default
+    /// [`DEFAULT_MIN_ELEMENTS`](Self::DEFAULT_MIN_ELEMENTS)).
+    pub min_elements: usize,
+}
+
+impl Compress {
+    /// The default [`min_elements`](Self::min_elements).
+    pub const DEFAULT_MIN_ELEMENTS: usize = 256;
+
+    /// Deflate at `level` (1–9; clamped), with shuffle.
+    #[must_use]
+    pub const fn deflate(level: u8) -> Self {
+        Self {
+            deflate: Some(if level < 1 {
+                1
+            } else if level > 9 {
+                9
+            } else {
+                level
+            }),
+            codec: None,
+            shuffle: true,
+            min_elements: Self::DEFAULT_MIN_ELEMENTS,
+        }
+    }
+
+    /// Compress with `codec`, with shuffle.
+    #[must_use]
+    pub const fn codec(codec: Compression) -> Self {
+        Self {
+            deflate: None,
+            codec: Some(codec),
+            shuffle: true,
+            min_elements: Self::DEFAULT_MIN_ELEMENTS,
+        }
+    }
+
+    /// With or without the shuffle filter.
+    #[must_use]
+    pub const fn shuffle(mut self, shuffle: bool) -> Self {
+        self.shuffle = shuffle;
+        self
+    }
+
+    /// Compress only variables of at least `n` values.
+    #[must_use]
+    pub const fn min_elements(mut self, n: usize) -> Self {
+        self.min_elements = n;
+        self
+    }
+}
+
 /// Storage details of a whole dataset.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 #[non_exhaustive]

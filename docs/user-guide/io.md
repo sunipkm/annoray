@@ -79,6 +79,42 @@ ds.assign(t2=ds["t"] * 2.0).to_netcdf(tmp / "small.nc")  # back over its own fil
 print(list(ds.data_vars), list(ar.open_dataset(tmp / "small.nc").data_vars))
 ```
 
+### Files from untrusted sources
+
+The readers check every offset and length against the file, so a corrupt or hostile file
+gives an error, not a crash. A small file can still declare large arrays, though, or
+chunks that a compressor expands many times over. `limits=` on `open_dataset`,
+`open_datatree` and `open_mfdataset` sets ceilings on what it may make annoray allocate. The
+file's metadata is checked before any values are read, and every read after that.
+
+| Limit | What it bounds |
+|---|---|
+| `max_read_bytes` | One read: a variable read whole, a slice of a lazy one, or one stored chunk (decoded whole for any read touching it) |
+| `max_total_bytes` | The values all variables of the file declare together |
+| `max_elements` | The values of one variable |
+| `max_rank` | The dimensions of one variable |
+| `max_variables` | The variables of the file, in all groups |
+| `max_attributes` | The attributes of one variable or group |
+
+`limits="untrusted"` sets them all: reads of at most 256 MiB, 1 GiB of values, 2²⁸ values per
+variable, 32 dimensions, and 10,000 variables and 10,000 attributes per variable or group. A
+dict sets some (`None` for no limit), and starts from that preset with `"preset": "untrusted"`.
+A breach is `ReadLimitError` (a `ValueError`), except for a netCDF-4 string, compound or
+variable-length variable over `max_read_bytes`: these are read when the file is opened, so
+such a variable is skipped with a warning, as variables that cannot be read are. Sizes are
+those of the values in memory.
+
+```{code-cell} python
+grid = ar.Dataset({"t": (("y", "x"), np.zeros((500, 400)))})
+grid.to_netcdf(tmp / "grid.nc")
+opened = ar.open_dataset(tmp / "grid.nc", limits={"preset": "untrusted", "max_read_bytes": 2**20})
+print(float(opened["t"].isel(y=0).sum()))  # a slice of 3.2 kB reads
+try:
+    opened["t"].load()  # all 1.6 MB does not
+except ar.ReadLimitError as e:
+    print("ReadLimitError:", e)
+```
+
 ## What is read from netCDF-4 and HDF5
 
 | In the file | In annoray |
@@ -108,6 +144,25 @@ Lossy codecs are decoded bit for bit as their reference libraries decode, built 
 multiply-adds where the reference's compiler fuses them (clang, and GCC on ARM); builds
 without them (x86-64) can differ in the last bit of some `double` values. SZ's point-wise
 relative mode also depends on the platform's `pow` in the last bit.
+
+### Compressing a whole file
+
+`compress=` on `to_netcdf` (of a `Dataset`, `DataTree` or, through `annoray.to_netcdf`, an
+xarray dataset) compresses every variable whose encoding sets no compression of its own, so
+`encoding` need not list them. It is `True` (deflate level 4), a deflate level 1–9, or a dict
+of the encoding's compression keys (`compression`, `complevel`, `zlib`, `shuffle`,
+`blosc_shuffle`) and `min_elements`. Shuffle is on unless the dict turns it off. Variables of
+fewer than `min_elements` values (256 by default), scalars and strings are written as they
+are; netCDF-3 ignores the option. xarray has no such option.
+
+```{code-cell} python
+big = ar.Dataset({"v": (("y", "x"), np.random.default_rng(0).normal(size=(200, 100)))})
+big.to_netcdf(tmp / "deflate.nc", compress=True)
+big.to_netcdf(tmp / "zstd.nc", compress={"compression": "zstd", "complevel": 3})
+for name in ["deflate.nc", "zstd.nc"]:
+    enc = ar.open_dataset(tmp / name)["v"].encoding
+    print(name, enc.get("zlib"), enc.get("compression"), enc["shuffle"])
+```
 
 ## Writing in place
 

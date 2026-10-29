@@ -26,6 +26,7 @@ mod raw;
 mod relations;
 mod reshape;
 mod rolling_exp;
+mod schema;
 mod stack;
 mod stats;
 mod tree;
@@ -71,6 +72,9 @@ fn _annoray(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(native::from_xarray, m)?)?;
     m.add_function(wrap_pyfunction!(native::set_stream_bytes, m)?)?;
     m.add_function(wrap_pyfunction!(native::stream_bytes, m)?)?;
+    m.add_function(wrap_pyfunction!(units::set_intern_cap, m)?)?;
+    m.add_function(wrap_pyfunction!(units::intern_cap, m)?)?;
+    m.add_function(wrap_pyfunction!(units::interned, m)?)?;
     m.add_function(wrap_pyfunction!(calculus::polyval, m)?)?;
     m.add_function(wrap_pyfunction!(elementwise::dot, m)?)?;
     m.add_function(wrap_pyfunction!(utility::where_, m)?)?;
@@ -87,6 +91,12 @@ fn _annoray(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(interop::_tree_from_parts, m)?)?;
     m.add_function(wrap_pyfunction!(interop::_tree_to_parts, m)?)?;
     m.add("UnitError", m.py().get_type::<convert::UnitError>())?;
+    m.add("SchemaError", m.py().get_type::<schema::SchemaError>())?;
+    m.add_class::<schema::PySchema>()?;
+    m.add(
+        "ReadLimitError",
+        m.py().get_type::<convert::ReadLimitError>(),
+    )?;
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     Ok(())
 }

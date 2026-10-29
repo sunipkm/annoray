@@ -92,8 +92,10 @@ annoray ──┬── annoray-units
           └── annoray-zarr ──┴── annoray-codecs
 ```
 
-Zstandard and LZ4 are behind the `zstd` and `lz4` features (on by default in `annoray`), which
-pass through to the codec crate; `rayon` (on by default) parallelises kernels and chunk
+netCDF-4/HDF5 and Zarr support are the `netcdf4` and `zarr` features of `annoray`, on by
+default; without them it reads and writes netCDF-3 alone, in a smaller program. Zstandard and
+LZ4 are behind the `zstd` and `lz4` features (on by default in `annoray`), which pass through
+to the codec crate; `rayon` (on by default) parallelises kernels and chunk
 decoding in `annoray`, `annoray-hdf5` and `annoray-zarr`.
 
 The Python bindings (PyO3, maturin) are in [`annoray-python`](annoray-python); wheels use the

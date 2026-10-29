@@ -5,6 +5,8 @@
 //! - **Values stay in their declared unit.** Mixing scales is an error unless you rescale or opt
 //!   into [`UnitPolicy::AutoRescale`].
 //! - **Affine, epoch and logarithmic units** (°C, `days since 1970-01-01`, dB) are first-class.
+//! - **Interned units.** [`UnitId`] is a `Copy` handle to a unit kept once per spelling, in a
+//!   capped process-wide table; [`Quantity`] holds one, so quantities are `Copy`.
 //! - **Angle is a dimension**, erasable with [`Unit::erase_angle`].
 //! - **UDUNITS-2 / CF parsing** backed by the full UDUNITS database, plus UCUM-style `kg.m2/s2`.
 //! - **Instants and durations** as 64-bit nanosecond counts ([`Instant`], [`Duration`]), the
@@ -47,6 +49,7 @@ pub mod dims;
 mod error;
 mod extra;
 mod instant;
+mod intern;
 mod parse;
 mod quantity;
 mod registry;
@@ -62,6 +65,7 @@ use std::str::FromStr;
 pub use dimension::{BaseDim, Dimension};
 pub use error::UnitError;
 pub use instant::{Duration, Instant};
+pub use intern::{DEFAULT_INTERN_CAP, UnitId, intern_cap, interned, set_intern_cap};
 pub use quantity::{Dyn, IntoUnit, Kind, Quantity, SameDimension, Scalar};
 pub use scale::{Rational, Scale};
 pub use static_unit::{StaticUnit, StaticValue, converter_from, converter_into};

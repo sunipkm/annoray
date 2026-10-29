@@ -376,9 +376,18 @@ impl PyDataTree {
     }
 
     /// Write this node's subtree as netCDF-4 groups (lazy values stream chunk by chunk).
-    #[pyo3(signature = (path, format="NETCDF4"))]
-    fn to_netcdf(&self, py: Python<'_>, path: PathBuf, format: &str) -> PyResult<()> {
-        let opts = WriteOptions::format(crate::raw::format_from_name(format)?);
+    /// `compress` compresses every variable without its own compression, as for
+    /// `Dataset.to_netcdf`.
+    #[pyo3(signature = (path, format="NETCDF4", compress=None))]
+    fn to_netcdf(
+        &self,
+        py: Python<'_>,
+        path: PathBuf,
+        format: &str,
+        compress: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<()> {
+        let mut opts = WriteOptions::format(crate::raw::format_from_name(format)?);
+        opts.compress = crate::raw::compress_from_py(compress)?;
         let sub = self.node_tree(py)?;
         py.detach(|| sub.to_netcdf_with(&path, &opts))
             .map_err(xr_error)
@@ -434,7 +443,7 @@ impl PyDataTree {
 /// Open a netCDF-4/HDF5 file's groups as a `DataTree` (lazily: values are read on demand).
 #[pyfunction]
 #[pyo3(signature = (path, *, mask_and_scale=true, decode_times=true, decode_units=true,
-    decode_coords=None, concat_characters=true, lazy=true))]
+    decode_coords=None, concat_characters=true, lazy=true, limits=None))]
 #[allow(clippy::fn_params_excessive_bools, clippy::too_many_arguments)]
 pub(crate) fn open_datatree(
     py: Python<'_>,
@@ -445,6 +454,7 @@ pub(crate) fn open_datatree(
     decode_coords: Option<&Bound<'_, PyAny>>,
     concat_characters: bool,
     lazy: bool,
+    limits: Option<&Bound<'_, PyAny>>,
 ) -> PyResult<Py<PyDataTree>> {
     let source = crate::native::open_source(path)?;
     let mut opts = open_options(
@@ -458,6 +468,7 @@ pub(crate) fn open_datatree(
     );
     (opts.decode.decode_coords, opts.decode.decode_coords_all) =
         crate::native::coords_option(decode_coords)?;
+    opts.limits = crate::native::limits_from_py(limits)?;
     let opened = py
         .detach(|| match source {
             crate::native::OpenSource::Path(p) => open_datatree_with(&p, &opts),

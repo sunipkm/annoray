@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 import tempfile
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import IO, Any, Literal
 
@@ -53,13 +53,20 @@ def open_dataset(
     drop_variables: str | Sequence[str] | None = None,
     decode_units: bool = True,
     lazy: bool = True,
+    limits: str | Mapping[str, Any] | None = None,
     **kwargs: Any,
 ) -> Dataset:
     """Open a netCDF-3/4, HDF5 file or Zarr store lazily and CF-decode it (xarray's
     ``open_dataset``). ``decode_cf=False`` turns every decoding step off; ``chunks`` and the
     other dask options are accepted and have no effect (data is read lazily, chunk by
     chunk, without dask); ``use_cftime=True`` gives CF dates for standard-calendar time
-    coordinates; ``decode_units`` (annoray) parses ``units`` attributes into units."""
+    coordinates; ``decode_units`` (annoray) parses ``units`` attributes into units.
+    ``limits`` (annoray) holds the file to read limits, for files from untrusted sources:
+    ``"untrusted"``, or a dict of ``max_read_bytes``, ``max_total_bytes``, ``max_elements``,
+    ``max_rank``, ``max_variables`` and ``max_attributes`` (``None`` for no limit; with
+    ``"preset": "untrusted"``, the others override that preset's). The file's metadata is
+    checked before any values are read, and every read after that; a breach is
+    ``ReadLimitError``."""
     _check(engine, kwargs)
     if decode_timedelta is False:
         raise NotImplementedError("decode_timedelta=False")
@@ -77,6 +84,7 @@ def open_dataset(
         decode_coords=decode_coords if isinstance(decode_coords, str) else flag(decode_coords),
         concat_characters=flag(concat_characters),
         lazy=lazy,
+        limits=limits,
     )
     if drop_variables is not None:
         ds = ds.drop_vars(drop_variables, errors="ignore")
@@ -107,13 +115,15 @@ def open_mfdataset(
     parallel: bool = False,
     join: str = "outer",
     lazy: bool = True,
+    limits: str | Mapping[str, Any] | None = None,
     **kwargs: Any,
 ) -> Dataset:
     """Open several files as one dataset (xarray's ``open_mfdataset``): a glob pattern or
     a list of paths, combined by their coordinates (``combine="by_coords"``) or
     concatenated along ``concat_dim`` in the order given (``combine="nested"``).
     ``preprocess`` is applied to each dataset first; ``parallel`` and the dask options are
-    accepted with no effect."""
+    accepted with no effect. ``limits`` holds each file to read limits, as in
+    ``open_dataset``."""
     _check(engine, {k: v for k, v in kwargs.items() if k not in ("data_vars", "coords", "compat")})
     if combine not in ("by_coords", "nested"):
         raise ValueError(f"combine must be 'by_coords' or 'nested', not {combine!r}")
@@ -121,7 +131,7 @@ def open_mfdataset(
         raise ValueError("combine='nested' needs concat_dim")
     if preprocess is None:
         return _open_mfdataset(
-            paths, concat_dim=concat_dim if combine == "nested" else None, lazy=lazy
+            paths, concat_dim=concat_dim if combine == "nested" else None, lazy=lazy, limits=limits
         )
     import glob
 
@@ -131,7 +141,7 @@ def open_mfdataset(
     files = sorted(glob.glob(str(paths))) if isinstance(paths, (str, os.PathLike)) else list(paths)
     if not files:
         raise OSError(f"no files match {paths!r}")
-    parts = [preprocess(open_dataset(f, lazy=lazy)) for f in files]
+    parts = [preprocess(open_dataset(f, lazy=lazy, limits=limits)) for f in files]
     if combine == "nested":
         return combine_nested(parts, concat_dim=concat_dim, join=join)  # pyright: ignore[reportArgumentType]
     return combine_by_coords(parts)

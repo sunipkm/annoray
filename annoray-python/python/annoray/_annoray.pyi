@@ -28,6 +28,11 @@ _InterpMethod: TypeAlias = Literal[
 ]
 _Extrapolate: TypeAlias = Literal["nan", "edge", "extend"] | float | None
 _Path: TypeAlias = str | os.PathLike[str]
+# `to_netcdf(compress=...)`: True (deflate 4), a deflate level, or a dict of compression keys
+# (`compression`, `complevel`, `zlib`, `shuffle`, `blosc_shuffle`) and `min_elements`.
+_Compress: TypeAlias = bool | int | Mapping[str, Any] | None
+# `open_dataset(limits=...)`: "untrusted", or a dict of limits (and "preset": "untrusted").
+_Limits: TypeAlias = str | Mapping[str, Any] | None
 # A path, a file's bytes, or a binary file-like object (read whole, from the start).
 _Source: TypeAlias = _Path | bytes | bytearray | memoryview | IO[bytes]
 _DecodeCoords: TypeAlias = bool | Literal["coordinates", "all"]
@@ -55,6 +60,30 @@ _Reduction: TypeAlias = Literal[
 
 class UnitError(ValueError):
     """Incompatible or unknown units (e.g. adding metres to seconds)."""
+
+class ReadLimitError(ValueError):
+    """A file breaches the read limits it was opened with (`limits=` of `open_dataset`)."""
+
+class SchemaError(ValueError):
+    """A dataset does not match a `Schema`; `problems` lists every way it differs."""
+
+    problems: list[str]
+
+class Schema:
+    """What a dataset must hold: `data_vars` and `coords` map names to dicts of `dims`, `ndim`,
+    `dtype`, `units` (`None`: no unit), `convertible`, `dimension`, `sizes`, `min_sizes`,
+    `attrs` and `optional`; `attrs` maps names to a value, a set of values, or `...`."""
+
+    def __init__(
+        self,
+        data_vars: Mapping[str, Mapping[str, Any]] | None = None,
+        coords: Mapping[str, Mapping[str, Any]] | None = None,
+        attrs: Mapping[str, Any] | None = None,
+        *,
+        closed: bool = False,
+    ) -> None: ...
+    def problems(self, ds: Dataset) -> list[str]: ...
+    def check(self, ds: Dataset) -> None: ...
 
 class Dimension:
     """A physical dimension: exponents of the base quantities (SI and angle)."""
@@ -1070,6 +1099,7 @@ class Dataset(_Reductions):
         mode: Literal["w", "a"] = "w",
         append_dim: str | None = None,
         region: Mapping[str, int | slice] | None = None,
+        compress: _Compress = None,
     ) -> None: ...
     def __add__(self, other: Any) -> Dataset: ...
     def __radd__(self, other: Any) -> Dataset: ...
@@ -1370,7 +1400,9 @@ class DataTree:
     def __ge__(self, other: Any) -> DataTree: ...
     def __eq__(self, other: object) -> DataTree: ...  # type: ignore[override]
     def __ne__(self, other: object) -> DataTree: ...  # type: ignore[override]
-    def to_netcdf(self, path: _Path, format: str = "NETCDF4") -> None: ...
+    def to_netcdf(
+        self, path: _Path, format: str = "NETCDF4", compress: _Compress = None
+    ) -> None: ...
     def to_zarr(
         self,
         store: _Path,
@@ -1444,6 +1476,7 @@ def open_dataset(
     decode_coords: _DecodeCoords = True,
     concat_characters: bool = True,
     lazy: bool = True,
+    limits: _Limits = None,
 ) -> Dataset: ...
 def open_datatree(
     path: _Source,
@@ -1454,9 +1487,14 @@ def open_datatree(
     decode_coords: _DecodeCoords = True,
     concat_characters: bool = True,
     lazy: bool = True,
+    limits: _Limits = None,
 ) -> DataTree: ...
 def open_mfdataset(
-    paths: str | Sequence[_Path], *, concat_dim: str | None = None, lazy: bool = True
+    paths: str | Sequence[_Path],
+    *,
+    concat_dim: str | None = None,
+    lazy: bool = True,
+    limits: _Limits = None,
 ) -> Dataset: ...
 @overload
 def concat(
@@ -1534,6 +1572,9 @@ def combine_by_coords(
 ) -> Dataset: ...
 def set_stream_bytes(bytes: int) -> None: ...
 def stream_bytes() -> int: ...
+def set_intern_cap(cap: int) -> None: ...
+def intern_cap() -> int: ...
+def interned() -> int: ...
 def _check_encoding(var: str, encoding: dict[str, Any], format: str) -> None: ...
 def write(
     path: _Path,
@@ -1541,4 +1582,5 @@ def write(
     attrs: Mapping[str, Any],
     variables: Iterable[Mapping[str, Any]],
     unlimited_dims: Iterable[Hashable],
+    compress: _Compress = None,
 ) -> None: ...

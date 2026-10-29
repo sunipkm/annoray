@@ -89,6 +89,7 @@ mod rename;
 mod repr;
 pub mod resample;
 mod reshape;
+pub mod schema;
 pub use resample::{date_range, date_range_in, date_range_tz};
 mod rolling;
 mod rolling_exp;
@@ -120,7 +121,7 @@ pub use dataarray::{Coords, DataArray, DataArrayBase, DataArrayView, DataArrayVi
 pub use dataset::{Dataset, DatasetBase, DatasetView, DatasetViewMut};
 pub use dt::DtComponent;
 pub use elementwise::{ClipBound, dot};
-pub use encoding::{DatasetEncoding, Encoding};
+pub use encoding::{Compress, DatasetEncoding, Encoding};
 pub use error::{CoreError, IndexError, Result};
 pub use fill::{FillMethod, InterpNaOptions};
 pub use groupby::{BinOptions, DataArrayGroupBy, DatasetGroupBy};
@@ -417,4 +418,22 @@ pub enum Error {
     /// CF decoding and encoding errors.
     #[error(transparent)]
     Cf(#[from] cf::CfError),
+    /// A dataset that does not match a [`Schema`](struct@schema::Schema).
+    #[error(transparent)]
+    Schema(#[from] schema::SchemaError),
+}
+
+impl Error {
+    /// The data-model error inside, however it is wrapped (a read inside CF decoding inside
+    /// I/O, …): for telling a breached [`ReadLimits`](io::ReadLimits) (`CoreError::Limit`)
+    /// from other failures.
+    #[must_use]
+    pub fn core(&self) -> Option<&CoreError> {
+        match self {
+            Self::Core(c)
+            | Self::Io(io::IoError::Core(c))
+            | Self::Cf(cf::CfError::Core(c) | cf::CfError::Io(io::IoError::Core(c))) => Some(c),
+            _ => None,
+        }
+    }
 }

@@ -233,7 +233,7 @@ impl WhereOther {
         if let Ok(q) = o.cast::<PyQuantity>() {
             // A complex quantity takes the general path (an array operand).
             return Ok(match &q.get().inner {
-                crate::units::Q::Real(q) => Some(Self::Quantity(q.clone())),
+                crate::units::Q::Real(q) => Some(Self::Quantity(*q)),
                 crate::units::Q::Complex(_) => None,
             });
         }

@@ -14,5 +14,6 @@ datatree
 functions
 units
 helpers
+schema
 testing
 ```

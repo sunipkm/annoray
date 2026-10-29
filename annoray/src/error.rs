@@ -160,6 +160,16 @@ pub enum CoreError {
     /// Reading lazily loaded data failed.
     #[error("reading data failed: {0}")]
     Read(String),
+    /// A file breaches a read limit ([`ReadLimits`](crate::io::ReadLimits)).
+    #[error("{what}: {found} exceeds the read limit of {limit}")]
+    Limit {
+        /// What was counted (`"values of /group/var"`, `"bytes of one read"`, …).
+        what: String,
+        /// How many there are.
+        found: u64,
+        /// The limit.
+        limit: u64,
+    },
     /// Mutation needs the data in memory: call `load()` first.
     #[error("variable data is not loaded; call load() before modifying it")]
     NotLoaded,

@@ -119,6 +119,7 @@ def to_netcdf(
     format: str = "NETCDF4",
     encoding: Mapping[Hashable, Mapping[str, Any]] | None = None,
     unlimited_dims: Iterable[Hashable] | None = None,
+    compress: bool | int | Mapping[str, Any] | None = None,
 ) -> None:
     """Write ``ds`` to ``path`` as netCDF-4 (default) or netCDF-3.
 
@@ -126,6 +127,8 @@ def to_netcdf(
     file is written by pure-Rust writers with the GIL released. Encodings follow xarray's
     (netCDF4-python) names, taken from each variable's ``.encoding`` and ``encoding``; codecs
     annoray can write: zlib (deflate), zstd, lz4 and blosc_{lz4, lz4hc, zlib, zstd}.
+    ``compress`` compresses every variable without compression of its own, as for
+    ``annoray.Dataset.to_netcdf``.
     """
     encoding = encoding or {}
     for name, given in encoding.items():
@@ -152,4 +155,5 @@ def to_netcdf(
         dict(ds.attrs),
         variables,
         [str(d) for d in unlimited],
+        compress,
     )

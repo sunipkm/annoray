@@ -239,6 +239,15 @@ impl<S: Repr> DataArrayBase<S> {
         self.variable.data()
     }
 
+    /// The values as one slice in row-major order, borrowed when stored that way (see
+    /// [`VariableBase::values_slice`]).
+    ///
+    /// # Errors
+    /// As for [`VariableBase::values_slice`].
+    pub fn values_slice<T: Element>(&self) -> Result<std::borrow::Cow<'_, [T]>> {
+        self.variable.values_slice()
+    }
+
     /// The values as `f64` (xarray's `.astype(float)`): numbers and booleans; NaN stays NaN.
     ///
     /// # Errors

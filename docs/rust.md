@@ -54,6 +54,8 @@ are:
 | `Dataset` | `DatasetView<'a>` | `DatasetViewMut<'a>` |
 
 Selections return views; the `_mut` variants write in place under the borrow checker.
+`data::<T>()` gives an ndarray view in any layout; `values_slice::<T>()` gives the values as
+one row-major slice, borrowed when they are stored that way and copied otherwise.
 `DataArray::put` returns a copy with values replaced, converted into the array's unit and
 element type.
 
@@ -78,6 +80,11 @@ dimensions included, with the differences of complex arrays: conversion scales b
 unit with an offset is `UnitError::ComplexOffset`), and there is no order (`<` does not
 compile). `re`, `im` and `norm` are real quantities in the same unit, `arg` is in radians, and
 a real quantity becomes a complex one with `into()`.
+
+Quantities are `Copy`: the unit is a `UnitId`, a handle to a unit kept once per spelling in a
+process-wide table, so a unit string is parsed once and a handle copies as a pointer. The table
+only grows; `set_intern_cap` bounds it (65,536 units by default), and interning past the cap is
+`UnitError::InternFull`, while plain `Unit` values keep working.
 
 ```rust
 use annoray::num_complex::Complex;
@@ -144,6 +151,114 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 Mixing zones in `concat`, `merge` or alignment is an error. Files hold the zone in a
 `time_zone` attribute. The [time chapter](user-guide/time.md) covers the same model from
 Python.
+
+## Writing files
+
+How a variable is stored (chunks, compression, packing, fill values) is its `Encoding`, read
+from files and used when writing. Two ways set it without copying data:
+
+- `WriteOptions::compress` gives a default for the whole file: a `Compress` applies to every
+  variable whose encoding sets no compression, from 256 values up (`min_elements`), except
+  strings and variable-length variables, which netCDF-C cannot filter. Chunk shapes are
+  netCDF-C's defaults unless an encoding sets them; netCDF-3 ignores the option.
+- `encoding_of_mut` on a view (`ds.view()`) sets one variable's encoding for this write: the
+  view borrows the values and has its own encodings.
+
+```rust
+use annoray::io::{Format, ToNetcdf, WriteOptions};
+use annoray::{Compress, Compression};
+
+let opts = WriteOptions::format(Format::Netcdf4).compress(Compress::deflate(4));
+ds.to_netcdf_with(&path, &opts)?;
+
+let mut view = ds.view();
+let p = view.encoding_of_mut("p")?;
+p.compression = Some(Compression::Lz4);
+p.chunks = Some(vec![25, 50]);
+view.to_netcdf_with(&path, &opts)?;
+```
+
+Zarr stores compress every array with `ZarrOptions::compressor` (Zstandard by default).
+
+## Units from files
+
+A `units` attribute that parses becomes the variable's unit (`Variable::unit`) and is removed
+from its attributes; writing puts it back. One that does not parse stays a plain attribute, the
+variable has no unit, and decoding warns (`Opened::warnings`: `units "…" kept as an attribute:
+…`); the attribute is written back unchanged. `DecodeOptions::decode_units = false` keeps every
+`units` attribute as text.
+
+## Schemas
+
+`annoray::schema::Schema` states what a dataset must hold: its variables and coordinates
+(dimensions, element types, units, sizes, attributes) and attributes. `check` returns a
+`SchemaError` listing every problem found; only metadata is read. Variables not named are
+allowed unless the schema is `closed()`.
+
+```rust
+use annoray::dims::Length;
+use annoray::schema::{Schema, Var};
+
+let schema = Schema::new()
+    .attr_eq("format", "prism-map")
+    .attr_in("version", ["1", "2"])
+    .coord("x", Var::of::<f64>(["x"]).dimension::<Length>())
+    .var("intensity", Var::of::<f32>(["y", "x"]).unit("1"))
+    .optional("mask", Var::of::<bool>(["y", "x"]));
+schema.check(&ds)?;
+```
+
+`#[derive(Schema)]` states the same of a struct whose fields borrow from the dataset:
+`ArrayView`s of the values (their element type and dimensionality checked), `&VariableBase`
+for the unit with the values, attributes (`&str`, `String`, `f64`, `i64`), and `Option`s of
+these for what may be absent. `view` checks the dataset, then borrows; lazy variables are read
+then, and only those named.
+
+```rust
+use annoray::dims::Length;
+use annoray::ndarray::{ArrayView1, ArrayView2};
+
+#[derive(annoray::schema::Schema)]
+#[schema(attr_eq("format", "prism-map"), attr_in("version", "1", "2"))]
+struct MapData<'a> {
+    #[schema(coord, dims = ["x"], dimension = Length)]
+    x: ArrayView1<'a, f64>,
+    #[schema(dims = ["y", "x"], unit = "1")]
+    intensity: ArrayView2<'a, f32>,
+    #[schema(dims = ["y", "x"])]
+    mask: Option<ArrayView2<'a, bool>>,
+    #[schema(attr)]
+    version: &'a str,
+}
+
+let map = MapData::view(&ds)?; // every problem at once, as `annoray::Error::Schema`
+let first: f32 = map.intensity[[0, 0]];
+let schema = MapData::schema(); // the same requirements as a `Schema`
+```
+
+## Files from untrusted sources
+
+`OpenOptions::limits` holds a file to a `ReadLimits`: the most bytes of one read (a slice,
+a whole variable, or one stored chunk), the bytes of values the file declares in all, values
+and dimensions per variable, variables, and attributes per variable or group. The metadata is
+checked before any values are read, and every read after that; a breach is
+`CoreError::Limit` (`Error::core` finds it inside the wrappers). netCDF-4 string, compound
+and variable-length variables are read while opening: one over `max_read_bytes` is skipped
+with a warning instead. `ReadLimits::untrusted()` suits files from users or the network.
+
+```rust
+use annoray::CoreError;
+use annoray::io::{OpenOptions, ReadLimits, open_dataset_with};
+
+let opts = OpenOptions::default().limits(ReadLimits::untrusted().max_total_bytes(64 << 20));
+match open_dataset_with(&path, &opts) {
+    Ok(opened) => { /* … */ }
+    Err(e) if matches!(e.core(), Some(CoreError::Limit { .. })) => { /* refuse the upload */ }
+    Err(e) => return Err(e.into()),
+}
+```
+
+The readers' fuzz targets are in `fuzz/` (`cargo +nightly fuzz run read_bytes`).
 
 ## Errors
 

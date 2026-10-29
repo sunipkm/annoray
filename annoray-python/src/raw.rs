@@ -20,7 +20,9 @@ use pyo3::prelude::*;
 use crate::convert::{attr_from_py, attrs_to_py, io_error, value_error};
 use annoray::io::{Format, RawDataset, WriteOptions, default_backend};
 use annoray::units::{Calendar, CfDate};
-use annoray::{BloscCodec, BloscShuffle, Compression, DType, Dataset, Owned, TypedArray, Variable};
+use annoray::{
+    BloscCodec, BloscShuffle, Compress, Compression, DType, Dataset, Owned, TypedArray, Variable,
+};
 use annoray_pyo3::convert::{into_numpy, numbers_from_numpy};
 use pyo3::types::{PyDict, PyTuple};
 
@@ -771,6 +773,67 @@ pub(crate) fn update_encoding(enc: &mut annoray::Encoding, e: &Bound<'_, PyDict>
     Ok(())
 }
 
+/// The keys of a `compress=` dict: an encoding's compression keys, and `min_elements`.
+const COMPRESS_KEYS: &[&str] = &[
+    "zlib",
+    "complevel",
+    "compression",
+    "shuffle",
+    "blosc_shuffle",
+    "min_elements",
+];
+
+/// `compress=` of `to_netcdf`: `None`/`False` for none, `True` for deflate level 4, a deflate
+/// level, or a dict of an encoding's compression keys (`compression`, `complevel`, `zlib`,
+/// `shuffle`, `blosc_shuffle`) and `min_elements`. Shuffle is on unless the dict turns it off.
+pub(crate) fn compress_from_py(c: Option<&Bound<'_, PyAny>>) -> PyResult<Option<Compress>> {
+    let Some(c) = c.filter(|c| !c.is_none()) else {
+        return Ok(None);
+    };
+    if let Ok(on) = c.cast::<pyo3::types::PyBool>() {
+        return Ok(on.is_true().then(|| Compress::deflate(4)));
+    }
+    if let Ok(level) = c.extract::<i64>() {
+        return match u8::try_from(level) {
+            Ok(l @ 1..=9) => Ok(Some(Compress::deflate(l))),
+            _ => Err(value_error(format!(
+                "compress: a deflate level is 1 to 9, not {level}"
+            ))),
+        };
+    }
+    let d = c.cast::<PyDict>().map_err(|_| {
+        pyo3::exceptions::PyTypeError::new_err(
+            "compress must be True, a deflate level (1-9) or a dict of compression keys",
+        )
+    })?;
+    for (k, _) in d.iter() {
+        let k: String = k.extract()?;
+        if !COMPRESS_KEYS.contains(&k.as_str()) {
+            return Err(value_error(format!(
+                "compress: unexpected key {k:?} (expected one of {COMPRESS_KEYS:?})"
+            )));
+        }
+    }
+    let mut enc = annoray::Encoding::default();
+    update_encoding(&mut enc, d)?;
+    let mut out = match (enc.compression, enc.deflate) {
+        (Some(codec), _) => Compress::codec(codec),
+        (None, Some(level)) => Compress::deflate(level),
+        (None, None) => {
+            return Err(value_error(
+                "compress: name a codec (compression=\"zstd\", …) or zlib=True",
+            ));
+        }
+    };
+    if d.contains("shuffle")? {
+        out = out.shuffle(enc.shuffle);
+    }
+    if let Some(n) = d.get_item("min_elements")? {
+        out = out.min_elements(n.extract()?);
+    }
+    Ok(Some(out))
+}
+
 pub(crate) fn format_from_name(name: &str) -> PyResult<Format> {
     Ok(match name.to_ascii_uppercase().as_str() {
         "NETCDF4" => Format::Netcdf4,
@@ -800,7 +863,7 @@ pub(crate) fn check_encoding_py(
 }
 
 #[pyfunction]
-#[pyo3(signature = (path, format, attrs, variables, unlimited_dims))]
+#[pyo3(signature = (path, format, attrs, variables, unlimited_dims, compress=None))]
 pub(crate) fn write(
     py: Python<'_>,
     path: PathBuf,
@@ -808,6 +871,7 @@ pub(crate) fn write(
     attrs: &Bound<'_, PyDict>,
     variables: Vec<Bound<'_, PyDict>>,
     unlimited_dims: Vec<String>,
+    compress: Option<&Bound<'_, PyAny>>,
 ) -> PyResult<()> {
     let mut ds = Dataset::new();
     for (k, v) in attrs.iter() {
@@ -835,7 +899,8 @@ pub(crate) fn write(
         }
     }
     ds.encoding_mut().unlimited_dims = unlimited_dims.into_iter().map(Into::into).collect();
-    let opts = WriteOptions::format(format_from_name(format)?);
+    let mut opts = WriteOptions::format(format_from_name(format)?);
+    opts.compress = compress_from_py(compress)?;
     py.detach(|| annoray::io::to_netcdf_with_backend(default_backend(), &ds, &path, &opts))
         .map_err(|e| io_error(format!("{}: {e}", path.display())))
 }

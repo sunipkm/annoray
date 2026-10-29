@@ -1096,6 +1096,7 @@ impl crate::LazySource for ConvertSource {
     }
 }
 
+#[cfg(feature = "netcdf4")]
 /// Unit conversion in one pass (on several threads for large arrays).
 #[allow(clippy::cast_possible_truncation)] // f32 data stays f32
 /// `v`'s values converted to `unit`, as an owned variable with `v`'s attributes and encoding

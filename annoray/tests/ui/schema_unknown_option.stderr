@@ -1,0 +1,5 @@
+error: unknown schema option (expected coord, attr, name, dims, unit, convertible, dimension or no_unit)
+ --> tests/ui/schema_unknown_option.rs:5:28
+  |
+5 |     #[schema(dims = ["x"], units = "m")]
+  |                            ^^^^^

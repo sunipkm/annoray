@@ -47,10 +47,7 @@ fn bad(message: impl Into<String>) -> IoError {
 /// Whether `path` is a Zarr store (a directory with v2 or v3 root metadata).
 #[must_use]
 pub fn is_zarr(path: &Path) -> bool {
-    path.is_dir()
-        && ["zarr.json", ".zgroup", ".zarray"]
-            .iter()
-            .any(|f| path.join(f).is_file())
+    super::is_zarr(path)
 }
 
 // ----- attributes -----
@@ -61,6 +58,14 @@ fn attr_from_json(v: &Value) -> Option<AttrValue> {
             .map(|i| AttrValue::I64(vec![i]))
             .or_else(|| n.as_u64().map(|u| AttrValue::U64(vec![u])))
             .or_else(|| n.as_f64().map(|f| AttrValue::F64(vec![f])))
+    };
+    if let Some(f) = annoray_zarr::special_float(v) {
+        return Some(AttrValue::F64(vec![f]));
+    }
+    // A list of numbers with NaN or infinities (bare, as zarr-python writes them, or quoted, as
+    // annoray wrote them before).
+    let special = |x: &Value| {
+        annoray_zarr::special_float(x).or_else(|| x.as_str().filter(|s| is_special(s)).map(special))
     };
     Some(match v {
         Value::String(s) => AttrValue::Str(s.clone()),
@@ -75,18 +80,15 @@ fn attr_from_json(v: &Value) -> Option<AttrValue> {
         Value::Array(items) if items.iter().all(|x| x.as_i64().is_some()) => {
             AttrValue::I64(items.iter().filter_map(Value::as_i64).collect())
         }
-        Value::Array(items)
-            if items
-                .iter()
-                .all(|x| x.is_number() || x.as_str().is_some_and(is_special)) =>
-        {
+        // Integers past `i64::MAX` (unsigned 64-bit values), exactly.
+        Value::Array(items) if items.iter().all(|x| x.as_u64().is_some()) => {
+            AttrValue::U64(items.iter().filter_map(Value::as_u64).collect())
+        }
+        Value::Array(items) if items.iter().all(|x| x.is_number() || special(x).is_some()) => {
             AttrValue::F64(
                 items
                     .iter()
-                    .map(|x| {
-                        x.as_f64()
-                            .unwrap_or_else(|| special(x.as_str().unwrap_or("")))
-                    })
+                    .map(|x| x.as_f64().or_else(|| special(x)).unwrap_or(f64::NAN))
                     .collect(),
             )
         }
@@ -109,15 +111,8 @@ fn special(s: &str) -> f64 {
 }
 
 fn attr_to_json(a: &AttrValue) -> Value {
-    fn f(x: f64) -> Value {
-        if x.is_nan() {
-            Value::String("NaN".into())
-        } else if x.is_infinite() {
-            Value::String(if x > 0.0 { "Infinity" } else { "-Infinity" }.into())
-        } else {
-            Number::from_f64(x).map_or(Value::Null, Value::Number)
-        }
-    }
+    // NaN and the infinities as Python's bare tokens, as zarr-python writes them.
+    let f = annoray_zarr::float_value;
     fn list<T: Into<Value> + Clone>(v: &[T]) -> Value {
         match v {
             [one] => one.clone().into(),

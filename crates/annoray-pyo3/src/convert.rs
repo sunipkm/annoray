@@ -16,7 +16,8 @@ fn value_error(e: impl std::fmt::Display) -> PyErr {
 // ----- attributes -----
 
 /// An attribute as Python: a `str`, a list of `str`, or numpy (a scalar for one value, as
-/// netCDF4-python gives).
+/// netCDF4-python gives). A string array of one element is a plain `str`, like a single
+/// number is a scalar, so `['Hα']` and `'Hα'` read the same; two or more strings are a list.
 ///
 /// # Errors
 /// `ValueError` for an attribute of a type annoray adds later (the type is non-exhaustive).
@@ -36,7 +37,11 @@ pub fn attr_to_py<'py>(py: Python<'py>, a: &AttrValue) -> PyResult<Bound<'py, Py
     }
     Ok(match a {
         AttrValue::Str(s) => PyString::new(py, s).into_any(),
-        AttrValue::Strs(v) => PyList::new(py, v)?.into_any(),
+        // netCDF4-python and xarray give one string for a one-element NC_STRING array.
+        AttrValue::Strs(v) => match v.as_slice() {
+            [s] => PyString::new(py, s).into_any(),
+            _ => PyList::new(py, v)?.into_any(),
+        },
         AttrValue::I8(v) => num!(v),
         AttrValue::I16(v) => num!(v),
         AttrValue::I32(v) => num!(v),
@@ -65,7 +70,16 @@ pub fn attr_from_py(v: &Bound<'_, PyAny>) -> PyResult<AttrValue> {
             String::from_utf8_lossy(b.as_bytes()).into_owned(),
         ));
     }
-    if let Ok(v) = v.extract::<Vec<String>>() {
+    // A sequence of `str`; a numpy array only of text (an empty numeric array would extract
+    // as an empty list of strings, losing its type).
+    let numeric_array = match v.getattr("dtype") {
+        Ok(d) => !matches!(
+            d.getattr("kind")?.extract::<String>()?.as_str(),
+            "U" | "S" | "O"
+        ),
+        Err(_) => false,
+    };
+    if !numeric_array && let Ok(v) = v.extract::<Vec<String>>() {
         return Ok(AttrValue::Strs(v));
     }
     // numpy scalars and arrays (and Python numbers, via numpy).

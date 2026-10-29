@@ -384,8 +384,8 @@ impl Q {
     /// As a complex quantity (a real one with no imaginary part).
     fn widened(&self) -> ComplexQuantity {
         match self {
-            Self::Real(q) => q.clone().into(),
-            Self::Complex(q) => q.clone(),
+            Self::Real(q) => (*q).into(),
+            Self::Complex(q) => *q,
         }
     }
 
@@ -558,7 +558,7 @@ impl PyQuantity {
     #[getter]
     fn real(&self) -> Self {
         match &self.inner {
-            Q::Real(q) => Self::of(Q::Real(q.clone())),
+            Q::Real(q) => Self::of(Q::Real(*q)),
             Q::Complex(q) => Self::of(Q::Real(q.re().dynamic())),
         }
     }
@@ -787,4 +787,25 @@ impl PyQuantity {
             Q::Complex(q) => Self::new_complex(q.value(), unit),
         }
     }
+}
+
+/// Set the cap on interned units (default 65,536): the units quantities hold are kept once per
+/// spelling in a process-wide table that only grows, and past the cap a quantity in a new unit
+/// is a `UnitError`. Units already interned stay; applications that read untrusted files may
+/// lower it.
+#[pyfunction]
+pub(crate) fn set_intern_cap(cap: usize) {
+    annoray::units::set_intern_cap(cap);
+}
+
+/// The cap on interned units.
+#[pyfunction]
+pub(crate) fn intern_cap() -> usize {
+    annoray::units::intern_cap()
+}
+
+/// The number of units interned so far.
+#[pyfunction]
+pub(crate) fn interned() -> usize {
+    annoray::units::interned()
 }

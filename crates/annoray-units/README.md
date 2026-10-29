@@ -27,6 +27,9 @@ Runtime and compile-time physical units with exact scales; the units layer of
 - **Complex quantities:** `Quantity<D, Complex<f64>>` holds a complex number under the same
   rules: conversion scales both parts (units with an offset are refused), and complex quantities
   have no order.
+- **Interned units:** `UnitId`, a `Copy` handle to a unit kept once per spelling in a
+  process-wide table (capped, 65,536 entries by default; `set_intern_cap`). Quantities hold one,
+  so they are `Copy`; a unit string seen before is looked up, not parsed again.
 
 ```rust
 use annoray_units::{Unit, UnitPolicy};

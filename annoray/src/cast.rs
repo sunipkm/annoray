@@ -48,7 +48,7 @@ impl std::fmt::Display for Wide {
 /// A target element type of [`astype`](VariableBase::astype).
 trait CastTo: Element + Copy {
     /// The value as `Self`, or why it has none.
-    fn cast(v: Wide) -> std::result::Result<Self, &'static str>;
+    fn from_wide(v: Wide) -> std::result::Result<Self, &'static str>;
 }
 
 /// A real value: the real part of a complex one whose imaginary part is zero.
@@ -81,7 +81,7 @@ fn trunc_int(x: f64) -> std::result::Result<i128, &'static str> {
 macro_rules! cast_int {
     ($($t:ty),*) => {$(
         impl CastTo for $t {
-            fn cast(v: Wide) -> std::result::Result<Self, &'static str> {
+            fn from_wide(v: Wide) -> std::result::Result<Self, &'static str> {
                 let i = match real(v)? {
                     Wide::Int(i) => i,
                     Wide::Float(x) | Wide::Complex(x, _) => trunc_int(x)?,
@@ -95,7 +95,7 @@ cast_int!(i8, i16, i32, i64, u8, u16, u32, u64);
 
 impl CastTo for f64 {
     #[allow(clippy::cast_precision_loss)] // rounds to nearest, as numpy
-    fn cast(v: Wide) -> std::result::Result<Self, &'static str> {
+    fn from_wide(v: Wide) -> std::result::Result<Self, &'static str> {
         Ok(match real(v)? {
             Wide::Int(i) => i as f64,
             Wide::Float(x) | Wide::Complex(x, _) => x,
@@ -105,7 +105,7 @@ impl CastTo for f64 {
 
 impl CastTo for f32 {
     #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)] // range checked
-    fn cast(v: Wide) -> std::result::Result<Self, &'static str> {
+    fn from_wide(v: Wide) -> std::result::Result<Self, &'static str> {
         let x = match real(v)? {
             Wide::Int(i) => return Ok(i as f32),
             Wide::Float(x) | Wide::Complex(x, _) => x,
@@ -118,7 +118,7 @@ impl CastTo for f32 {
 }
 
 impl CastTo for bool {
-    fn cast(v: Wide) -> std::result::Result<Self, &'static str> {
+    fn from_wide(v: Wide) -> std::result::Result<Self, &'static str> {
         Ok(match v {
             Wide::Int(i) => i != 0,
             Wide::Float(x) => x != 0.0,
@@ -138,18 +138,18 @@ fn parts(v: Wide) -> (f64, f64) {
 }
 
 impl CastTo for Complex<f64> {
-    fn cast(v: Wide) -> std::result::Result<Self, &'static str> {
+    fn from_wide(v: Wide) -> std::result::Result<Self, &'static str> {
         let (re, im) = parts(v);
         Ok(Complex::new(re, im))
     }
 }
 
 impl CastTo for Complex<f32> {
-    fn cast(v: Wide) -> std::result::Result<Self, &'static str> {
+    fn from_wide(v: Wide) -> std::result::Result<Self, &'static str> {
         let (re, im) = parts(v);
         Ok(Complex::new(
-            f32::cast(Wide::Float(re))?,
-            f32::cast(Wide::Float(im))?,
+            f32::from_wide(Wide::Float(re))?,
+            f32::from_wide(Wide::Float(im))?,
         ))
     }
 }
@@ -190,7 +190,7 @@ fn cast_as<T: CastTo>(t: &TypedArray<View<'_>>) -> Result<TypedArray<Owned>> {
     let values = widened(t).ok_or_else(unsupported)?;
     let mut out = Vec::with_capacity(t.len());
     for v in values {
-        out.push(T::cast(v).map_err(|reason| CoreError::Cast {
+        out.push(T::from_wide(v).map_err(|reason| CoreError::Cast {
             value: v.to_string(),
             dtype: T::DTYPE,
             reason,

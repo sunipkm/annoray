@@ -1,0 +1,39 @@
+error[E0277]: `Vec<f64>` cannot be a variable field of a schema struct
+ --> tests/ui/schema_wrong_field_type.rs:3:13
+  |
+3 |     values: Vec<f64>,
+  |             ^^^ not an `ArrayView`, a `&VariableBase` or an `Option` of one
+  |
+  = help: the trait `FieldSpec` is not implemented for `Vec<f64>`
+  = note: an attribute field is marked `#[schema(attr)]`: `&str`, `String`, `f64`, `i64`, `&AttrValue` or an `Option` of one
+help: the following other types implement trait `FieldSpec`
+ --> src/schema.rs
+  |
+  | impl<T: Element, D: ndarray::Dimension> FieldSpec for ArrayView<'_, T, D> {
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `ArrayBase<ViewRepr<&T>, D>`
+...
+  | impl<S: Repr> FieldSpec for &VariableBase<S> {
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `&VariableBase<S>`
+...
+  | impl<F: FieldSpec> FieldSpec for Option<F> {
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `Option<F>`
+
+error[E0277]: `Vec<f64>` cannot be a variable field of a schema struct
+ --> tests/ui/schema_wrong_field_type.rs:3:13
+  |
+3 |     values: Vec<f64>,
+  |             ^^^^^^^^ not an `ArrayView`, a `&VariableBase` or an `Option` of one
+  |
+  = help: the trait `FieldSpec` is not implemented for `Vec<f64>`
+  = note: an attribute field is marked `#[schema(attr)]`: `&str`, `String`, `f64`, `i64`, `&AttrValue` or an `Option` of one
+help: the following other types implement trait `FieldSpec`
+ --> src/schema.rs
+  |
+  | impl<T: Element, D: ndarray::Dimension> FieldSpec for ArrayView<'_, T, D> {
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `ArrayBase<ViewRepr<&T>, D>`
+...
+  | impl<S: Repr> FieldSpec for &VariableBase<S> {
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `&VariableBase<S>`
+...
+  | impl<F: FieldSpec> FieldSpec for Option<F> {
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `Option<F>`

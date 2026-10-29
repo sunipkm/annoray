@@ -107,6 +107,14 @@ pub enum UnitError {
         /// `"ambiguous"` or `"skipped"`.
         reason: &'static str,
     },
+    /// The table of interned units ([`UnitId`](crate::UnitId)) is full.
+    #[error(
+        "the table of interned units is full ({cap} units); raise it with set_intern_cap, or use Unit values"
+    )]
+    InternFull {
+        /// The cap reached ([`intern_cap`](crate::intern_cap)).
+        cap: usize,
+    },
     /// An encoded date is not a whole number of time steps from the reference.
     #[error("{date} is not a whole number of {step} from the reference date")]
     NotWholeSteps {

@@ -65,6 +65,23 @@ A file's CF `units` attribute becomes the unit of the variable it belongs to, an
 `to_netcdf` writes the unit back as the attribute. Units are therefore never stale: there is
 no attribute that can disagree with the data after a conversion.
 
+A `units` attribute that does not parse (a typo, or a spelling outside UDUNITS-2 and CF, such
+as `"counts per detector pixel"`), in a file or given to a constructor, is kept as a plain
+attribute, with a warning naming the reason. The variable then has no unit: conversions and
+unit checks refuse it instead of guessing, and the attribute is written back unchanged.
+`open_dataset(decode_units=False)` keeps every `units` attribute as text, without warnings, as
+xarray does.
+
+```{code-cell} python
+import warnings
+
+with warnings.catch_warnings(record=True) as caught:
+    warnings.simplefilter("always")
+    odd = ar.DataArray([1.0, 2.0], dims="x", attrs={"units": "counts per detector pixel"})
+print(odd.units, odd.attrs["units"])
+print(caught[0].message)
+```
+
 ## Quantities
 
 ```{code-cell} python
@@ -78,6 +95,10 @@ print(ar.Quantity(1, "km") == ar.Quantity(1000, "m"), ar.Quantity(1, "km") > ar.
 A quantity is also made by multiplying a number by a unit (`2.5 * ar.Unit("km")`), and is
 accepted wherever a value with a unit is expected: as an operand of a data array, as a label
 in `sel`, as the value of `put`, `where` and `fillna`.
+
+A quantity's unit is interned: each spelling is parsed once and kept in a process-wide table,
+so quantities are cheap to make and copy. The table is capped (65,536 units by default,
+{func}`~annoray.set_intern_cap`); past the cap, a quantity in a new unit is a `UnitError`.
 
 ### Complex quantities
 

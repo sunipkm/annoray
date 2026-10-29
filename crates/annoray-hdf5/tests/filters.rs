@@ -180,3 +180,32 @@ fn big_chunks() {
     assert!(checked >= 20);
     let _ = std::fs::remove_dir_all(dir);
 }
+
+/// A chunk is decoded whole for any read touching it, so it is held to the load limit: a
+/// small compressed file cannot expand one value's read into a large allocation.
+#[test]
+fn a_chunk_over_the_load_limit_is_refused() {
+    use annoray_hdf5::{WDataset, WGroup, WNode};
+    // 2 MiB of zeros in one chunk, which deflate stores in a few kilobytes.
+    let mut d = WDataset::new(Array::F64(ndarray::ArrayD::zeros(ndarray::IxDyn(&[
+        512, 512,
+    ]))));
+    d.chunks = Some(vec![512, 512]);
+    d.deflate = Some(9);
+    let mut g = WGroup::default();
+    g.members.push(("zeros".into(), WNode::Dataset(d)));
+    let bytes = annoray_hdf5::write_file(&g).unwrap();
+    assert!(bytes.len() < 64 << 10, "{}", bytes.len());
+    let one = |limit: usize| {
+        let f = File::from_bytes(bytes.clone())
+            .unwrap()
+            .with_load_limit(limit);
+        match f.root().unwrap().get("zeros").unwrap() {
+            Node::Dataset(d) => d.read_slice(&[0, 0], &[1, 1]),
+            _ => panic!("not a dataset"),
+        }
+    };
+    let err = one(1 << 20).unwrap_err().to_string();
+    assert!(err.contains("chunk too large to load"), "{err}");
+    assert!(one(4 << 20).is_ok());
+}

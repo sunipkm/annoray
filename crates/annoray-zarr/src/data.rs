@@ -454,6 +454,9 @@ impl Fill {
 /// A float fill value: a number, `"NaN"`, `"Infinity"`, `"-Infinity"` or a hexadecimal bit
 /// pattern (of an `f32` when `narrow`).
 fn float_fill(v: &Value, narrow: bool) -> Option<f64> {
+    if let Some(f) = crate::json::special_float(v) {
+        return Some(f);
+    }
     Some(match v {
         Value::Number(n) => n.as_f64()?,
         Value::String(s) => match s.as_str() {

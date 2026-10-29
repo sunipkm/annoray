@@ -63,12 +63,21 @@ benchmarks in [performance](https://github.com/sunipkm/annoray/blob/main/docs/pe
 
 | Feature | Default | |
 |---|---|---|
+| `netcdf4` | yes | netCDF-4 and HDF5 files: read, written, and written in place (`NetcdfWriter`). Without it, netCDF-3 alone. |
+| `zarr` | yes | Zarr v2 and v3 directory stores. |
 | `rayon` | yes | Data-parallel reductions, arithmetic, rolling windows, quantiles, CF decoding, and HDF5/Zarr chunk (de)compression. |
 | `zstd`, `lz4` | yes | Zstandard and LZ4 chunk codecs (HDF5 filters 32015/32004, Zarr `zstd`/`lz4`, inside Blosc), pure Rust. |
 | `uom` | no | Arrays and `sel` labels of uom SI quantities: `to_typed`, `from_typed` (values rescaled into coherent SI). |
 | `whippyunits` | no | Arrays and `sel` labels of whippyunits quantities; `view_typed` reinterprets data in exactly the quantity's unit without copying. |
 | `netcdf-c` | no | netCDF-C/HDF5 C libraries as an alternative backend (static build; requires cmake). |
 | `tzdb-bundle` | no | The IANA time zone database built in, for systems without one (always on Windows); otherwise time zones come from the system's database. |
+
+A format left out is an error that names its feature. Format support is what sets the size of
+a program: `open_dataset` detects formats at run time, so it links every reader built in, and
+writing picks its writer from a run-time format. A program that opens and writes netCDF-3
+files is about 0.9 MB with `default-features = false` and 1.3 MB with `netcdf4` and `zarr`
+(release, LTO, stripped, `opt-level = "z"`; macOS arm64). Code a program never calls (a writer,
+a codec) is left out by the linker either way.
 
 [`annoray-units`](https://docs.rs/annoray-units) and [`annoray-hdf5`](https://docs.rs/annoray-hdf5)
 are standalone crates, re-exported as `annoray::units` and `annoray::hdf5`;

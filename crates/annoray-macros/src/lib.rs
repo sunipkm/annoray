@@ -7,6 +7,54 @@ use quote::{quote, quote_spanned};
 use syn::spanned::Spanned;
 use syn::{Error, Expr, Ident};
 
+mod schema;
+
+/// A struct of typed views of a dataset: `Name::schema()` says what the dataset must hold, and
+/// `Name::view(&ds)` checks it (reporting every problem) and borrows the fields. Use it as
+/// `annoray::schema::Schema`.
+///
+/// Fields are variables (data variables, or coordinates with `coord`) or, with `attr`,
+/// dataset attributes. A variable field is an `ArrayView` of its element type and
+/// dimensionality (`ArrayView2<'a, f32>`), a `&'a VariableBase<S>` for the unit with the
+/// values, or `Option` of either for a variable that may be absent; an attribute field is
+/// `&'a str`, `String`, `f64`, `i64`, `&'a AttrValue`, or `Option` of one.
+///
+/// | Field option | Means |
+/// |---|---|
+/// | `coord` | a coordinate (default: a data variable) |
+/// | `attr` | a dataset attribute |
+/// | `name = "…"` | the variable's or attribute's name (default: the field's) |
+/// | `dims = ["y", "x"]` | its dimensions, in order |
+/// | `unit = "…"` | its unit (equal as units compare) |
+/// | `convertible = "…"` | a unit convertible to this one |
+/// | `dimension = Length` | a unit of this dimension (`annoray::dims`) |
+/// | `no_unit` | no unit |
+///
+/// On the struct: `attr("name")`, `attr_eq("name", value)` and `attr_in("name", value, …)`
+/// for dataset attributes, and `closed` to allow no variables but the fields'.
+///
+/// ```ignore
+/// #[derive(annoray::schema::Schema)]
+/// #[schema(attr_eq("format", "prism-map"))]
+/// struct MapData<'a> {
+///     #[schema(coord, dims = ["x"], dimension = Length)]
+///     x: ArrayView1<'a, f64>,
+///     #[schema(dims = ["y", "x"], unit = "1")]
+///     intensity: ArrayView2<'a, f32>,
+///     mask: Option<ArrayView2<'a, bool>>,
+///     #[schema(attr)]
+///     version: &'a str,
+/// }
+/// let map = MapData::view(&ds)?;
+/// ```
+#[proc_macro_derive(Schema, attributes(schema))]
+pub fn derive_schema(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let input = syn::parse_macro_input!(input as syn::DeriveInput);
+    schema::expand(&input)
+        .unwrap_or_else(Error::into_compile_error)
+        .into()
+}
+
 /// Select by position or by dimension name with Python-style slices, returning a view.
 ///
 /// ```ignore

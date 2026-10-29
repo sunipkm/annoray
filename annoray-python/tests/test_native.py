@@ -510,6 +510,170 @@ def test_write_encoding(big_file, tmp_path):
         ds.to_netcdf(tmp_path / "no.nc", encoding={"nope": {"zlib": True}})
 
 
+def test_compress_on_write(tmp_path):
+    rng = np.random.default_rng(1)
+    ds = ar.Dataset(
+        {
+            "big": (("y", "x"), rng.normal(size=(40, 30))),
+            "own": (("y", "x"), rng.normal(size=(40, 30))),
+            "small": ("x", np.arange(30.0)),
+            "text": ("n", np.array([f"s{i}" for i in range(300)], dtype=object)),
+        }
+    )
+
+    def enc(path):
+        back = ar.open_dataset(path)
+        return {k: back[k].encoding for k in back.data_vars}
+
+    # True: deflate 4 with shuffle; a variable's own encoding wins; small ones and strings stay.
+    ds.to_netcdf(tmp_path / "a.nc", compress=True, encoding={"own": {"zlib": True, "complevel": 9}})
+    e = enc(tmp_path / "a.nc")
+    assert e["big"]["zlib"] and e["big"]["complevel"] == 4 and e["big"]["shuffle"]
+    assert e["own"]["complevel"] == 9
+    assert not e["small"].get("zlib") and not e["text"].get("zlib")
+    assert "zlib" not in ds["big"].encoding  # the dataset is unchanged
+    xr.testing.assert_equal(ar.open_dataset(tmp_path / "a.nc").to_xarray(), ds.to_xarray())
+
+    # A level; a codec, without shuffle, from 30 values.
+    ds.to_netcdf(tmp_path / "b.nc", compress=7)
+    assert enc(tmp_path / "b.nc")["big"]["complevel"] == 7
+    c = {"compression": "zstd", "complevel": 3, "shuffle": False, "min_elements": 30}
+    ds.to_netcdf(tmp_path / "c.nc", compress=c)
+    e = enc(tmp_path / "c.nc")
+    assert e["big"]["compression"] == "zstd" and not e["big"].get("shuffle")
+    assert e["small"]["compression"] == "zstd"
+
+    # Trees, appending (the file is rewritten), and xarray datasets.
+    tree = ar.DataTree.from_dict({"/": ds, "/g": ds})
+    tree.to_netcdf(tmp_path / "t.nc", compress=2)
+    back = ar.open_datatree(tmp_path / "t.nc")
+    assert back["g"].to_dataset()["big"].encoding["complevel"] == 2
+    ds[["small"]].to_netcdf(tmp_path / "m.nc")
+    ds[["big"]].to_netcdf(tmp_path / "m.nc", mode="a", compress=True)
+    assert enc(tmp_path / "m.nc")["big"]["zlib"]
+    ar.to_netcdf(ds.to_xarray(), tmp_path / "x.nc", compress=True)
+    assert enc(tmp_path / "x.nc")["big"]["zlib"]
+
+    for bad, err in [
+        (0, ValueError),
+        (10, ValueError),
+        ({"level": 4}, ValueError),
+        ({"shuffle": True}, ValueError),
+        ({"compression": "bzip2"}, ValueError),
+        ("zstd", TypeError),
+    ]:
+        with pytest.raises(err):
+            ds.to_netcdf(tmp_path / "bad.nc", compress=bad)
+    with pytest.raises(ValueError, match="compress cannot be given"):
+        ds.to_netcdf(tmp_path / "m.nc", mode="a", append_dim="x", compress=True)
+
+
+def test_read_limits(tmp_path):
+    ds = ar.Dataset(
+        {
+            "t": (("y", "x"), np.arange(10_000.0).reshape(100, 100)),
+            "c": (("p", "q", "r"), np.ones((2, 3, 4))),
+        }
+    )
+    path = tmp_path / "l.nc"
+    ds.to_netcdf(path, encoding={"t": {"chunksizes": (10, 10)}})
+
+    # Metadata is checked when opening, lazily or not.
+    for lazy in [True, False]:
+        with pytest.raises(
+            ar.ReadLimitError, match="dimensions of /c: 3 exceeds the read limit of 2"
+        ):
+            ar.open_dataset(path, limits={"max_rank": 2}, lazy=lazy)
+        with pytest.raises(ar.ReadLimitError, match="bytes of values in the file"):
+            ar.open_dataset(path, limits={"max_total_bytes": 1000}, lazy=lazy)
+    assert ar.open_dataset(path, limits="untrusted")["t"].shape == (100, 100)
+    assert isinstance(ar.ReadLimitError("x"), ValueError)
+
+    # Reads: a slice within the limit reads, the whole variable does not.
+    opened = ar.open_dataset(path, limits={"max_read_bytes": 8_000})
+    assert float(opened["t"].isel(y=3, x=4)) == 304.0
+    with pytest.raises(ar.ReadLimitError, match="bytes of one read: 80000"):
+        opened["t"].load()
+    with pytest.raises(ar.ReadLimitError, match="bytes of one chunk of /t"):
+        ar.open_dataset(path, limits={"max_read_bytes": 799})
+    # A preset with one limit changed, or removed.
+    lim = {"preset": "untrusted", "max_rank": 2}
+    with pytest.raises(ar.ReadLimitError):
+        ar.open_dataset(path, limits=lim)
+    assert ar.open_dataset(path, limits={"preset": "untrusted", "max_rank": None}) is not None
+
+    # Bytes, trees and several files.
+    with pytest.raises(ar.ReadLimitError):
+        ar.open_dataset(path.read_bytes(), limits={"max_rank": 2})
+    with pytest.raises(ar.ReadLimitError):
+        ar.open_datatree(path, limits={"max_rank": 2})
+    with pytest.raises(ar.ReadLimitError):
+        ar.open_mfdataset([path], limits={"max_rank": 2})
+    for bad, err in [("trusting", ValueError), ({"max_size": 1}, ValueError), (3, TypeError)]:
+        with pytest.raises(err):
+            ar.open_dataset(path, limits=bad)
+
+
+def test_schema(tmp_path):
+    ds = ar.Dataset(
+        {"intensity": (("y", "x"), np.zeros((3, 4), "f4"), {"units": "1", "long_name": "I"})},
+        coords={"x": ("x", np.arange(4.0), {"units": "km"}), "y": ("y", np.arange(3.0))},
+        attrs={"format": "prism-map", "version": "2"},
+    )
+    schema = ar.Schema(
+        data_vars={
+            "intensity": {
+                "dims": ["y", "x"],
+                "dtype": np.float32,
+                "units": "1",
+                "attrs": {"long_name": ...},
+            },
+            "mask": {"dims": ["y", "x"], "dtype": "bool", "optional": True},
+        },
+        coords={"x": {"dims": "x", "dimension": "m", "sizes": {"x": 4}}, "y": {"units": None}},
+        attrs={"format": "prism-map", "version": {"1", "2"}},
+    )
+    schema.check(ds)
+    assert schema.problems(ds) == []
+    assert "intensity" in repr(schema)
+
+    wrong = ar.Schema(
+        data_vars={
+            "intensity": {"dtype": "float64", "convertible": "s", "min_sizes": {"x": 10}},
+            "counts": {},
+        },
+        coords={"x": {"dimension": ar.Quantity(1, "s").dimension}},
+        attrs={"format": "prism-spectrum", "author": ...},
+        closed=True,
+    )
+    with pytest.raises(ar.SchemaError) as e:
+        wrong.check(ds)
+    assert e.value.problems == [
+        'attribute format: "prism-map", expected "prism-spectrum"',
+        "attribute author: missing",
+        "x: unit km is not of dimension s",
+        "intensity: element type float32, expected float64",
+        "intensity: unit 1, expected a unit convertible to s",
+        "intensity: dimension x of length 4, expected at least 10",
+        "counts: missing",
+        "y: not in the schema",
+    ]
+    assert isinstance(e.value, ValueError)
+    assert str(e.value).startswith("the dataset does not match the schema:")
+    # A lazy dataset is checked from its metadata.
+    path = tmp_path / "s.nc"
+    ds.to_netcdf(path)
+    assert schema.problems(ar.open_dataset(path)) == []
+    for bad, err in [
+        ({"data_vars": {"v": {"unit": "m"}}}, ValueError),
+        ({"data_vars": {"v": {"units": "m", "dimension": "m"}}}, ValueError),
+        ({"data_vars": {"v": {"dtype": "float128x"}}}, ValueError),
+        ({"data_vars": {"v": "m"}}, TypeError),
+    ]:
+        with pytest.raises(err):
+            ar.Schema(**bad)
+
+
 # ----- DataTree -----
 
 
@@ -565,6 +729,25 @@ def test_units_are_parsed_once_and_compose():
     assert ar.Unit("%").dimensionless and not km.dimensionless
     with pytest.raises(ar.UnitError):
         ar.Unit("not a unit!!")
+
+
+def test_intern_cap():
+    # Each spelling is interned once; past the cap only new units fail.
+    ar.Quantity(1.0, "km")
+    n = ar.interned()
+    ar.Quantity(2.0, "km")
+    assert ar.interned() == n
+    old = ar.intern_cap()
+    ar.set_intern_cap(n)
+    try:
+        assert ar.intern_cap() == n
+        assert ar.Quantity(3.0, "km").to("km").magnitude == 3.0
+        with pytest.raises(ar.UnitError, match="interned units is full"):
+            ar.Quantity(1.0, "furlong fortnight-1")
+    finally:
+        ar.set_intern_cap(old)
+    assert ar.Quantity(1.0, "furlong fortnight-1").units == "furlong fortnight-1"
+    assert ar.interned() == n + 1
 
 
 def test_quantity_arithmetic_and_conversion():

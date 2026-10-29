@@ -35,10 +35,19 @@ pyo3::create_exception!(
     "Incompatible or unknown units (e.g. adding metres to seconds)."
 );
 
-/// An annoray error as the Python exception xarray would raise (or [`UnitError`]).
+pyo3::create_exception!(
+    annoray,
+    ReadLimitError,
+    PyValueError,
+    "A file breaches the read limits it was opened with (`limits=` of `open_dataset`)."
+);
+
+/// An annoray error as the Python exception xarray would raise (or [`UnitError`],
+/// [`ReadLimitError`]).
 pub(crate) fn core_error(e: CoreError) -> PyErr {
     let msg = e.to_string();
     match e {
+        CoreError::Limit { .. } => ReadLimitError::new_err(msg),
         CoreError::Unit(u) => unit_error(&u),
         CoreError::NoSuchVariable(_) | CoreError::LabelNotFound { .. } => PyKeyError::new_err(msg),
         CoreError::Index(_) => PyIndexError::new_err(msg),

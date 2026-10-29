@@ -46,20 +46,20 @@ fn typed_arithmetic() {
     let d = Quantity::<Length>::new(2.5, "km").unwrap();
     let t = Quantity::<Time>::new(30.0, "min").unwrap();
     // A length over a time is a velocity: the compiler knows.
-    let v: Quantity<Velocity> = (&d / &t).unwrap();
+    let v: Quantity<Velocity> = (d / t).unwrap();
     assert_eq!(v.unit().to_string(), "km min-1");
     let v = v.to("m/s").unwrap();
     assert!((v.value() - 2500.0 / 1800.0).abs() < 1e-12);
     let s = t.to("s").unwrap();
-    let a: Quantity<Acceleration> = (&v / &s).unwrap();
-    let j: Quantity<Jerk> = (&a / &s).unwrap();
+    let a: Quantity<Acceleration> = (v / s).unwrap();
+    let j: Quantity<Jerk> = (a / s).unwrap();
     assert_eq!(j.unit().to_string(), "m s-3");
     // A speed is a velocity.
-    let speed: Quantity<Speed> = v.clone();
-    let back: Quantity<Length> = (&speed * &s).unwrap();
+    let speed: Quantity<Speed> = v;
+    let back: Quantity<Length> = (speed * s).unwrap();
     assert!((back.to("km").unwrap().value() - 2.5).abs() < 1e-12);
     // Products of lengths are areas; owned operands work too.
-    let area: Quantity<Area> = (d.clone() * d).unwrap();
+    let area: Quantity<Area> = (d * d).unwrap();
     assert_eq!(area.unit().to_string(), "km2");
 }
 
@@ -74,15 +74,15 @@ fn units_are_checked_at_run_time() {
     // Same dimension, different scales: convert first.
     let km = Quantity::<Length>::new(1.0, "km").unwrap();
     let m = Quantity::<Length>::new(1.0, "m").unwrap();
-    assert!(matches!(&km + &m, Err(UnitError::ScaleMismatch { .. })));
-    assert_eq!((&km + &m.to("km").unwrap()).unwrap().value(), 1.001);
+    assert!(matches!(km + m, Err(UnitError::ScaleMismatch { .. })));
+    assert_eq!((km + m.to("km").unwrap()).unwrap().value(), 1.001);
     // Comparisons convert.
     assert!(km == Quantity::<Length>::new(1000.0, "m").unwrap());
     assert!(km > Quantity::<Length>::new(999.0, "m").unwrap());
     // Absolute temperatures: differences are fine, scaling is not.
     let c20 = Quantity::<Temperature>::new(20.0, "degC").unwrap();
     let c10 = Quantity::<Temperature>::new(10.0, "degC").unwrap();
-    assert_eq!((&c20 - &c10).unwrap().value(), 10.0);
+    assert_eq!((c20 - c10).unwrap().value(), 10.0);
     assert!((&c20 * 2.0).is_err());
     assert_eq!(c20.to("degF").unwrap().value(), 68.0);
     // Angles are their own dimension.
@@ -97,11 +97,11 @@ fn units_are_checked_at_run_time() {
 fn dynamic_quantities_meet_typed_ones() {
     // A unit read from a file: dimension known only at run time.
     let from_file: Quantity<Dyn> = Quantity::new(3.0, "m s-1").unwrap();
-    let v: Quantity<Velocity> = from_file.clone().cast().unwrap();
-    assert!(from_file.clone().cast::<Length>().is_err());
+    let v: Quantity<Velocity> = from_file.cast().unwrap();
+    assert!(from_file.cast::<Length>().is_err());
     let t = Quantity::<Time>::new(2.0, "s").unwrap();
     // Typed with dynamic gives dynamic.
-    let d: Quantity<Dyn> = (&from_file * &t).unwrap();
+    let d: Quantity<Dyn> = (from_file * t).unwrap();
     let d: Quantity<Length> = d.cast().unwrap();
     assert_eq!(d.value(), 6.0);
     let m: Unit = "m".parse().unwrap();

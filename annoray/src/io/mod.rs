@@ -16,21 +16,27 @@
 
 use std::path::Path;
 
+mod limits;
+#[cfg(feature = "netcdf4")]
 mod nc_writer;
 pub mod netcdf3;
+#[cfg(feature = "netcdf4")]
 pub mod netcdf4;
 #[cfg(feature = "netcdf-c")]
 pub mod netcdf_c;
 mod raw;
 mod replace;
+#[cfg(feature = "zarr")]
 pub mod zarr;
 
+pub use limits::ReadLimits;
 pub use raw::{
     Backend, CompoundField, EnumType, FileBytes, Format, IoError, RawData, RawDataset, RawDim,
     RawVariable, Result, Storage, WriteOptions, map_file, read_file,
 };
 
 pub use crate::cf::{DecodeOptions, EncodeOptions};
+#[cfg(feature = "netcdf4")]
 pub use nc_writer::NetcdfWriter;
 
 use crate::{DataTree, Dataset, DatasetBase, Error, Repr};
@@ -43,6 +49,8 @@ pub struct OpenOptions {
     pub group: Option<String>,
     /// What to CF-decode.
     pub decode: DecodeOptions,
+    /// Ceilings on what the file may make the reader allocate (none by default).
+    pub limits: ReadLimits,
 }
 
 impl OpenOptions {
@@ -68,6 +76,33 @@ impl OpenOptions {
         self.decode = decode;
         self
     }
+
+    /// Hold the file to `limits`: its metadata is checked before any values are read, and
+    /// every read after that (see [`ReadLimits`]).
+    #[must_use]
+    pub fn limits(mut self, limits: ReadLimits) -> Self {
+        self.limits = limits;
+        self
+    }
+
+    /// A file in memory for these options: read lazily under limits, so that its metadata is
+    /// checked before any values are read (an eager open then reads them while decoding).
+    fn read_bytes(&self, bytes: Vec<u8>) -> Result<RawDataset<'static>> {
+        if self.limits.is_unlimited() {
+            read_bytes(bytes, self.decode.lazy)
+        } else {
+            read_bytes_limited(bytes, true, self.limits.max_read_bytes)
+        }
+    }
+
+    /// `raw`, checked against the limits and with its reads held to them.
+    fn limited(&self, raw: RawDataset<'static>) -> Result<RawDataset<'static>> {
+        if self.limits.is_unlimited() {
+            return Ok(raw);
+        }
+        self.limits.check(&raw)?;
+        Ok(self.limits.wrap(raw))
+    }
 }
 
 /// A dataset opened from a file, with any non-fatal decoding warnings.
@@ -88,11 +123,13 @@ pub fn open_dataset_with_backend(
     path: impl AsRef<Path>,
     opts: &OpenOptions,
 ) -> Result<Opened, Error> {
-    let raw = if opts.decode.lazy {
+    let raw = opts.limited(if !opts.limits.is_unlimited() {
+        backend.read_lazy_limited(path.as_ref(), &opts.limits)?
+    } else if opts.decode.lazy {
         backend.read_lazy(path.as_ref())?
     } else {
         backend.read(path.as_ref())?
-    };
+    })?;
     decode_opened(&raw, opts)
 }
 
@@ -102,6 +139,15 @@ pub fn open_dataset_with_backend(
 /// # Errors
 /// [`IoError::Unsupported`] for other formats; errors of the format's reader.
 pub fn read_bytes(bytes: Vec<u8>, lazy: bool) -> Result<RawDataset<'static>> {
+    read_bytes_limited(bytes, lazy, None)
+}
+
+/// [`read_bytes`], HDF5 reads (those made while opening included) held to `load_limit`.
+fn read_bytes_limited(
+    bytes: Vec<u8>,
+    lazy: bool,
+    load_limit: Option<u64>,
+) -> Result<RawDataset<'static>> {
     let bytes = FileBytes::Owned(bytes);
     if netcdf3::is_netcdf3(&bytes) {
         let file = netcdf3::Netcdf3File::from_file_bytes(bytes)?;
@@ -112,7 +158,13 @@ pub fn read_bytes(bytes: Vec<u8>, lazy: bool) -> Result<RawDataset<'static>> {
         };
     }
     if annoray_hdf5::is_hdf5(&bytes) {
-        return netcdf4::read_file_bytes(bytes, lazy);
+        #[cfg(feature = "netcdf4")]
+        return netcdf4::read_file_bytes_limited(bytes, lazy, load_limit);
+        #[cfg(not(feature = "netcdf4"))]
+        {
+            let _ = load_limit;
+            return Err(without("netcdf4", "netCDF-4 and HDF5 files"));
+        }
     }
     Err(IoError::Unsupported(
         "the bytes are not a netCDF or HDF5 file".into(),
@@ -124,7 +176,7 @@ pub fn read_bytes(bytes: Vec<u8>, lazy: bool) -> Result<RawDataset<'static>> {
 /// # Errors
 /// As for [`read_bytes`], and decoding errors.
 pub fn open_dataset_from_bytes(bytes: Vec<u8>, opts: &OpenOptions) -> Result<Opened, Error> {
-    decode_opened(&read_bytes(bytes, opts.decode.lazy)?, opts)
+    decode_opened(&opts.limited(opts.read_bytes(bytes)?)?, opts)
 }
 
 /// [`open_datatree_with`] for a file held in memory (netCDF-3, netCDF-4 or HDF5).
@@ -132,7 +184,7 @@ pub fn open_dataset_from_bytes(bytes: Vec<u8>, opts: &OpenOptions) -> Result<Ope
 /// # Errors
 /// As for [`read_bytes`], and decoding errors.
 pub fn open_datatree_from_bytes(bytes: Vec<u8>, opts: &OpenOptions) -> Result<OpenedTree, Error> {
-    decode_opened_tree(&read_bytes(bytes, opts.decode.lazy)?, opts)
+    decode_opened_tree(&opts.limited(opts.read_bytes(bytes)?)?, opts)
 }
 
 fn decode_opened(raw: &RawDataset<'static>, opts: &OpenOptions) -> Result<Opened, Error> {
@@ -154,13 +206,29 @@ pub fn to_netcdf_with_backend<S: Repr>(
     path: impl AsRef<Path>,
     opts: &WriteOptions,
 ) -> Result<(), Error> {
-    let raw = crate::cf::encode(ds, &EncodeOptions::format(opts.format))?;
+    let raw = crate::cf::encode(ds, &opts.encode_options())?;
     backend.write_owned(raw, path.as_ref(), opts)?;
     Ok(())
 }
 
 fn not_netcdf(path: &Path) -> IoError {
     IoError::Unsupported(format!("{}: not a netCDF or HDF5 file", path.display()))
+}
+
+/// Whether `path` is a Zarr store (a directory with Zarr metadata).
+fn is_zarr(path: &Path) -> bool {
+    path.is_dir()
+        && ["zarr.json", ".zgroup", ".zarray"]
+            .iter()
+            .any(|f| path.join(f).is_file())
+}
+
+/// A format this build leaves out (its Cargo feature is off).
+#[cfg(not(all(feature = "netcdf4", feature = "zarr")))]
+fn without(feature: &str, what: &str) -> IoError {
+    IoError::Unsupported(format!(
+        "{what} need annoray's `{feature}` feature, which this build leaves out"
+    ))
 }
 
 /// Picks a backend per file, all pure Rust: netCDF-3 via [`netcdf3::Netcdf3`], netCDF-4 and
@@ -175,22 +243,35 @@ impl Backend for AutoBackend {
     }
 
     fn read(&self, path: &Path) -> Result<RawDataset<'static>> {
-        if zarr::is_zarr(path) {
+        if is_zarr(path) {
+            #[cfg(feature = "zarr")]
             return zarr::read(path, false);
+            #[cfg(not(feature = "zarr"))]
+            return Err(without("zarr", "Zarr stores"));
         }
         let bytes = map_file(path)?;
         if netcdf3::is_netcdf3(&bytes) {
             return netcdf3::Netcdf3File::from_file_bytes(bytes)?.to_raw();
         }
         if annoray_hdf5::is_hdf5(&bytes) {
+            #[cfg(feature = "netcdf4")]
             return netcdf4::Netcdf4.read(path);
+            #[cfg(not(feature = "netcdf4"))]
+            return Err(without("netcdf4", "netCDF-4 and HDF5 files"));
         }
         Err(not_netcdf(path))
     }
 
     fn read_lazy(&self, path: &Path) -> Result<RawDataset<'static>> {
-        if zarr::is_zarr(path) {
+        self.read_lazy_limited(path, &ReadLimits::default())
+    }
+
+    fn read_lazy_limited(&self, path: &Path, limits: &ReadLimits) -> Result<RawDataset<'static>> {
+        if is_zarr(path) {
+            #[cfg(feature = "zarr")]
             return zarr::read(path, true);
+            #[cfg(not(feature = "zarr"))]
+            return Err(without("zarr", "Zarr stores"));
         }
         let bytes = map_file(path)?;
         if netcdf3::is_netcdf3(&bytes) {
@@ -198,7 +279,14 @@ impl Backend for AutoBackend {
             return Ok(std::sync::Arc::new(file).to_raw_lazy());
         }
         if annoray_hdf5::is_hdf5(&bytes) {
-            return netcdf4::Netcdf4.read_lazy(path);
+            // By path: external links and virtual datasets name files relative to it.
+            #[cfg(feature = "netcdf4")]
+            return netcdf4::Netcdf4.read_lazy_limited(path, limits);
+            #[cfg(not(feature = "netcdf4"))]
+            {
+                let _ = limits;
+                return Err(without("netcdf4", "netCDF-4 and HDF5 files"));
+            }
         }
         Err(not_netcdf(path))
     }
@@ -207,7 +295,10 @@ impl Backend for AutoBackend {
         if opts.format.is_netcdf3() {
             netcdf3::Netcdf3.write(ds, path, opts)
         } else {
-            netcdf4::Netcdf4.write(ds, path, opts)
+            #[cfg(feature = "netcdf4")]
+            return netcdf4::Netcdf4.write(ds, path, opts);
+            #[cfg(not(feature = "netcdf4"))]
+            return Err(without("netcdf4", "netCDF-4 files"));
         }
     }
 
@@ -215,7 +306,10 @@ impl Backend for AutoBackend {
         if opts.format.is_netcdf3() {
             netcdf3::Netcdf3.write_owned(ds, path, opts)
         } else {
-            netcdf4::Netcdf4.write_owned(ds, path, opts)
+            #[cfg(feature = "netcdf4")]
+            return netcdf4::Netcdf4.write_owned(ds, path, opts);
+            #[cfg(not(feature = "netcdf4"))]
+            return Err(without("netcdf4", "netCDF-4 files"));
         }
     }
 }
@@ -274,6 +368,7 @@ impl<S: Repr> ToNetcdf for DatasetBase<S> {
 }
 
 /// Writing datasets to Zarr stores.
+#[cfg(feature = "zarr")]
 pub trait ToZarr {
     /// Write a Zarr v3 store (as zarr-python 3) with consolidated metadata, replacing `path`.
     ///
@@ -290,6 +385,7 @@ pub trait ToZarr {
     fn to_zarr_with(&self, path: impl AsRef<Path>, opts: &zarr::ZarrOptions) -> Result<(), Error>;
 }
 
+#[cfg(feature = "zarr")]
 impl<S: Repr> ToZarr for DatasetBase<S> {
     fn to_zarr_with(&self, path: impl AsRef<Path>, opts: &zarr::ZarrOptions) -> Result<(), Error> {
         let raw = crate::cf::encode(self, &EncodeOptions::format(Format::Netcdf4))?;
@@ -303,6 +399,7 @@ impl<S: Repr> ToZarr for DatasetBase<S> {
 ///
 /// # Errors
 /// I/O or decoding errors.
+#[cfg(feature = "zarr")]
 pub fn open_zarr(path: impl AsRef<Path>) -> Result<Dataset, Error> {
     open_dataset(path)
 }
@@ -349,11 +446,13 @@ pub fn open_datatree_with_backend(
     path: impl AsRef<Path>,
     opts: &OpenOptions,
 ) -> Result<OpenedTree, Error> {
-    let raw = if opts.decode.lazy {
+    let raw = opts.limited(if !opts.limits.is_unlimited() {
+        backend.read_lazy_limited(path.as_ref(), &opts.limits)?
+    } else if opts.decode.lazy {
         backend.read_lazy(path.as_ref())?
     } else {
         backend.read(path.as_ref())?
-    };
+    })?;
     decode_opened_tree(&raw, opts)
 }
 
@@ -380,8 +479,9 @@ pub fn open_datatree_with(path: impl AsRef<Path>, opts: &OpenOptions) -> Result<
     open_datatree_with_backend(default_backend(), path, opts)
 }
 
-fn encode_tree(tree: &DataTree, format: Format) -> Result<RawDataset<'_>, Error> {
-    let mut raw = crate::cf::encode(tree.dataset(), &EncodeOptions::format(format))?;
+fn encode_tree<'a>(tree: &'a DataTree, opts: &EncodeOptions) -> Result<RawDataset<'a>, Error> {
+    let format = opts.format;
+    let mut raw = crate::cf::encode(tree.dataset(), opts)?;
     if !tree.children().is_empty() && format != Format::Netcdf4 {
         return Err(IoError::Format {
             what: "groups".into(),
@@ -391,14 +491,15 @@ fn encode_tree(tree: &DataTree, format: Format) -> Result<RawDataset<'_>, Error>
         .into());
     }
     for (name, child) in tree.children() {
-        raw.groups.insert(name.clone(), encode_tree(child, format)?);
+        raw.groups.insert(name.clone(), encode_tree(child, opts)?);
     }
     Ok(raw)
 }
 
+#[cfg(feature = "zarr")]
 impl ToZarr for DataTree {
     fn to_zarr_with(&self, path: impl AsRef<Path>, opts: &zarr::ZarrOptions) -> Result<(), Error> {
-        let raw = encode_tree(self, Format::Netcdf4)?;
+        let raw = encode_tree(self, &EncodeOptions::format(Format::Netcdf4))?;
         zarr::write(&raw, path.as_ref(), opts)?;
         Ok(())
     }
@@ -406,7 +507,7 @@ impl ToZarr for DataTree {
 
 impl ToNetcdf for DataTree {
     fn to_netcdf_with(&self, path: impl AsRef<Path>, opts: &WriteOptions) -> Result<(), Error> {
-        let raw = encode_tree(self, opts.format)?;
+        let raw = encode_tree(self, &opts.encode_options())?;
         default_backend().write_owned(raw, path.as_ref(), opts)?;
         Ok(())
     }

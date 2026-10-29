@@ -7,7 +7,7 @@
 use std::path::PathBuf;
 
 use annoray::io::{
-    DecodeOptions, MfOptions, OpenOptions, ToNetcdf, WriteOptions, open_dataset_with,
+    DecodeOptions, MfOptions, OpenOptions, ReadLimits, ToNetcdf, WriteOptions, open_dataset_with,
 };
 use annoray::{
     BinOp, BinOptions, ConcatOptions, DataArray, Dataset, Extrapolate, How, InterpMethod,
@@ -28,6 +28,10 @@ use crate::mutate::{Lending, Source, live_dict};
 
 /// A facade error as a Python exception.
 pub(crate) fn xr_error(e: annoray::Error) -> PyErr {
+    // A breached read limit, however deep the read that found it.
+    if let Some(annoray::CoreError::Limit { .. }) = e.core() {
+        return crate::convert::ReadLimitError::new_err(e.to_string());
+    }
     match e {
         annoray::Error::Core(c) => crate::convert::core_error(c),
         annoray::Error::Unit(u) => crate::convert::unit_error(&u),
@@ -2027,7 +2031,11 @@ impl PyDataset {
     /// With `mode="a"`, `append_dim` appends along an unlimited dimension of the file and
     /// `region` (dimension → start or slice) writes into part of it, in place (as xarray's
     /// `to_zarr`): see `NetcdfWriter`.
-    #[pyo3(signature = (path, format="NETCDF4", encoding=None, unlimited_dims=None, mode="w", append_dim=None, region=None))]
+    /// `compress` compresses every variable whose encoding sets no compression (netCDF-4):
+    /// `True` (deflate level 4), a deflate level 1–9, or a dict of an encoding's compression
+    /// keys and `min_elements` (default 256: smaller variables, scalars and strings are left
+    /// as they are), e.g. `{"compression": "zstd", "complevel": 3}`.
+    #[pyo3(signature = (path, format="NETCDF4", encoding=None, unlimited_dims=None, mode="w", append_dim=None, region=None, compress=None))]
     #[allow(clippy::too_many_arguments)]
     fn to_netcdf(
         slf: &Bound<'_, Self>,
@@ -2038,6 +2046,7 @@ impl PyDataset {
         mode: &str,
         append_dim: Option<String>,
         region: Option<&Bound<'_, PyDict>>,
+        compress: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<()> {
         let py = slf.py();
         if append_dim.is_some() || region.is_some() {
@@ -2046,10 +2055,10 @@ impl PyDataset {
                     "append_dim and region write into an existing file: use mode=\"a\"",
                 ));
             }
-            if encoding.is_some() || unlimited_dims.is_some() {
+            if encoding.is_some() || unlimited_dims.is_some() || compress.is_some() {
                 return Err(PyValueError::new_err(
-                    "append_dim and region use the file's encoding: encoding and \
-                     unlimited_dims cannot be given",
+                    "append_dim and region use the file's encoding: encoding, \
+                     unlimited_dims and compress cannot be given",
                 ));
             }
             let w = py
@@ -2079,6 +2088,9 @@ impl PyDataset {
                 if let Some(u) = &unlimited_dims {
                     kw.set_item("unlimited_dims", u.clone())?;
                 }
+                if let Some(c) = compress {
+                    kw.set_item("compress", c)?;
+                }
                 py.import("annoray._io")?
                     .getattr("append_netcdf")?
                     .call((slf, path), Some(&kw))?;
@@ -2091,7 +2103,8 @@ impl PyDataset {
             }
         }
         let this = slf.borrow();
-        let opts = WriteOptions::format(crate::raw::format_from_name(format)?);
+        let mut opts = WriteOptions::format(crate::raw::format_from_name(format)?);
+        opts.compress = crate::raw::compress_from_py(compress)?;
         // A view: the encoding given is applied without copying any data.
         let mut ds = this.inner.view();
         if let Some(u) = unlimited_dims {
@@ -2711,7 +2724,7 @@ impl PyDt {
 /// and read on demand; CF conventions are decoded (times, packing, fill values, units).
 #[pyfunction]
 #[pyo3(signature = (path, *, group=None, mask_and_scale=true, decode_times=true,
-    decode_units=true, decode_coords=None, concat_characters=true, lazy=true))]
+    decode_units=true, decode_coords=None, concat_characters=true, lazy=true, limits=None))]
 #[allow(clippy::too_many_arguments, clippy::fn_params_excessive_bools)]
 pub(crate) fn open_dataset(
     py: Python<'_>,
@@ -2723,6 +2736,7 @@ pub(crate) fn open_dataset(
     decode_coords: Option<&Bound<'_, PyAny>>,
     concat_characters: bool,
     lazy: bool,
+    limits: Option<&Bound<'_, PyAny>>,
 ) -> PyResult<Py<PyDataset>> {
     let source = open_source(path)?;
     let mut opts = open_options(
@@ -2735,6 +2749,7 @@ pub(crate) fn open_dataset(
         lazy,
     );
     (opts.decode.decode_coords, opts.decode.decode_coords_all) = coords_option(decode_coords)?;
+    opts.limits = limits_from_py(limits)?;
     let opened = py
         .detach(|| match source {
             OpenSource::Path(p) => open_dataset_with(&p, &opts),
@@ -2743,6 +2758,63 @@ pub(crate) fn open_dataset(
         .map_err(xr_error)?;
     warn_all(py, &opened.warnings)?;
     new_ds(py, opened.dataset)
+}
+
+/// The keys of a `limits=` dict, as [`ReadLimits`]' fields.
+const LIMIT_KEYS: &[&str] = &[
+    "max_read_bytes",
+    "max_total_bytes",
+    "max_elements",
+    "max_rank",
+    "max_variables",
+    "max_attributes",
+];
+
+/// `limits=` of the open functions: `None` (no limits), `"untrusted"`
+/// ([`ReadLimits::untrusted`]), or a dict of limits by [`LIMIT_KEYS`] (an int, or `None` for
+/// no limit), starting from `"untrusted"`'s when it has `"preset": "untrusted"`.
+pub(crate) fn limits_from_py(l: Option<&Bound<'_, PyAny>>) -> PyResult<ReadLimits> {
+    let Some(l) = l.filter(|l| !l.is_none()) else {
+        return Ok(ReadLimits::default());
+    };
+    let preset = |name: &str| match name {
+        "untrusted" => Ok(ReadLimits::untrusted()),
+        other => Err(PyValueError::new_err(format!(
+            "limits: unknown preset {other:?} (expected \"untrusted\")"
+        ))),
+    };
+    if let Ok(name) = l.extract::<String>() {
+        return preset(&name);
+    }
+    let d = l.cast::<PyDict>().map_err(|_| {
+        pyo3::exceptions::PyTypeError::new_err("limits must be \"untrusted\" or a dict of limits")
+    })?;
+    let mut out = match d.get_item("preset")? {
+        Some(p) => preset(&p.extract::<String>()?)?,
+        None => ReadLimits::default(),
+    };
+    for (k, v) in d.iter() {
+        let k: String = k.extract()?;
+        if k == "preset" {
+            continue;
+        }
+        let n: Option<u64> = v.extract()?;
+        let size = |n: Option<u64>| n.map(|n| usize::try_from(n).unwrap_or(usize::MAX));
+        match k.as_str() {
+            "max_read_bytes" => out.max_read_bytes = n,
+            "max_total_bytes" => out.max_total_bytes = n,
+            "max_elements" => out.max_elements = n,
+            "max_rank" => out.max_rank = size(n),
+            "max_variables" => out.max_variables = size(n),
+            "max_attributes" => out.max_attributes = size(n),
+            other => {
+                return Err(PyValueError::new_err(format!(
+                    "limits: unknown key {other:?} (expected \"preset\" or one of {LIMIT_KEYS:?})"
+                )));
+            }
+        }
+    }
+    Ok(out)
 }
 
 /// What to open: a path, or a file's bytes.
@@ -2881,18 +2953,23 @@ pub(crate) fn decode_cf(
 /// Open several files as one dataset: a glob pattern or a list of paths, combined by their
 /// coordinates (default) or concatenated along `concat_dim` in the order given.
 #[pyfunction]
-#[pyo3(signature = (paths, *, concat_dim=None, lazy=true))]
+#[pyo3(signature = (paths, *, concat_dim=None, lazy=true, limits=None))]
 pub(crate) fn open_mfdataset(
     py: Python<'_>,
     paths: &Bound<'_, PyAny>,
     concat_dim: Option<String>,
     lazy: bool,
+    limits: Option<&Bound<'_, PyAny>>,
 ) -> PyResult<Py<PyDataset>> {
     let paths: Vec<PathBuf> = match paths.extract::<String>() {
         Ok(pattern) => annoray::io::glob(&pattern).map_err(xr_error)?,
         Err(_) => paths.extract()?,
     };
-    let mut opts = MfOptions::default().open(OpenOptions::default().lazy(lazy));
+    let mut opts = MfOptions::default().open(
+        OpenOptions::default()
+            .lazy(lazy)
+            .limits(limits_from_py(limits)?),
+    );
     if let Some(d) = concat_dim {
         opts = opts.concat_dim(d);
     }

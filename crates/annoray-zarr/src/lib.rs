@@ -22,6 +22,7 @@ mod array;
 mod codec;
 mod data;
 mod group;
+mod json;
 mod store;
 
 pub use annoray_codecs::{BloscCodec, BloscShuffle};
@@ -29,6 +30,7 @@ pub use array::{Array, ArrayBuilder, Compressor};
 pub use codec::{Codec, Sharding};
 pub use data::{ArrayData, DType, Endian, Fill};
 pub use group::{Group, Node};
+pub use json::{float_value, special_float};
 /// JSON values (attributes).
 pub use serde_json::{Map, Number, Value};
 pub use store::Store;

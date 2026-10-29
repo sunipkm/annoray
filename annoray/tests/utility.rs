@@ -284,3 +284,22 @@ fn in_place_assignment_checks_first() {
     a.remove_coord("x").unwrap();
     assert!(a.coords().is_empty());
 }
+
+#[test]
+fn values_slice_borrows_or_copies_in_order() {
+    use std::borrow::Cow;
+    let v = annoray::Variable::new(
+        ["y", "x"],
+        annoray::ndarray::array![[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]].into_dyn(),
+    )
+    .unwrap();
+    let s = v.values_slice::<f64>().unwrap();
+    assert!(matches!(s, Cow::Borrowed(_)));
+    assert_eq!(s.as_ptr(), v.data::<f64>().unwrap().as_ptr());
+    // A reversed view is not stored in order: copied, in its own order.
+    let r = annoray::isel!(v[:, ::-1]).unwrap();
+    let s = r.values_slice::<f64>().unwrap();
+    assert!(matches!(s, Cow::Owned(_)));
+    assert_eq!(*s, [3.0, 2.0, 1.0, 6.0, 5.0, 4.0]);
+    assert!(v.values_slice::<i32>().is_err());
+}

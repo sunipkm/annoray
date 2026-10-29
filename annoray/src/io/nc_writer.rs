@@ -15,7 +15,7 @@ use indexmap::IndexMap;
 
 use super::netcdf4::{self, NON_COORD};
 use super::{Backend, Format, IoError, OpenOptions, WriteOptions};
-use crate::cf::{DecodeOptions, EncodeOptions};
+use crate::cf::DecodeOptions;
 use crate::units::Unit;
 use crate::{DatasetBase, Encoding, Error, Name, Repr, VariableBase};
 
@@ -103,7 +103,7 @@ impl NetcdfWriter {
             .into());
         }
         let path = path.as_ref();
-        let raw = crate::cf::encode(template, &EncodeOptions::format(opts.format))?;
+        let raw = crate::cf::encode(template, &opts.encode_options())?;
         let deferred: Vec<Name> = template.data_vars().keys().cloned().collect();
         netcdf4::write_deferred(&raw, path, opts, &deferred)?;
         Self::open(path)

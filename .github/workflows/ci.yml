@@ -28,6 +28,12 @@ jobs:
       # Each typed-unit bridge on its own (the all-features run covers them together).
       - run: cargo clippy -p annoray --all-targets --features uom -- -D warnings
       - run: cargo clippy -p annoray --all-targets --features whippyunits -- -D warnings
+      # The format features off, each alone, and the codecs without the formats (the library:
+      # most tests need netCDF-4).
+      - run: cargo clippy -p annoray --lib --no-default-features -- -D warnings
+      - run: cargo clippy -p annoray --lib --no-default-features --features netcdf4 -- -D warnings
+      - run: cargo clippy -p annoray --lib --no-default-features --features zarr -- -D warnings
+      - run: cargo clippy -p annoray --lib --no-default-features --features zstd,lz4,rayon -- -D warnings
 
   test:
     strategy:
@@ -45,6 +51,8 @@ jobs:
       - run: cargo test --workspace --all-features
       # Without C libraries: netCDF-3 must work in pure Rust, netCDF-4 must fail clearly.
       - run: cargo test -p annoray
+      # netCDF-3 alone (no `netcdf4`, no `zarr`): it reads and writes, the rest is a clear error.
+      - run: cargo test -p annoray --no-default-features --test minimal_features
       - uses: actions/setup-python@v5
         if: matrix.os == 'ubuntu-latest'
         with:
