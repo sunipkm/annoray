@@ -27,6 +27,23 @@ pub enum AttrValue {
     F64(Vec<f64>),
 }
 
+impl AttrValue {
+    /// The attribute as one string: `Str`, or `Strs` of one element (netCDF4-python and
+    /// xarray write non-ASCII text as a one-element `NC_STRING` array, and read both forms as
+    /// one `str`). `None` for anything else.
+    #[must_use]
+    pub fn as_text(&self) -> Option<&str> {
+        match self {
+            Self::Str(s) => Some(s),
+            Self::Strs(v) => match v.as_slice() {
+                [s] => Some(s),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+}
+
 impl From<&str> for AttrValue {
     fn from(s: &str) -> Self {
         Self::Str(s.to_owned())

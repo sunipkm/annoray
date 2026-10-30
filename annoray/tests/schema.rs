@@ -254,3 +254,51 @@ fn lazy_values_are_read_by_the_view() {
     let e = Series::view(&more).err().unwrap().to_string();
     assert!(e.contains("extra: not in the schema"), "{e}");
 }
+
+#[derive(annoray::schema::Schema)]
+#[schema(attr_eq("window_name", "Hα"), attr_in("band", "Hα", "Hβ"))]
+struct Window<'a> {
+    #[schema(attr)]
+    window_name: &'a str,
+    #[schema(attr)]
+    band: String,
+}
+
+#[test]
+fn one_element_string_arrays_are_text() {
+    // netCDF4-python and xarray write non-ASCII text as a one-element NC_STRING array.
+    let one = || AttrValue::Strs(vec!["Hα".into()]);
+    let ds = Dataset::new().with_attrs([("window_name", one()), ("band", one())]);
+    let w = Window::view(&ds).unwrap();
+    assert_eq!((w.window_name, w.band.as_str()), ("Hα", "Hα"));
+    Window::schema().check(&ds).unwrap();
+    Window::view(&Dataset::new().with_attrs([("window_name", "Hα"), ("band", "Hβ")])).unwrap();
+
+    // Not text: no strings, several, or a number.
+    for (a, found) in [
+        (AttrValue::Strs(vec![]), "[]"),
+        (
+            AttrValue::Strs(vec!["Hα".into(), "Hβ".into()]),
+            "[\"Hα\", \"Hβ\"]",
+        ),
+        (AttrValue::F64(vec![1.0]), "1"),
+    ] {
+        let ds = Dataset::new().with_attrs([("window_name", a.clone()), ("band", a)]);
+        let problems = shown(&Window::schema().problems(&ds));
+        assert!(
+            problems.contains(&format!("attribute window_name: {found}, expected text")),
+            "{problems:?}"
+        );
+        assert!(Window::view(&ds).is_err());
+    }
+
+    // A round trip keeps the form it read.
+    let path = std::env::temp_dir().join(format!("annoray-strs-{}.nc", std::process::id()));
+    ds.to_netcdf(&path).unwrap();
+    let back = open_dataset(&path).unwrap();
+    assert_eq!(back.attrs()["window_name"], one());
+    Window::view(&back).unwrap();
+    std::fs::remove_file(&path).unwrap();
+    assert_eq!(one().as_text(), Some("Hα"));
+    assert_eq!(AttrValue::I8(vec![1]).as_text(), None);
+}

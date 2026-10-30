@@ -28,7 +28,8 @@ Each variable is a dict of what it must be, every key optional:
 | `optional` | whether it may be absent |
 
 Attributes map to the value they must have, a `set` of values they may have, or `...` for
-any value.
+any value. Text compares as `.attrs` shows it: a one-element `NC_STRING` array (as
+netCDF4-python and xarray write non-ASCII text) equals its one string.
 
 ```{code-cell} python
 import numpy as np

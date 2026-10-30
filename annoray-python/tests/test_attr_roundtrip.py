@@ -211,7 +211,7 @@ def test_xarray_reads_annoray_zarr_attributes(tmp_path):
     assert np.isnan(back["nan"]) and back["inf"] == np.inf
     assert back["list"] == [1.0, -np.inf] and back["s"] == "NaN"
     # And annoray reads what zarr-python writes.
-    xr.Dataset({"v": ("x", [1.0])}, attrs=attrs).to_zarr(tmp_path / "x.zarr")
+    xr.Dataset({"v": ("x", [1.0])}, attrs=attrs).to_zarr(tmp_path / "x.zarr", consolidated=False)
     ours = ar.open_dataset(tmp_path / "x.zarr").attrs
     assert np.isnan(ours["nan"]) and ours["inf"] == np.inf and ours["s"] == "NaN"
     assert list(ours["list"]) == [1.0, -np.inf]

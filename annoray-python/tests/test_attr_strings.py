@@ -71,3 +71,28 @@ def test_round_trip_through_a_second_write(path, tmp_path):
     second_path = tmp_path / "again.nc"
     first.to_netcdf(second_path)
     assert ar.open_dataarray(second_path).attrs["one_greek"] == "Hα"
+
+
+def test_one_element_nc_string_is_text_to_the_schema(tmp_path):
+    """netCDF4-python writes non-ASCII text as a one-element NC_STRING array: text to
+    `ar.Schema` as to `.attrs`, and written back in the form it was read."""
+    netCDF4 = pytest.importorskip("netCDF4")
+    h5py = pytest.importorskip("h5py")
+    p = tmp_path / "one_string.nc"
+    with netCDF4.Dataset(p, "w") as d:
+        d.setncattr_string("greek", "Hα")
+        d.setncattr("ascii", "plain")
+        d.setncattr_string("pair", ["a", "b"])
+    again = tmp_path / "again.nc"
+    ar.open_dataset(p).to_netcdf(again)
+    schema = ar.Schema(attrs={"greek": "Hα", "ascii": {"plain", "other"}})
+    for path in [p, again]:
+        ds = ar.open_dataset(path)
+        assert ds.attrs["greek"] == "Hα" and isinstance(ds.attrs["greek"], str)
+        assert ds.attrs["pair"] == ["a", "b"]
+        schema.check(ds)
+        with h5py.File(path) as f:
+            assert f.attrs.get_id("greek").shape == (1,)
+    assert ar.Schema(attrs={"pair": "a"}).problems(ar.open_dataset(p)) == [
+        'attribute pair: ["a", "b"], expected "a"'
+    ]

@@ -167,6 +167,7 @@ impl Var {
     }
 
     /// With attribute `name` equal to `value`.
+    /// Text compares as text: `Str(s)` and a one-element `Strs([s])` are equal.
     pub fn attr_eq(mut self, name: impl Into<Name>, value: impl Into<AttrValue>) -> Self {
         self.attrs.push((name.into(), AttrRule::Eq(value.into())));
         self
@@ -312,10 +313,10 @@ fn check_attrs(
         };
         let expected = match rule {
             AttrRule::Present => None,
-            AttrRule::Text => (!matches!(a, AttrValue::Str(_))).then(|| "text".to_owned()),
+            AttrRule::Text => a.as_text().is_none().then(|| "text".to_owned()),
             AttrRule::Number => attr_number(a).is_none().then(|| "a number".to_owned()),
-            AttrRule::Eq(want) => (a != want).then(|| show_attr(want)),
-            AttrRule::In(wants) => (!wants.contains(a)).then(|| {
+            AttrRule::Eq(want) => (!same_attr(a, want)).then(|| show_attr(want)),
+            AttrRule::In(wants) => (!wants.iter().any(|w| same_attr(a, w))).then(|| {
                 let shown: Vec<String> = wants.iter().map(show_attr).collect();
                 format!("one of {}", shown.join(", "))
             }),
@@ -329,6 +330,15 @@ fn check_attrs(
                 },
             ));
         }
+    }
+}
+
+/// Whether two attributes are equal, text by its string: `Str(s)` and a one-element
+/// `Strs([s])` are the same text (see [`AttrValue::as_text`]).
+fn same_attr(a: &AttrValue, b: &AttrValue) -> bool {
+    match (a.as_text(), b.as_text()) {
+        (Some(x), Some(y)) => x == y,
+        _ => a == b,
     }
 }
 
@@ -454,6 +464,7 @@ impl Schema {
     }
 
     /// Dataset attribute `name` equal to `value`.
+    /// Text compares as text: `Str(s)` and a one-element `Strs([s])` are equal.
     pub fn attr_eq(mut self, name: impl Into<Name>, value: impl Into<AttrValue>) -> Self {
         self.attrs.push((name.into(), AttrRule::Eq(value.into())));
         self
@@ -865,10 +876,8 @@ impl<'a> AttrField<'a> for &'a str {
         schema.attr_text(name)
     }
     fn extract(a: Option<&'a AttrValue>, name: &str) -> Result<Self, crate::Error> {
-        match a {
-            Some(AttrValue::Str(s)) => Ok(s),
-            other => Err(wrong(name, "text", other)),
-        }
+        a.and_then(AttrValue::as_text)
+            .ok_or_else(|| wrong(name, "text", a))
     }
 }
 
