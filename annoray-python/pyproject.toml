@@ -10,7 +10,7 @@ authors = [{ name = "Sunip K. Mukherjee", email = "sunipkmukherjee@gmail.com" }]
 requires-python = ">=3.11"
 license = "MIT OR Apache-2.0"
 license-files = ["LICENSE-MIT", "LICENSE-APACHE"]
-dependencies = ["numpy>=1.26", "matplotlib>=3.8"]
+dependencies = ["numpy>=1.26"]
 dynamic = ["version"]
 keywords = ["xarray", "netcdf", "hdf5", "units", "labelled arrays", "climate", "cf-conventions"]
 classifiers = [
@@ -40,6 +40,8 @@ Issues = "https://github.com/sunipkm/annoray/issues"
 Changelog = "https://github.com/sunipkm/annoray/releases"
 
 [project.optional-dependencies]
+# Plotting (`da.plot`, `ds.plot`).
+plot = ["matplotlib>=3.8"]
 # Interoperability with xarray (engine="annoray", to_xarray/from_xarray).
 xarray = ["xarray>=2025.1"]
 # Conversions to and from astropy units and quantities (to_astropy, from_astropy).
@@ -52,6 +54,7 @@ whenever = ["whenever>=0.11"]
 # Everything the test suite uses (tests skip what is missing).
 test = [
     "pytest",
+    "matplotlib>=3.8",
     "xarray>=2025.1",
     "pandas",
     "cftime",

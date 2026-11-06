@@ -7,7 +7,7 @@ pip install annoray
 ```
 
 Wheels use CPython's stable ABI: one per platform covers CPython @PYTHON_VERSION@ and later on Linux,
-macOS and Windows. The dependencies are NumPy and matplotlib (imported only for plotting).
+macOS and Windows. The only dependency is NumPy; `pip install annoray[plot]` adds matplotlib for plotting.
 `import annoray` loads neither xarray nor pandas.
 
 Optional extras:

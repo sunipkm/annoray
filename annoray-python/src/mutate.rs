@@ -2,54 +2,34 @@
 //! `da.name = …`, writes to `.attrs`), and the bookkeeping that keeps it memory-safe and
 //! xarray-like.
 //!
-//! - Lending: `.values` and `to_xarray()` give numpy arrays that view an object's buffers
-//!   without copying. Once an object has lent a buffer, a variable it replaces or removes is
-//!   kept alive (retired) for the object's lifetime instead of being freed, so no view ever
-//!   dangles. An object that has lent nothing frees replaced data at once. Data buffers are
-//!   never written in place: values are immutable.
+//! - Sharing: data variables, coordinates and child arrays hold reference-counted buffers, and
+//!   a numpy view (`.values`, `to_xarray()`) holds its own reference, so a view outlives any
+//!   replacement of the variable it came from. Data buffers are never written in place: values
+//!   are immutable from Python.
 //! - Parents: a data array taken from a dataset (`ds["t"]`, `ds.t`, `ds.data_vars`, …) or a
-//!   coordinate taken from a data array is a copy, but remembers where it came from. Writes
-//!   to its attributes also reach the source variable, as xarray's shared variables do, as
-//!   long as the source has not replaced that variable since (a generation count per name).
+//!   coordinate taken from a data array shares its buffer, and remembers where it came from.
+//!   Writes to its attributes also reach the source variable, as xarray's shared variables do,
+//!   as long as the source has not replaced that variable since (a generation count per name).
 
 use std::collections::HashMap;
 use std::sync::Mutex;
-use std::sync::atomic::{AtomicBool, Ordering};
 
-use annoray::{Attrs, DataArray, Name, Variable};
+use annoray::{Attrs, DataArray, Name, Unit};
 use pyo3::exceptions::{PyKeyError, PyTypeError};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
 use crate::convert::{OrPy, attrs_to_py};
-use crate::native::{PyDataArray, PyDataset, new_child_da, new_da, spec_from_py};
+use crate::native::{PyDataArray, PyDataset, new_child_da, new_da, spec_from_py, units_attr};
 
-/// Per-object lending state; see the module notes.
+/// How many times each variable of an object has been replaced; see the module notes.
 #[derive(Default)]
-pub(crate) struct Lending {
-    lent: AtomicBool,
-    retired: Mutex<Vec<Variable>>,
-    generations: Mutex<HashMap<Name, u64>>,
-}
+pub(crate) struct Generations(Mutex<HashMap<Name, u64>>);
 
-impl Lending {
-    /// Note that a buffer of this object has been lent out.
-    pub(crate) fn lend(&self) {
-        self.lent.store(true, Ordering::Relaxed);
-    }
-
-    /// Dispose of variables displaced by an assignment: kept alive if buffers were lent.
-    pub(crate) fn retire(&self, displaced: impl IntoIterator<Item = Variable>) {
-        if self.lent.load(Ordering::Relaxed)
-            && let Ok(mut r) = self.retired.lock()
-        {
-            r.extend(displaced);
-        }
-    }
-
+impl Generations {
     /// The generation of variable `name` (bumped whenever it is replaced or removed).
     pub(crate) fn generation(&self, name: &str) -> u64 {
-        self.generations
+        self.0
             .lock()
             .ok()
             .and_then(|g| g.get(name).copied())
@@ -58,7 +38,7 @@ impl Lending {
 
     /// Mark variables as replaced: copies taken earlier no longer write through.
     pub(crate) fn bump<'a>(&self, names: impl IntoIterator<Item = &'a str>) {
-        if let Ok(mut g) = self.generations.lock() {
+        if let Ok(mut g) = self.0.lock() {
             for n in names {
                 let e = g.entry(Name::from(n)).or_insert(0);
                 *e = e.saturating_add(1);
@@ -79,9 +59,9 @@ impl Source {
     /// A link to variable `name` of `owner` as it is now.
     pub(crate) fn of(owner: &Bound<'_, PyAny>, name: &str) -> Option<Self> {
         let generation = if let Ok(ds) = owner.cast::<PyDataset>() {
-            ds.borrow().lending.generation(name)
+            ds.borrow().generations.generation(name)
         } else if let Ok(da) = owner.cast::<PyDataArray>() {
-            da.borrow().lending.generation(name)
+            da.borrow().generations.generation(name)
         } else {
             return None;
         };
@@ -92,22 +72,32 @@ impl Source {
         })
     }
 
-    /// Give the source variable `attrs`, if it is still the one this copy came from.
-    pub(crate) fn write_attrs(&self, py: Python<'_>, attrs: &Attrs) -> PyResult<()> {
+    /// Give the source variable `attrs` and `unit`, if it is still the one this array came
+    /// from.
+    pub(crate) fn write_attrs(
+        &self,
+        py: Python<'_>,
+        attrs: &Attrs,
+        unit: Option<&Unit>,
+    ) -> PyResult<()> {
         let owner = self.owner.bind(py);
         if let Ok(ds) = owner.cast::<PyDataset>() {
             let mut ds = ds.try_borrow_mut()?;
-            if ds.lending.generation(&self.name) == self.generation
+            if ds.generations.generation(&self.name) == self.generation
                 && let Ok(a) = ds.inner.attrs_of_mut(&self.name)
             {
                 a.clone_from(attrs);
+                ds.inner.set_unit_of(&self.name, unit.cloned()).py_err()?;
             }
         } else if let Ok(da) = owner.cast::<PyDataArray>() {
             let mut da = da.try_borrow_mut()?;
-            if da.lending.generation(&self.name) == self.generation
+            if da.generations.generation(&self.name) == self.generation
                 && let Ok(a) = da.inner.coord_attrs_mut(&self.name)
             {
                 a.clone_from(attrs);
+                da.inner
+                    .set_coord_unit(&self.name, unit.cloned())
+                    .py_err()?;
             }
         }
         Ok(())
@@ -120,14 +110,14 @@ impl Source {
         let owner = self.owner.bind(py);
         if let Ok(ds) = owner.cast::<PyDataset>() {
             let mut ds = ds.try_borrow_mut()?;
-            if ds.lending.generation(&self.name) == self.generation
+            if ds.generations.generation(&self.name) == self.generation
                 && let Ok(e) = ds.inner.encoding_of_mut(&self.name)
             {
                 e.clone_from(enc);
             }
         } else if let Ok(da) = owner.cast::<PyDataArray>() {
             let mut da = da.try_borrow_mut()?;
-            if da.lending.generation(&self.name) == self.generation
+            if da.generations.generation(&self.name) == self.generation
                 && let Ok(e) = da.inner.coord_encoding_mut(&self.name)
             {
                 e.clone_from(enc);
@@ -259,19 +249,6 @@ pub(crate) fn live_dict<'py>(
         .call1((owner, data))
 }
 
-/// Note that `owner` (a DataArray or Dataset) lends a buffer to a numpy view.
-pub(crate) fn mark_lent(owner: &Bound<'_, PyAny>) {
-    if let Ok(da) = owner.cast::<PyDataArray>() {
-        if let Ok(d) = da.try_borrow() {
-            d.lending.lend();
-        }
-    } else if let Ok(ds) = owner.cast::<PyDataset>()
-        && let Ok(d) = ds.try_borrow()
-    {
-        d.lending.lend();
-    }
-}
-
 /// `attrs` with the keys of `changed` set (converted from Python) and the `removed` keys
 /// dropped; the other attributes are kept as they are, never converted, so their exact
 /// types (a file's `int16`, `float32`, string lists) survive any edit.
@@ -284,14 +261,66 @@ fn edited(attrs: &Attrs, changed: &Bound<'_, PyAny>, removed: Vec<String>) -> Py
     Ok(out)
 }
 
+/// A data array's `attrs` and `unit` after an edit of its attributes, where `"units"` stands
+/// for the unit: a string that parses becomes the unit (the values are unchanged); any other
+/// value stays an attribute, and the array then has no unit. Removing `"units"` clears both.
+pub(crate) fn edited_with_unit(
+    attrs: &Attrs,
+    unit: Option<&Unit>,
+    changed: &Bound<'_, PyAny>,
+    removed: Vec<String>,
+) -> PyResult<(Attrs, Option<Unit>)> {
+    let mut out = attrs.clone();
+    let mut unit = unit.cloned();
+    for k in removed {
+        if k == "units" {
+            unit = None;
+        }
+        out.shift_remove(k.as_str());
+    }
+    for (k, v) in crate::native::dict_iter(Some(changed))? {
+        if k == "units" {
+            out.shift_remove(k.as_str());
+            unit = match v.extract::<String>() {
+                Ok(text) => units_attr(changed.py(), &text)?,
+                Err(_) => None,
+            };
+            if unit.is_some() {
+                continue;
+            }
+        }
+        let value = crate::convert::named_attr_from_py(&k, &v)?;
+        out.insert(k.into(), value);
+    }
+    Ok((out, unit))
+}
+
 impl PyDataArray {
-    /// Replace the attributes, writing through to the source variable if there is one.
-    pub(crate) fn replace_attrs(slf: &Bound<'_, Self>, attrs: Attrs) -> PyResult<()> {
-        slf.try_borrow_mut()?.inner.attrs_mut().clone_from(&attrs);
+    /// Replace the attributes and unit, writing through to the source variable if there is
+    /// one.
+    pub(crate) fn replace_attrs(
+        slf: &Bound<'_, Self>,
+        attrs: Attrs,
+        unit: Option<Unit>,
+    ) -> PyResult<()> {
+        {
+            let mut me = slf.try_borrow_mut()?;
+            me.inner.attrs_mut().clone_from(&attrs);
+            me.inner.set_unit(unit.clone());
+        }
         if let Some(p) = &slf.borrow().parent {
-            p.write_attrs(slf.py(), &attrs)?;
+            p.write_attrs(slf.py(), &attrs, unit.as_ref())?;
         }
         Ok(())
+    }
+
+    /// The attributes as `.attrs` shows them: with the unit as `"units"`.
+    pub(crate) fn attrs_with_units<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let d = attrs_to_py(py, self.inner.attrs())?;
+        if let Some(u) = self.inner.unit() {
+            d.set_item("units", u.to_string())?;
+        }
+        Ok(d)
     }
 
     /// The coordinates as data arrays linked to this one.
@@ -318,9 +347,8 @@ impl PyDataArray {
     ) -> PyResult<()> {
         let var = spec_from_py(slf.py(), name, value)?;
         let mut me = slf.try_borrow_mut()?;
-        let old = me.inner.set_coord_var(name, var).py_err()?;
-        me.lending.retire(old);
-        me.lending.bump([name]);
+        me.inner.set_coord_var(name, var).py_err()?;
+        me.generations.bump([name]);
         Ok(())
     }
 }
@@ -332,11 +360,19 @@ impl PyDataArray {
         changed: &Bound<'_, PyAny>,
         removed: Vec<String>,
     ) -> PyResult<()> {
-        let new = edited(slf.borrow().inner.attrs(), changed, removed)?;
-        Self::replace_attrs(slf, new)
+        let (attrs, unit) = {
+            let me = slf.borrow();
+            edited_with_unit(me.inner.attrs(), me.inner.unit(), changed, removed)?
+        };
+        Self::replace_attrs(slf, attrs, unit)
     }
 
     fn _plain_attrs<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        self.attrs_with_units(py)
+    }
+
+    /// The attributes other than the unit, as they are stored.
+    fn _stored_attrs<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         attrs_to_py(py, self.inner.attrs())
     }
 
@@ -349,9 +385,8 @@ impl PyDataArray {
     }
 
     fn _del_coord(&mut self, name: &str) -> PyResult<()> {
-        let old = self.inner.remove_coord(name).py_err()?;
-        self.lending.retire([old]);
-        self.lending.bump([name]);
+        self.inner.remove_coord(name).py_err()?;
+        self.generations.bump([name]);
         Ok(())
     }
 
@@ -413,9 +448,8 @@ impl PyDataset {
         .with_name(key);
         let coords: Vec<String> = array.coords().keys().map(ToString::to_string).collect();
         let mut me = slf.try_borrow_mut()?;
-        let displaced = me.inner.set_array(key, array).py_err()?;
-        me.lending.retire(displaced);
-        me.lending
+        me.inner.set_array(key, array).py_err()?;
+        me.generations
             .bump(std::iter::once(key).chain(coords.iter().map(String::as_str)));
         Ok(())
     }
@@ -432,9 +466,8 @@ impl PyDataset {
 
     /// `del ds["v"]` removes a data variable or coordinate.
     fn __delitem__(&mut self, key: &str) -> PyResult<()> {
-        let old = self.inner.remove(key).py_err()?;
-        self.lending.retire([old]);
-        self.lending.bump([key]);
+        self.inner.remove(key).py_err()?;
+        self.generations.bump([key]);
         Ok(())
     }
 
@@ -481,9 +514,8 @@ impl PyDataset {
     fn _set_coord(slf: &Bound<'_, Self>, name: &str, value: &Bound<'_, PyAny>) -> PyResult<()> {
         let var = spec_from_py(slf.py(), name, value)?;
         let mut me = slf.try_borrow_mut()?;
-        let old = me.inner.set_coord_var(name, var).py_err()?;
-        me.lending.retire(old);
-        me.lending.bump([name]);
+        me.inner.set_coord_var(name, var).py_err()?;
+        me.generations.bump([name]);
         Ok(())
     }
 

@@ -38,7 +38,7 @@ use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyTuple};
 
 use crate::convert::{
-    attrs_from_py, attrs_to_py, into_numpy, nanos_from_numpy, numbers_from_numpy,
+    attrs_from_py, attrs_to_py, into_numpy, nanos_from_numpy, numbers_from_numpy, numpy_buffer,
 };
 
 /// Values a variable lends instead of a copy (a read-only numpy view of its data), when it
@@ -262,7 +262,9 @@ pub fn variable_to_parts<'py>(
     variable_into_parts(py, var.clone())
 }
 
-/// A variable from its parts: its values copied once.
+/// A variable from its parts. Numbers, date-times and durations are read in place, keeping the
+/// numpy array alive; they are only moved or lent arrays here, which nothing writes to. Other
+/// values are copied.
 ///
 /// # Errors
 /// `TypeError` / `ValueError` for parts that do not follow the format, or values,
@@ -272,8 +274,16 @@ pub fn variable_from_parts(parts: &Bound<'_, PyAny>) -> PyResult<Variable> {
     let dims: Vec<String> = item(&d, "dims")?.extract()?;
     let kind: String = item(&d, "kind")?.extract()?;
     let calendar = opt_str(&d, "calendar")?;
-    let values = values_from_py(&kind, &item(&d, "values")?, calendar.as_deref())?;
-    let mut var = Variable::from_typed(dims, values).map_err(value_error)?;
+    let values = item(&d, "values")?;
+    let in_place = match kind.as_str() {
+        "number" | "datetime" | "timedelta" => numpy_buffer(&values)?,
+        _ => None,
+    };
+    let mut var = match in_place {
+        Some(buffer) => Variable::from_external(dims, buffer),
+        None => Variable::from_typed(dims, values_from_py(&kind, &values, calendar.as_deref())?),
+    }
+    .map_err(value_error)?;
     if let Some(u) = opt_str(&d, "units")? {
         var = var.with_unit(u.parse::<Unit>().map_err(value_error)?);
     }

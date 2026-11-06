@@ -285,6 +285,42 @@ fn indexers<R: Repr>(
         .collect()
 }
 
+/// The positions a boolean `mask` selects along `dim` (of length `len`): the mask must lie
+/// along `dim` alone, and its coordinates must agree with `coords`.
+fn positions_of_mask<C: Repr, R: Repr>(
+    coords: &IndexMap<Name, VariableBase<C>>,
+    dim: &str,
+    len: usize,
+    mask: &DataArrayBase<R>,
+) -> Result<Vec<isize>> {
+    if mask.dims() != [Name::from(dim)] {
+        return Err(invalid(format!(
+            "a boolean indexer for {dim:?} must lie along {dim:?} alone, not {:?}",
+            mask.dims()
+        )));
+    }
+    if mask.shape() != [len] {
+        return Err(invalid(format!(
+            "a boolean indexer for {dim:?} has length {:?}; the dimension has length {len}",
+            mask.shape()
+        )));
+    }
+    for (k, c) in mask.coords() {
+        if coords.get(k).is_some_and(|e| !variables_equal(e, c)) {
+            return Err(invalid(format!(
+                "coordinate {k:?} of an indexer conflicts with the indexed object's"
+            )));
+        }
+    }
+    mask.variable()
+        .data::<bool>()?
+        .iter()
+        .enumerate()
+        .filter(|(_, keep)| **keep)
+        .map(|(i, _)| isize::try_from(i).map_err(|_| IndexError::Overflow.into()))
+        .collect()
+}
+
 /// Attach the indexers' coordinates (skipping `skip`), refusing conflicting ones.
 fn attach<R: Repr>(
     coords: &mut IndexMap<Name, Variable>,
@@ -413,6 +449,19 @@ impl<S: Repr> DataArrayBase<S> {
         Ok(DataArrayBase::from_parts(self.name().cloned(), var, coords))
     }
 
+    /// The positions boolean `mask` selects along `dim`, for [`take`](Self::take).
+    ///
+    /// # Errors
+    /// A mask that does not lie along `dim` alone or differs from it in length, or whose
+    /// coordinates differ from this array's; [`CoreError::DTypeMismatch`] for other values.
+    pub fn mask_positions<R: Repr>(
+        &self,
+        dim: &str,
+        mask: &DataArrayBase<R>,
+    ) -> Result<Vec<isize>> {
+        positions_of_mask(self.coords(), dim, self.variable().len_of(dim)?, mask)
+    }
+
     /// Pointwise selection by label arrays (xarray's `sel` with `DataArray` indexers):
     /// labels become positions with `method`/`tolerance`, then as
     /// [`isel_vectorized`](Self::isel_vectorized).
@@ -458,6 +507,23 @@ impl<S: Repr> DatasetBase<S> {
         }
         *out.attrs_mut() = self.attrs().clone();
         Ok(out)
+    }
+
+    /// [`DataArrayBase::mask_positions`] against every variable.
+    ///
+    /// # Errors
+    /// As for [`DataArrayBase::mask_positions`].
+    pub fn mask_positions<R: Repr>(
+        &self,
+        dim: &str,
+        mask: &DataArrayBase<R>,
+    ) -> Result<Vec<isize>> {
+        let len = self
+            .sizes()
+            .get(dim)
+            .copied()
+            .ok_or_else(|| CoreError::NoSuchDim(dim.into()))?;
+        positions_of_mask(self.coords(), dim, len, mask)
     }
 
     /// [`DataArrayBase::sel_vectorized`] of every variable.

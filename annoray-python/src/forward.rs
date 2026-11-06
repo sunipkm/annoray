@@ -286,9 +286,9 @@ macro_rules! common_extras {
             /// Pickled as a plain-data state (values, units, attributes, encoding); lazy
             /// data is read.
             __reduce__ => "reduce_pickle",
-            /// A copy.
+            /// A copy sharing the data, with attributes of its own.
             __copy__ => "shallow_copy",
-            /// A copy (data is never shared between annoray objects).
+            /// A copy with data of its own.
             __deepcopy__ => "deepcopy",
             /// No-op: a file is released when the data read from it is dropped.
             close => "close",

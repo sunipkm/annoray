@@ -9,6 +9,7 @@ and the array's unit. matplotlib is imported on first use.
 
 from __future__ import annotations
 
+from importlib.util import find_spec
 from typing import TYPE_CHECKING, Any
 
 from annoray.plot._dataarray import (
@@ -30,6 +31,13 @@ from annoray.plot._utils import OPTIONS
 
 if TYPE_CHECKING:
     from annoray._annoray import DataArray, Dataset
+
+
+def _require_matplotlib() -> None:
+    """Plotting needs matplotlib, which is an optional extra."""
+    if find_spec("matplotlib") is None:
+        raise ImportError("plotting needs matplotlib: install it with `pip install annoray[plot]`")
+
 
 __all__ = [
     "OPTIONS",
@@ -58,6 +66,7 @@ class DataArrayPlotAccessor:
     __slots__ = ("_da",)
 
     def __init__(self, darray: DataArray) -> None:
+        _require_matplotlib()
         self._da = darray
 
     def __call__(self, **kwargs: Any) -> Any:
@@ -97,6 +106,7 @@ class DatasetPlotAccessor:
     __slots__ = ("_ds",)
 
     def __init__(self, dataset: Dataset) -> None:
+        _require_matplotlib()
         self._ds = dataset
 
     def __call__(self, **kwargs: Any) -> Any:

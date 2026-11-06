@@ -45,6 +45,7 @@ fn _annoray(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<raw::RawGroup>()?;
     m.add_function(wrap_pyfunction!(raw::write, m)?)?;
     m.add_function(wrap_pyfunction!(raw::check_encoding_py, m)?)?;
+    m.add_class::<native::LentBuffer>()?;
     m.add_class::<native::PyDataArray>()?;
     m.add_class::<native::PyDataset>()?;
     m.add_class::<nc_writer::PyNetcdfWriter>()?;
@@ -72,6 +73,7 @@ fn _annoray(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(native::from_xarray, m)?)?;
     m.add_function(wrap_pyfunction!(native::set_stream_bytes, m)?)?;
     m.add_function(wrap_pyfunction!(native::stream_bytes, m)?)?;
+    m.add_function(wrap_pyfunction!(units::define_unit, m)?)?;
     m.add_function(wrap_pyfunction!(units::set_intern_cap, m)?)?;
     m.add_function(wrap_pyfunction!(units::intern_cap, m)?)?;
     m.add_function(wrap_pyfunction!(units::interned, m)?)?;

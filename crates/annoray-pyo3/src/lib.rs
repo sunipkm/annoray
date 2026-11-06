@@ -57,18 +57,22 @@
 //!
 //! # Copies
 //!
-//! Each extension module has its own memory allocator, so values cannot change owner between
-//! two extension modules; what crosses is copied once, into the side that keeps it:
+//! Each extension module has its own memory allocator, so memory cannot change owner between
+//! two extension modules. It need not: a value of numbers reads the numpy array that crossed
+//! in place, and keeps it (and so the memory, freed by the module that allocated it) alive.
+//! Writing to such a value in Rust first copies it.
 //!
 //! | direction | copies of the values |
 //! |---|---|
-//! | Rust → Python, by value ([`ArDataArray`], [`ArDataset`], [`ArDataTree`]) | one (numbers move into numpy without a copy; annoray copies them into its own memory) |
-//! | Rust → Python, by reference (`&ArDataArray`, `&ArDataset`) | two |
-//! | Python → Rust ([`ArDataArray`], [`ArDataset`]) | one (annoray lends read-only numpy views; they are copied into the Rust value) |
-//! | Python → Rust, in place ([`ArDataArrayRef`]) | none, for numbers, date-times and durations |
-//! | Python → Rust ([`ArDataTree`]) | two (trees do not lend their values) |
+//! | Rust → Python, by value ([`ArDataArray`], [`ArDataset`], [`ArDataTree`]) | none (numbers move into numpy, which annoray reads in place), or one for values Rust itself only reads from Python |
+//! | Rust → Python, by reference (`&ArDataArray`, `&ArDataset`) | one |
+//! | Python → Rust ([`ArDataArray`], [`ArDataset`], [`ArDataArrayRef`]) | none, for numbers, date-times and durations (annoray lends read-only numpy views) |
+//! | Python → Rust ([`ArDataTree`]) | one (trees do not lend their values) |
 //!
-//! Date-times and durations take one more copy from Rust to Python (from annoray's `Instant`
+//! Units defined at run time ([`define_unit`](annoray::units::define_unit)) are per extension
+//! module: one that crosses has to be defined on both sides, or the crossing is an error.
+//!
+//! Date-times and durations take one copy from Rust to Python (from annoray's `Instant`
 //! and `Duration` to numpy's layout); text and CF dates are converted element by element.
 //! Values read lazily from a file are read when converted. Encodings (how values are stored
 //! on disk) do not cross.

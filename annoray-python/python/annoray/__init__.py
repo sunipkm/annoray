@@ -18,7 +18,7 @@ from __future__ import annotations
 from importlib.metadata import version as _version
 from typing import Any
 
-from annoray import dims, testing
+from annoray import dims, testing, units
 from annoray._accessors import register_dataarray_accessor, register_dataset_accessor
 from annoray._annoray import (
     Coarsen,
@@ -43,6 +43,7 @@ from annoray._annoray import (
     corr,
     cov,
     decode_cf,
+    define_unit,
     dot,
     from_xarray,
     full_like,
@@ -110,6 +111,7 @@ __all__ = [
     "cross",
     "date_range",
     "decode_cf",
+    "define_unit",
     "dimension",
     "dims",
     "dot",
@@ -147,6 +149,7 @@ __all__ = [
     "to_netcdf",
     "to_zarr",
     "unify_chunks",
+    "units",
     "where",
     "zeros_like",
 ]

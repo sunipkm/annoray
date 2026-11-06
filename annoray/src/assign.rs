@@ -3,8 +3,7 @@
 //! `da.name = …`).
 //!
 //! Each setter checks everything before changing anything: on an error the container is as
-//! it was. Setters that replace variables return the variables they displaced, so that a
-//! caller that lent out their memory (zero-copy views) can keep it alive.
+//! it was. Setters that replace variables return the variables they displaced.
 
 use indexmap::IndexMap;
 
@@ -45,7 +44,16 @@ impl Dataset {
     pub fn set_array(&mut self, name: impl Into<Name>, array: DataArray) -> Result<Vec<Variable>> {
         let name = name.into();
         let (_, var, coords) = array.into_parts();
-        if self.coords().contains_key(&name) {
+        if var.dims() == std::slice::from_ref(&name) && self.data_vars().contains_key(&name) {
+            // A data variable replaced by the index of a dimension of that name.
+            let mut sizes = self.sizes_without(&[&name])?;
+            merge_sizes(&mut sizes, &var)?;
+            let (data_vars, own_coords) = self.parts_mut();
+            let displaced = data_vars.shift_remove(&name);
+            own_coords.insert(name, var);
+            return Ok(displaced.into_iter().collect());
+        }
+        if self.coords().contains_key(&name) || var.dims() == std::slice::from_ref(&name) {
             return Ok(self.set_coord_var(name, var)?.into_iter().collect());
         }
         let index = |n: &Name, v: &Variable| v.dims() == std::slice::from_ref(n);
@@ -160,9 +168,43 @@ impl Dataset {
             .map(Variable::attrs_mut)
             .ok_or_else(|| CoreError::NoSuchVariable(name.into()))
     }
+
+    /// Set (or clear) the unit of variable (or coordinate) `name`, returning the old one. The
+    /// values are unchanged.
+    ///
+    /// # Errors
+    /// [`CoreError::NoSuchVariable`].
+    pub fn set_unit_of(
+        &mut self,
+        name: &str,
+        unit: Option<annoray_units::Unit>,
+    ) -> Result<Option<annoray_units::Unit>> {
+        let (data_vars, coords) = self.parts_mut();
+        data_vars
+            .get_mut(name)
+            .or_else(|| coords.get_mut(name))
+            .map(|v| v.set_unit(unit))
+            .ok_or_else(|| CoreError::NoSuchVariable(name.into()))
+    }
 }
 
 impl DataArray {
+    /// Set (or clear) the unit of coordinate `name`, returning the old one. The values are
+    /// unchanged.
+    ///
+    /// # Errors
+    /// [`CoreError::NoSuchVariable`].
+    pub fn set_coord_unit(
+        &mut self,
+        name: &str,
+        unit: Option<annoray_units::Unit>,
+    ) -> Result<Option<annoray_units::Unit>> {
+        self.coords
+            .get_mut(name)
+            .map(|v| v.set_unit(unit))
+            .ok_or_else(|| CoreError::NoSuchVariable(name.into()))
+    }
+
     /// Set (or clear) the name.
     pub fn set_name(&mut self, name: Option<Name>) {
         self.name = name;

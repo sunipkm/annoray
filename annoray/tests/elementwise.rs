@@ -91,13 +91,22 @@ fn clip_scalars_types_and_units() {
         t.clip(Some(ClipBound::Quantity(1.0, unit("m"))), None)
             .is_err()
     );
-    // Bare numbers beside a unit: only NaN, or 0 for a ratio-scale unit.
-    assert!(t.clip(Some(5.0.into()), None).is_err());
-    assert!(t.clip(Some(0.0.into()), None).is_err()); // °C is not ratio-scale
+    // Bare numbers are in the data's own unit.
+    let at_least = |v: f64| vals(&t).iter().map(|x| x.max(v)).collect::<Vec<_>>();
+    close(
+        &vals(&t.clip(Some(5.0.into()), None).unwrap()),
+        &at_least(5.0),
+    );
+    close(
+        &vals(&t.clip(Some(0.0.into()), None).unwrap()),
+        &at_least(0.0),
+    );
     close(&vals(&t.clip(Some(NAN.into()), None).unwrap()), &[NAN; 3]);
     let m = da(array![-1.0, 2.0]).with_unit(unit("m"));
     close(&vals(&m.clip(Some(0.0.into()), None).unwrap()), &[0.0, 2.0]);
-    assert!(m.clip(None, Some(1.0.into())).is_err());
+    let clipped = m.clip(None, Some(1.0.into())).unwrap();
+    close(&vals(&clipped), &[-1.0, 1.0]);
+    assert_eq!(clipped.unit(), Some(&unit("m")));
 }
 
 #[test]

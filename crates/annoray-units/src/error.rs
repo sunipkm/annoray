@@ -17,6 +17,12 @@ pub enum UnitError {
     /// An identifier is not a known unit, with or without a prefix.
     #[error("unknown unit {0:?}")]
     UnknownUnit(String),
+    /// [`define_unit`](crate::define_unit) was given a name that already means another unit.
+    #[error("unit {name:?} already exists with another definition")]
+    Redefined {
+        /// The name.
+        name: String,
+    },
     /// The two units measure different quantities.
     #[error("incompatible units: {lhs} and {rhs}")]
     Incompatible {

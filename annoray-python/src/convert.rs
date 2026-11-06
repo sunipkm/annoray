@@ -24,7 +24,7 @@ pub(crate) fn io_error(e: impl std::fmt::Display) -> PyErr {
 
 // ----- attributes -----
 
-pub(crate) use annoray_pyo3::convert::{attr_from_py, attr_to_py, attrs_to_py};
+pub(crate) use annoray_pyo3::convert::{attr_from_py, attr_to_py, attrs_to_py, named_attr_from_py};
 
 // ----- errors -----
 
@@ -178,11 +178,6 @@ fn objects_from(arr: &Bound<'_, PyAny>) -> PyResult<TypedArray<Owned>> {
     Err(PyTypeError::new_err(
         "object arrays must hold only strings, bytes, cftime dates or datetimes",
     ))
-}
-
-/// Any array-like (numpy array, list, scalar) as typed values.
-pub(crate) fn typed_from_py(obj: &Bound<'_, PyAny>) -> PyResult<TypedArray<Owned>> {
-    Ok(typed_zone_from_py(obj)?.0)
 }
 
 /// Any array-like as typed values, with the time zone that times with one share (whenever's

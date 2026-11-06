@@ -465,6 +465,13 @@ impl<S: Repr> DataArrayBase<S> {
         at: &VariableBase<R>,
         opts: impl Into<InterpOptions>,
     ) -> Result<DataArray> {
+        if at.ndim() == 0 {
+            let one = at.expand_dims(dim, 0)?;
+            return Ok(self
+                .interp(dim, &one, opts)?
+                .isel_move([(dim, 0)])?
+                .to_owned());
+        }
         let dim = Name::from(dim);
         let coord = self
             .coords()
@@ -510,6 +517,10 @@ impl<S: Repr> DatasetBase<S> {
         at: &VariableBase<R>,
         opts: impl Into<InterpOptions>,
     ) -> Result<Dataset> {
+        if at.ndim() == 0 {
+            let one = at.expand_dims(dim, 0)?;
+            return Ok(self.interp(dim, &one, opts)?.isel([(dim, 0)])?.to_owned());
+        }
         let dim = Name::from(dim);
         let coord = self
             .coords()

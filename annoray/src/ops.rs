@@ -743,6 +743,8 @@ impl<S: Repr> DataArrayBase<S> {
                     };
                     (Some(plan.result), plan.lhs, plan.rhs)
                 }
+                // A plain number on the left keeps the right operand's spelling.
+                BinOp::Mul if self.unit().is_none() => (rhs.unit().cloned(), None, None),
                 BinOp::Mul => (Some(lu.mul(ru)?), None, None),
                 BinOp::Div => (Some(lu.div(ru)?), None, None),
                 BinOp::Max | BinOp::Min => {

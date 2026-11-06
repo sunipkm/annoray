@@ -2,7 +2,8 @@
 
 **Annotated arrays**: the [xarray](https://xarray.dev) data model with first-class physical
 units, implemented in Rust (PyO3). I/O uses pure-Rust netCDF-3, netCDF-4, HDF5 and Zarr
-(v2/v3, `open_zarr`/`to_zarr`) backends; the runtime dependencies are NumPy and matplotlib.
+(v2/v3, `open_zarr`/`to_zarr`) backends; the only runtime dependency is NumPy
+(`annoray[plot]` adds matplotlib).
 Wheels use the stable ABI: one per platform for CPython 3.11 and later.
 
 - **Labelled indexing and alignment:** `isel`, `sel` (exact, nearest, pad, backfill;

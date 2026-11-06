@@ -1,16 +1,39 @@
 //! Comparison and logical operators on data arrays (`<`, `==`, `&`, `~`, …), and the numpy
 //! ufuncs that call them.
 
-use annoray::{CmpOp, LogicOp};
+use annoray::{CmpOp, DataArray, LogicOp};
 use pyo3::prelude::*;
 use pyo3::pyclass::CompareOp;
 
 use crate::convert::OrPy;
-use crate::native::{PyDataArray, new_da, operand};
+use crate::native::{Operand, PyDataArray, new_da, operand, positional_operand};
 
 impl PyDataArray {
     /// `self op other` (or `other op self` when `reflected`); NotImplemented for operands
-    /// that are not scalars, quantities or data arrays.
+    /// that are not scalars, quantities, numpy arrays or data arrays.
+    /// `other` as an operand beside this array, a plain array by position.
+    fn operand_of<'py>(
+        &self,
+        py: Python<'py>,
+        other: &Bound<'py, PyAny>,
+    ) -> PyResult<Option<Operand<'py>>> {
+        if let Some(o) = operand(py, other)? {
+            return Ok(Some(o));
+        }
+        Ok(
+            positional_operand(py, other, self.inner.dims(), self.inner.shape())?
+                .map(|a| Operand::Owned(Box::new(a))),
+        )
+    }
+
+    /// A plain array operand has no name to disagree with this array's.
+    fn named_like_self(&self, out: DataArray, plain: bool) -> DataArray {
+        match self.inner.name() {
+            Some(n) if plain => out.with_name(n.clone()),
+            _ => out,
+        }
+    }
+
     pub(crate) fn compare_with(
         &self,
         py: Python<'_>,
@@ -18,9 +41,10 @@ impl PyDataArray {
         other: &Bound<'_, PyAny>,
         reflected: bool,
     ) -> PyResult<Py<PyAny>> {
-        let Some(o) = operand(py, other)? else {
+        let Some(o) = self.operand_of(py, other)? else {
             return Ok(py.NotImplemented());
         };
+        let plain = matches!(o, Operand::Owned(_)) && o.get().ndim() > 0;
         let o = o.get();
         let out = py
             .detach(|| {
@@ -31,7 +55,7 @@ impl PyDataArray {
                 }
             })
             .py_err()?;
-        Ok(new_da(py, out)?.into_any())
+        Ok(new_da(py, self.named_like_self(out, plain))?.into_any())
     }
 
     pub(crate) fn logical_with(
@@ -41,9 +65,10 @@ impl PyDataArray {
         other: &Bound<'_, PyAny>,
         reflected: bool,
     ) -> PyResult<Py<PyAny>> {
-        let Some(o) = operand(py, other)? else {
+        let Some(o) = self.operand_of(py, other)? else {
             return Ok(py.NotImplemented());
         };
+        let plain = matches!(o, Operand::Owned(_)) && o.get().ndim() > 0;
         let o = o.get();
         let out = py
             .detach(|| {
@@ -54,7 +79,7 @@ impl PyDataArray {
                 }
             })
             .py_err()?;
-        Ok(new_da(py, out)?.into_any())
+        Ok(new_da(py, self.named_like_self(out, plain))?.into_any())
     }
 }
 

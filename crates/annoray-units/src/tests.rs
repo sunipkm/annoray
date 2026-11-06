@@ -604,3 +604,67 @@ fn physical_constants_are_current() {
     assert!(close(factor("mmHg", "Pa"), 133.322_387_415));
     assert_eq!(exact("kWh", "MJ"), r(18, 5));
 }
+
+#[test]
+fn braced_exponents_parse() {
+    assert_eq!(u("cm^{-3}"), u("cm-3"));
+    assert_eq!(u("eV cm^{-3} s^{-1}"), u("eV cm-3 s-1"));
+    assert_eq!(u("m^{ 2 }"), u("m2"));
+    assert_eq!(u("cm^{-3}").to_string(), "cm^{-3}");
+    for bad in ["m^{2", "m^{}", "m^{x}", "m{2}", "{2}", "m^}2"] {
+        assert!(bad.parse::<Unit>().is_err(), "{bad}");
+    }
+}
+
+#[test]
+fn photons_are_a_count_and_ph_is_the_phot() {
+    assert_eq!(u("photon"), u("1"));
+    assert_eq!(u("photons"), u("count"));
+    assert_eq!(u("ph").converter_to(&u("lx")).unwrap().factor(), 1e4);
+    assert_ne!(u("ph"), u("photon"));
+}
+
+#[test]
+fn defined_units_convert_exactly_and_keep_their_spelling() {
+    let tecu = crate::define_unit("TestTECU", "1e16 m^-2").unwrap();
+    assert_eq!(tecu.to_string(), "TestTECU");
+    assert_eq!(u("TestTECU"), u("1e16 m-2"));
+    assert_eq!(
+        u("TestTECU").converter_to(&u("m-2")).unwrap().factor(),
+        1e16
+    );
+    assert_eq!(
+        u("kTestTECU")
+            .converter_to(&u("TestTECU"))
+            .unwrap()
+            .factor(),
+        1e3
+    );
+    assert_eq!(u("TestTECU").to_string(), "TestTECU");
+    // Handles made from it, once defined, keep meaning the same unit.
+    let id = crate::UnitId::parse("TestTECU").unwrap();
+    assert_eq!(*id, u("1e16 m-2"));
+    assert!(id.same_spelling(crate::UnitId::parse("TestTECU").unwrap()));
+}
+
+#[test]
+fn defining_a_unit_again() {
+    crate::define_unit("TestAgain", "2 m").unwrap();
+    crate::define_unit("TestAgain", "2 m").unwrap();
+    crate::define_unit("TestAgain", "200 cm").unwrap();
+    for (name, definition) in [("TestAgain", "3 m"), ("km", "1 m"), ("kTestAgain", "1 m")] {
+        assert!(
+            matches!(
+                crate::define_unit(name, definition),
+                Err(UnitError::Redefined { .. })
+            ),
+            "{name}"
+        );
+    }
+    crate::define_unit("km", "1000 m").unwrap();
+    assert!(crate::define_unit("m2", "1 s").is_err());
+    assert!(crate::define_unit("", "1 s").is_err());
+    assert!(crate::define_unit("two words", "1 s").is_err());
+    assert!(crate::define_unit("TestBadDef", "no such thing").is_err());
+    assert!("TestBadDef".parse::<Unit>().is_err());
+}

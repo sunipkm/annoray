@@ -192,6 +192,7 @@ ar.set_intern_cap(65_536)
    set_stream_bytes
    stream_bytes
    set_intern_cap
+   define_unit
    intern_cap
    interned
    set_options

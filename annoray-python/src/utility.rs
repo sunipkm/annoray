@@ -9,7 +9,7 @@ use pyo3::exceptions::{PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyTuple};
 
-use crate::convert::{OrPy, UnitError, attr_from_py, parse_unit, quantity_parts};
+use crate::convert::{OrPy, UnitError, parse_unit, quantity_parts};
 use crate::native::{
     PyDataArray, PyDataset, dict_iter, merge_kwargs, new_child_da, new_da, new_ds, operand,
     variable_from_py,
@@ -316,22 +316,20 @@ fn replaced_data(py: Python<'_>, like: &Variable, data: &Bound<'_, PyAny>) -> Py
     Ok(v.with_encoding(like.encoding().clone()))
 }
 
-fn attrs_update(
-    attrs: &mut annoray::Attrs,
-    args: &Bound<'_, PyTuple>,
-    kwargs: Option<&Bound<'_, PyDict>>,
-) -> PyResult<()> {
+/// The attributes `assign_attrs(*args, **kwargs)` gives, one dict in order of precedence.
+fn attrs_update<'py>(
+    py: Python<'py>,
+    args: &Bound<'py, PyTuple>,
+    kwargs: Option<&Bound<'py, PyDict>>,
+) -> PyResult<Bound<'py, PyDict>> {
+    let changed = PyDict::new(py);
     for a in args.iter() {
-        for (k, v) in dict_iter(Some(&a))? {
-            attrs.insert(k.into(), attr_from_py(&v)?);
-        }
+        changed.update(a.cast::<PyDict>()?.as_mapping())?;
     }
     if let Some(kw) = kwargs {
-        for (k, v) in kw.iter() {
-            attrs.insert(k.extract::<String>()?.into(), attr_from_py(&v)?);
-        }
+        changed.update(kw.as_mapping())?;
     }
-    Ok(())
+    Ok(changed)
 }
 
 fn loc_indexer<'py>(obj: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
@@ -377,8 +375,10 @@ impl PyDataArray {
 
 #[pymethods]
 impl PyDataArray {
-    /// A copy (annoray arrays are immutable, so deep and shallow copies are the same), with
-    /// its values replaced by `data` (same shape) if given.
+    /// A copy, with its values replaced by `data` (same shape) if given. `deep=False` shares
+    /// the buffers with this array, `deep=True` gives them memory of their own; attributes
+    /// and coordinates are independent either way, and values are immutable, so the two
+    /// differ only in memory.
     #[pyo3(signature = (deep=true, data=None))]
     fn copy(
         &self,
@@ -386,9 +386,15 @@ impl PyDataArray {
         deep: bool,
         data: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<Py<PyDataArray>> {
-        let _ = deep;
         let Some(data) = data else {
-            return new_da(py, self.inner.clone());
+            return new_da(
+                py,
+                if deep {
+                    py.detach(|| self.inner.deep_copy())
+                } else {
+                    self.inner.clone()
+                },
+            );
         };
         let v = replaced_data(py, self.inner.variable(), data)?;
         let (name, _, coords) = self.inner.clone().into_parts();
@@ -428,7 +434,11 @@ impl PyDataArray {
         kwargs: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Py<PyDataArray>> {
         let mut out = self.inner.clone();
-        attrs_update(out.attrs_mut(), args, kwargs)?;
+        let changed = attrs_update(py, args, kwargs)?;
+        let (attrs, unit) =
+            crate::mutate::edited_with_unit(out.attrs(), out.unit(), changed.as_any(), Vec::new())?;
+        *out.attrs_mut() = attrs;
+        out.set_unit(unit);
         new_da(py, out)
     }
 
@@ -529,9 +539,11 @@ impl PyDataArray {
 
 #[pymethods]
 impl PyDataset {
-    /// A copy (datasets are immutable, so deep and shallow copies are the same), with the
-    /// data of variables replaced from `data` (a mapping of name to values of the same
-    /// shape) if given.
+    /// A copy, with the data of variables replaced from `data` (a mapping of name to values of
+    /// the same shape) if given. `deep=False` shares the buffers with this dataset, `deep=True`
+    /// gives them memory of their own; attributes and the mapping of variables are independent
+    /// either way, so a later `update` or attribute write on this dataset does not reach the
+    /// copy.
     #[pyo3(signature = (deep=true, data=None))]
     fn copy(
         &self,
@@ -539,8 +551,11 @@ impl PyDataset {
         deep: bool,
         data: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<Py<PyDataset>> {
-        let _ = deep;
-        let mut out = self.inner.clone();
+        let mut out = if deep {
+            py.detach(|| self.inner.deep_copy())
+        } else {
+            self.inner.clone()
+        };
         for (k, v) in dict_iter(data)? {
             let old =
                 self.inner.data_vars().get(k.as_str()).ok_or_else(|| {
@@ -579,7 +594,8 @@ impl PyDataset {
         kwargs: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Py<PyDataset>> {
         let mut out = self.inner.clone();
-        attrs_update(out.attrs_mut(), args, kwargs)?;
+        let changed = attrs_update(py, args, kwargs)?;
+        crate::native::set_attrs(out.attrs_mut(), Some(changed.as_any()))?;
         new_ds(py, out)
     }
 
@@ -784,10 +800,21 @@ pub(crate) fn where_method(
     let py = slf.py();
     let me = &slf.borrow().inner;
     let cond = condition(slf.as_any(), cond)?;
-    let c = cond
-        .cast::<PyDataArray>()
-        .map_err(|_| PyTypeError::new_err("cond must be a DataArray of booleans"))?;
-    let c = &c.borrow().inner;
+    let plain_mask = match cond.cast::<PyDataArray>() {
+        Ok(_) => None,
+        Err(_) => crate::native::positional_operand(py, &cond, me.dims(), me.shape())?,
+    };
+    let held;
+    let c = match &plain_mask {
+        Some(mask) => mask,
+        None => {
+            held = cond
+                .cast::<PyDataArray>()
+                .map_err(|_| PyTypeError::new_err("cond must be a DataArray of booleans"))?
+                .borrow();
+            &held.inner
+        }
+    };
     let out = match other {
         None => py.detach(|| me.where_(c)),
         Some(o) if o.is_none() => py.detach(|| me.where_(c)),
@@ -803,6 +830,20 @@ pub(crate) fn where_method(
         },
     };
     new_da(py, out.py_err()?)
+}
+
+/// `where(cond, other, drop=True)` of a DataArray or Dataset.
+pub(crate) fn where_drop(
+    obj: &Bound<'_, PyAny>,
+    cond: &Bound<'_, PyAny>,
+    other: Option<&Bound<'_, PyAny>>,
+) -> PyResult<Py<PyAny>> {
+    Ok(obj
+        .py()
+        .import("annoray._methods")?
+        .getattr("where_drop")?
+        .call1((obj, cond, other))?
+        .unbind())
 }
 
 /// `Dataset.where`'s condition: `cond`, or `cond(ds)` when callable.

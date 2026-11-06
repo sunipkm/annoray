@@ -82,6 +82,9 @@ pub trait Element:
 
     /// Mutably borrow the concretely typed array, if `a` holds this element type.
     fn peek_mut<S: Repr>(a: &mut TypedArray<S>) -> Option<&mut Arr<S, Self>>;
+
+    /// Take the concretely typed array out, if `a` holds this element type.
+    fn take<S: Repr>(a: TypedArray<S>) -> Option<Arr<S, Self>>;
 }
 
 /// An n-dimensional array with a runtime element type, in storage representation `S`.
@@ -187,6 +190,13 @@ macro_rules! impl_element {
             }
 
             fn peek_mut<S: Repr>(a: &mut TypedArray<S>) -> Option<&mut Arr<S, Self>> {
+                match a {
+                    TypedArray::$var(x) => Some(x),
+                    _ => None,
+                }
+            }
+
+            fn take<S: Repr>(a: TypedArray<S>) -> Option<Arr<S, Self>> {
                 match a {
                     TypedArray::$var(x) => Some(x),
                     _ => None,

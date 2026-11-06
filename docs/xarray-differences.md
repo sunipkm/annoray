@@ -10,9 +10,10 @@ This page lists the differences by topic. Each entry gives annoray's behaviour, 
 
 ## Data model and assignment
 
-Data are immutable from Python; containers are not. A `DataArray`'s data and unit are fixed
-for its lifetime (its coordinates, attributes and name can change), while a `Dataset` is a
-mutable collection whose variables are replaced, never written into.
+Data are immutable from Python; containers are not. A `DataArray`'s data is fixed for its
+lifetime (its coordinates, attributes, including the `units` that name its unit, and its name
+can change), while a `Dataset` is a mutable collection whose variables are replaced, never
+written into.
 
 - **Values are immutable from Python.** `da[...] = v`, `da.loc[...] = v` and
   `da.values[...] = v` raise `TypeError`; `.values` is a read-only NumPy view of the Rust
@@ -39,9 +40,33 @@ mutable collection whose variables are replaced, never written into.
     it was.
   - `attrs`, `coords` and `encoding` are live `dict` subclasses.
   - Attributes that are not edited keep their exact netCDF types (`int16`, `float32`, arrays).
-- **Arrays taken from a dataset are linked copies.** `ds["v"].attrs[...] = ...` writes
-  through to the dataset, unless the dataset has since replaced `v`.
+- **Arrays taken from a dataset share its buffers, and are otherwise linked copies.**
+  `ds["v"]`, `ds.data_vars`, `ds.variables` and `ds.copy(deep=False)` only count a reference to
+  the values, so they cost the same whatever the size. `ds["v"].attrs[...] = ...` writes through
+  to the dataset, unless the dataset has since replaced `v`. A numpy view (`.values`) holds its
+  own reference: it keeps its values through any later replacement.
   - *xarray:* the array shares the whole variable with the dataset.
+- **`copy(deep=)` differs only in memory.** `deep=False` shares the buffers, `deep=True` gives
+  them memory of their own. Attributes and the mapping of variables are independent in both, so
+  a later `update` or attribute write on the source does not reach a copy.
+  - *xarray:* `deep=False` shares attributes' values, and lets writes to the data through.
+  - In Rust, `clone` shares and a write copies first (`data_mut`, copy on write); `deep_copy`
+    copies at once.
+- **Constructing from numpy copies by default, into C order.** `Dataset(..., copy=False)` and
+  `DataArray(..., copy=False)` keep aligned, native numpy arrays of numbers, booleans, complex
+  numbers, `datetime64[ns]` and `timedelta64[ns]` as they are, in their own layout, with the
+  array alive for as long as the values are. Writing to such an array afterwards is your
+  responsibility not to: annoray's values would change under it. Other inputs (lists, text,
+  other date units, `float16`, other byte orders) are still copied.
+  - *xarray:* never copies a numpy array, so a later write to it reaches the dataset.
+- **A variable named after its only dimension is that dimension's coordinate**, in the
+  constructor, `update`, `ds[...] = ...`, `assign`, `merge` and (in Rust) `add_var`, as in
+  xarray.
+- **`assign_coords` replaces a coordinate**, as in xarray; one that would change the length of a
+  dimension other variables have is an error.
+- **`None` attributes are refused**, by name (`attribute "a": None cannot be stored ...`). netCDF
+  has no such attribute, and a value that could not be written would fail far from its cause.
+  - *xarray:* keeps `None` in memory and fails when writing.
 - **Single-coordinate indexes only.** Label lookups run on the dimension coordinate; there
   are no separate index objects.
   - These raise an error with a hint:
@@ -57,8 +82,17 @@ mutable collection whose variables are replaced, never written into.
 
 ## Units
 
-Units belong to the data, not to an attribute: `da.units` is a unit, and a CF `units`
-attribute is decoded into it when a file is opened.
+Units belong to the data: `da.units` is a unit, and a CF `units` attribute is decoded into it
+when a file is opened.
+
+- **`da.attrs["units"]` is that unit.** It reads the unit as written, and appears in `dict(da.attrs)`
+  and iteration; a `units` attribute given to a constructor becomes the unit, so
+  `(dims, values, dict(da.attrs))` keeps it, and it is written to a file once.
+  - Writing it sets the unit and leaves the values as they are; use `to` to convert them. A
+    string that does not parse stays an attribute, with a warning, and the data then has no unit.
+    `del`, `pop` and `clear` remove the unit, as `da.attrs = {...}` without `units` does.
+  - `keep_attrs=False` keeps the unit (it belongs to the data), so `attrs` is then
+    `{"units": ...}`. *xarray:* loses it.
 
 - **Values stay in their declared unit.** `mm` data is never normalised to `m`.
 - **`+`, `-` and comparisons check dimensions.**
@@ -68,9 +102,19 @@ attribute is decoded into it when a file is opened.
 - **Bare numbers next to unitful data.**
   - A bare number is accepted only as `0` (for ratio-scale and logarithmic units) or NaN.
   - Any other value must be given as a `Quantity`. This applies to comparisons, `where`,
-    `fillna`, `clip`, `isin`, `put` and `query`. For example, `da > 280` on kelvin data raises `UnitError`;
+    `fillna`, `isin`, `put` and `query`. For example, `da > 280` on kelvin data raises `UnitError`;
     `da > ar.Quantity(280, "K")` works.
   - *xarray:* compares the stored numbers, whatever the unit.
+  - **`clip` is the exception:** a bare bound is in the data's own unit, as
+    `np.clip(da.values, ...)` is. It can only limit the values as they stand, so nothing is
+    left ambiguous; a `Quantity` is converted as usual.
+- **Plain arrays next to labelled data.** `da * np.ones(3)` treats a numpy array as positional,
+  dimensionless data broadcast onto `da`'s dimensions (a shape that does not fit is `ValueError`),
+  as xarray does, for arithmetic, comparisons and logic, and for each variable of a `Dataset`.
+  - Unit checks apply: `km_array + ndarray` is a `UnitError`, `km_array * ndarray` is in `km`.
+  - `da ** ndarray` is elementwise without a unit. With one, all the exponents must be the
+    same (different powers have no single unit).
+  - *xarray:* ignores units.
 - **Affine and logarithmic units.**
   - `degC - degC` is a kelvin-sized step; `degC + degC`, products of °C and sums of °C are
     errors.
@@ -79,6 +123,12 @@ attribute is decoded into it when a file is opened.
   unit instead of dropping the unit.
 - **Math functions.** Transcendental functions need dimensionless input. `sin`, `cos` and
   `tan` take angles. Inverse trigonometric functions of unitful input return radians.
+- **Unit strings** are UDUNITS-2 and CF, plus LaTeX's braced exponent (`cm^{-3}`) and `photon`,
+  a count like `count`. `ph` stays UDUNITS' phot (10⁴ lx), so it is not a photon as in astropy.
+  `ar.define_unit("TECU", "1e16 m^-2")` adds a unit for the process (Rust:
+  `annoray::units::define_unit`); a name that already means another unit is an error. Each
+  compiled extension linking annoray has its own registry, so an extension exchanging such a
+  unit with `annoray` defines it on both sides.
 - **Python scalars.** `float(da)` and `int(da)` work only on dimensionless data. `da.item()`
   returns a `Quantity` when there is a unit.
 - **Calculus.**
@@ -119,10 +169,14 @@ attribute is decoded into it when a file is opened.
 ## Indexing and selection
 
 - **`.loc[...]` is read-only.** Use `put_sel` to write by label.
+- **Boolean masks.** `sel` and `isel` take a boolean array or `DataArray` along the dimension, and
+  `where` a boolean numpy array (broadcast by position), as in xarray. A mask whose
+  coordinates differ from the object's is an error. `where(drop=True)` also takes these.
 - **Rust selection macros.** `isel!` / `sel!` take Python slice syntax and return `Result`;
   they never panic.
 - **`interp`.**
   - No extrapolation by default.
+  - A scalar target gives a 0-d result with a scalar coordinate, as in xarray.
   - A NaN target gives NaN.
   - Text coordinates along the interpolated dimension are dropped.
   - annoray additions: log-scale interpolation (`method="log_coord"`, `"log_value"`,
@@ -266,8 +320,8 @@ attribute is decoded into it when a file is opened.
 
 ## Python API
 
-- `import annoray` loads neither xarray nor pandas. The dependencies are NumPy and
-  matplotlib (imported only for plotting); xarray and astropy are optional extras.
+- `import annoray` loads neither xarray nor pandas nor matplotlib. The only dependency is
+  NumPy; matplotlib (the `plot` extra), xarray and astropy are optional extras.
 - xarray's `Variable`, `IndexVariable`, `Coordinates` and `CFTimeIndex` classes are not
   provided.
 - Unknown attributes cannot be set on objects. Accessors registered with

@@ -52,7 +52,7 @@ def test_properties():
 
 def test_units_from_attrs_and_quantities():
     a = ar.DataArray([1.0, 2.0], dims="x", attrs={"units": "m s-1", "long_name": "speed"})
-    assert a.units is not None and "units" not in a.attrs and a.attrs["long_name"] == "speed"
+    assert a.units == "m s-1" and a.attrs["units"] == "m s-1" and a.attrs["long_name"] == "speed"
     q = ar.DataArray(2.0 * ar.Unit("km"))  # a scalar quantity: a 0-d array
     assert q.units == "km" and q.ndim == 0 and float(q.values) == 2.0
     with pytest.warns(UserWarning, match="kept as an attribute"):

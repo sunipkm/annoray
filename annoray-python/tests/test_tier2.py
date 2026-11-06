@@ -139,7 +139,7 @@ def test_units_survive_pandas_and_dicts():
     d = m.to_dict()
     assert d["attrs"]["units"] == "m"
     back = ar.DataArray.from_dict(d)
-    assert back.units == "m" and "units" not in back.attrs
+    assert back.units == "m" and back.attrs == {"units": "m"}
     ar.testing.assert_identical(back, m)
 
 

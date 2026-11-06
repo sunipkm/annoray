@@ -192,6 +192,18 @@ impl Hash for PyUnit {
     }
 }
 
+/// Add a unit to this process's registry: `define_unit("TECU", "1e16 m^-2")`. It parses from
+/// then on, by that exact spelling and with SI prefix symbols, and is read and written as
+/// written. Defining a name again with an equal unit does nothing; a name that already means
+/// another unit is an error. The definition is a string or a `Unit`.
+#[pyfunction]
+pub(crate) fn define_unit(name: &str, definition: &Bound<'_, PyAny>) -> PyResult<PyUnit> {
+    let text = definition.str()?.extract::<String>()?;
+    annoray::units::define_unit(name, &text)
+        .map(|inner| PyUnit { inner })
+        .map_err(|e| crate::convert::unit_error(&e))
+}
+
 /// A unit from a string, a `Unit`, or an astropy unit.
 pub(crate) fn unit_from_py(u: &Bound<'_, PyAny>) -> PyResult<Unit> {
     if let Ok(u) = u.cast::<PyUnit>() {

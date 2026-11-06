@@ -425,7 +425,7 @@ def _strip_unit(da: DataArray, keep_attrs: bool | None) -> DataArray:
         dims=da.dims,
         coords=dict(da.coords),
         name=da.name,
-        attrs=dict(da.attrs) if keep_attrs is not False else None,
+        attrs=da._stored_attrs() if keep_attrs is not False else None,
     )
     return out
 
@@ -561,7 +561,7 @@ def argsort(obj: DataArray, axis: int = -1, kind: Any = None, order: Any = None)
         raise ValueError("argsort: order= applies to structured arrays, which annoray lacks")
     idx = np.argsort(np.asarray(obj.values), axis=axis, kind=kind)
     return DataArray(
-        idx, dims=obj.dims, coords=dict(obj.coords), name=obj.name, attrs=dict(obj.attrs)
+        idx, dims=obj.dims, coords=dict(obj.coords), name=obj.name, attrs=obj._stored_attrs()
     )
 
 
@@ -575,13 +575,13 @@ def reduce_pickle(obj: Any) -> Any:
 
 
 def deepcopy(obj: Any, memo: Any = None) -> Any:
-    """``copy.deepcopy``: a copy (data is never shared between annoray objects)."""
-    return obj.copy()
+    """``copy.deepcopy``: a copy with data of its own."""
+    return obj.copy(deep=True)
 
 
 def shallow_copy(obj: Any) -> Any:
-    """``copy.copy``."""
-    return obj.copy()
+    """``copy.copy``: a copy sharing the data, with attributes of its own."""
+    return obj.copy(deep=False)
 
 
 def close(obj: Any) -> None:
@@ -785,3 +785,30 @@ def set_xindex(obj: Any, coord_names: Any, index_cls: Any = None, **options: Any
 def to_stacked_array(obj: Any, *args: Any, **kwargs: Any) -> Any:
     """Not supported: the result is indexed by a MultiIndex."""
     raise NotImplementedError(f"to_stacked_array: {_ONE_INDEX}")
+
+
+def where_array(ds: Dataset, cond: Any, other: Any = None) -> Dataset:
+    """``ds.where`` with a plain boolean array, broadcast onto each variable by position."""
+    return ds.assign({k: v.where(cond, other) for k, v in ds.data_vars.items()})
+
+
+def where_drop(obj: Any, cond: Any, other: Any = None) -> Any:
+    """``obj.where(cond, drop=True)``: positions where ``cond`` holds nowhere are removed."""
+    if other is not None:
+        raise ValueError("cannot set `other` if drop=True")
+    if callable(cond) and not isinstance(cond, DataArray | Dataset):
+        cond = cond(obj)
+    if isinstance(cond, Dataset):
+        cond = cond.to_array("__variable__").any("__variable__")
+    elif not isinstance(cond, DataArray):
+        if isinstance(obj, Dataset):
+            raise TypeError("drop=True on a Dataset needs cond as a DataArray or Dataset")
+        cond = DataArray(np.broadcast_to(np.asarray(cond), obj.shape), dims=obj.dims)
+    mask = np.asarray(cond.values)
+    if mask.dtype.kind != "b":
+        raise TypeError("cond must be boolean")
+    kept = {
+        d: np.nonzero(mask.any(axis=tuple(a for a in range(mask.ndim) if a != axis)))[0]
+        for axis, d in enumerate(cond.dims)
+    }
+    return obj.isel(kept).where(cond.isel(kept))

@@ -13,12 +13,12 @@ use annoray_pyo3::parts;
 use crate::native::{PyDataArray, PyDataset, new_da, new_ds, values_of};
 use crate::tree::{PyDataTree, new_root};
 
-/// Views of `owner`'s values (in memory, numeric, date-time or duration), without a copy.
-fn lend<'py>(owner: &Bound<'py, PyAny>, var: &Variable) -> PyResult<Option<Bound<'py, PyAny>>> {
+/// Views of a variable's values (in memory, numeric, date-time or duration), without a copy.
+fn lend<'py>(py: Python<'py>, var: &Variable) -> PyResult<Option<Bound<'py, PyAny>>> {
     if var.is_lazy() || !parts::lends(var.dtype()) {
         return Ok(None);
     }
-    values_of(owner.clone(), var).map(Some)
+    values_of(py, var).map(Some)
 }
 
 /// The exchange format's version (see `annoray-pyo3`).
@@ -39,8 +39,8 @@ pub(crate) fn _array_from_parts(
 /// A `DataArray`'s parts (values lent where they can be).
 #[pyfunction]
 pub(crate) fn _array_to_parts<'py>(da: &Bound<'py, PyDataArray>) -> PyResult<Bound<'py, PyDict>> {
-    let owner = da.as_any();
-    parts::dataarray_to_parts(da.py(), &da.borrow().inner, &|v| lend(owner, v))
+    let py = da.py();
+    parts::dataarray_to_parts(py, &da.borrow().inner, &|v| lend(py, v))
 }
 
 /// A `Dataset` from its parts (values copied once).
@@ -55,8 +55,8 @@ pub(crate) fn _dataset_from_parts(
 /// A `Dataset`'s parts (values lent where they can be).
 #[pyfunction]
 pub(crate) fn _dataset_to_parts<'py>(ds: &Bound<'py, PyDataset>) -> PyResult<Bound<'py, PyDict>> {
-    let owner = ds.as_any();
-    parts::dataset_to_parts(ds.py(), &ds.borrow().inner, &|v| lend(owner, v))
+    let py = ds.py();
+    parts::dataset_to_parts(py, &ds.borrow().inner, &|v| lend(py, v))
 }
 
 /// A `DataTree` from its parts (values copied once).

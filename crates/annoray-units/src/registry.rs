@@ -1,7 +1,9 @@
-//! The unit and prefix registry, built once from the generated UDUNITS table.
+//! The unit and prefix registry, built once from the generated UDUNITS table, and the units an
+//! application adds at run time ([`define_unit`]).
 
 use std::collections::HashMap;
-use std::sync::OnceLock;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{OnceLock, PoisonError, RwLock};
 
 use crate::extra::{AMENDMENTS, EXTRA_UNITS};
 use crate::parse::{parse_number, parse_with};
@@ -45,13 +47,33 @@ pub(crate) struct Registry {
     pub(crate) failures: Vec<(&'static str, UnitError)>,
 }
 
+/// Units defined at run time, by the exact spelling (they behave as symbols).
+type Custom = HashMap<String, Unit>;
+
+static CUSTOM: RwLock<Option<Custom>> = RwLock::new(None);
+/// Whether [`CUSTOM`] has entries: most programs never define a unit, and do not take the lock.
+static ANY_CUSTOM: AtomicBool = AtomicBool::new(false);
+
 impl Registry {
-    /// Resolve an identifier: exact symbol, then name (case-insensitive), then prefix + unit.
+    /// Resolve an identifier: exact symbol, then name (case-insensitive), then a unit defined
+    /// at run time, then prefix + unit.
     pub(crate) fn lookup(&self, id: &str) -> Option<Unit> {
+        if ANY_CUSTOM.load(Ordering::Acquire) {
+            let custom = CUSTOM.read().unwrap_or_else(PoisonError::into_inner);
+            self.lookup_in(id, custom.as_ref())
+        } else {
+            self.lookup_in(id, None)
+        }
+    }
+
+    fn lookup_in(&self, id: &str, custom: Option<&Custom>) -> Option<Unit> {
         if let Some(u) = self.symbols.get(id) {
             return Some(u.clone());
         }
         if let Some(u) = self.names.get(&id.to_lowercase()) {
+            return Some(u.clone());
+        }
+        if let Some(u) = custom.and_then(|c| c.get(id)) {
             return Some(u.clone());
         }
         // Prefix + unit. Like UDUNITS, a prefix symbol may precede a unit name (`dbar`, `mbar`).
@@ -60,6 +82,7 @@ impl Registry {
             self.symbols
                 .get(rest)
                 .or_else(|| self.names.get(&rest.to_lowercase()))
+                .or_else(|| custom.and_then(|c| c.get(rest)))
         };
         for (p, scale) in &self.symbol_prefixes {
             if let Some(u) = id
@@ -219,4 +242,52 @@ pub(crate) fn entries() -> Vec<Entry> {
 pub(crate) fn registry() -> &'static Registry {
     static REG: OnceLock<Registry> = OnceLock::new();
     REG.get_or_init(Registry::build)
+}
+
+/// Add a unit to this process's registry: `define_unit("TECU", "1e16 m^-2")`. It parses from
+/// then on, by that exact spelling and with SI prefix symbols (`kTECU`), and files that name it
+/// read and write it as written. Returns the unit.
+///
+/// Definitions are never removed, so a unit once parsed keeps its meaning; defining a name
+/// again with an equal unit does nothing. Each compiled copy of this crate has its own registry
+/// (two Python extension modules that both link it define their units separately).
+///
+/// ```
+/// use annoray_units::{Unit, define_unit};
+///
+/// define_unit("TECU", "1e16 m^-2")?;
+/// let tecu: Unit = "TECU".parse()?;
+/// assert_eq!(tecu.converter_to(&"m^-2".parse()?)?.factor(), 1e16);
+/// assert_eq!(tecu.to_string(), "TECU");
+/// # Ok::<(), annoray_units::UnitError>(())
+/// ```
+///
+/// # Errors
+/// [`UnitError::Parse`] for a `name` that would not read back as one unit name (`m2` is `m`
+/// squared), or a `definition` that does not parse; [`UnitError::Redefined`] for a name that
+/// already means another unit, with or without a prefix.
+pub fn define_unit(name: &str, definition: &str) -> Result<Unit, UnitError> {
+    if !crate::parse::is_unit_name(name) {
+        return Err(UnitError::Parse {
+            input: name.to_owned(),
+            pos: 0,
+            reason: "a unit's name is letters, not ending in a digit".to_owned(),
+        });
+    }
+    let unit = definition.parse::<Unit>()?.without_label();
+    let reg = registry();
+    let mut custom = CUSTOM.write().unwrap_or_else(PoisonError::into_inner);
+    if let Some(existing) = reg.lookup_in(name, custom.as_ref()) {
+        if existing != unit {
+            return Err(UnitError::Redefined {
+                name: name.to_owned(),
+            });
+        }
+    } else {
+        custom
+            .get_or_insert_with(Custom::new)
+            .insert(name.to_owned(), unit.clone());
+        ANY_CUSTOM.store(true, Ordering::Release);
+    }
+    Ok(unit.with_label(name))
 }

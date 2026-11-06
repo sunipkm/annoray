@@ -313,7 +313,9 @@ impl PyDataset {
         new_ds(py, do_sortby(py, &self.inner, variables, ascending)?)
     }
 
-    /// Add or replace coordinates: `ds.assign_coords(x=[...])`.
+    /// Add or replace coordinates: `ds.assign_coords(x=[...])`. A new coordinate cannot change
+    /// the length of a dimension other variables have; a data variable of that name becomes
+    /// the coordinate.
     #[pyo3(signature = (coords=None, **kwargs))]
     fn assign_coords(
         &self,
@@ -323,9 +325,11 @@ impl PyDataset {
     ) -> PyResult<Py<PyDataset>> {
         let mut out = self.inner.clone();
         for (name, v) in merge_kwargs(coords, kwargs)? {
-            out = out
-                .with_coord(name.as_str(), spec_from_py(py, &name, &v)?)
-                .py_err()?;
+            let var = spec_from_py(py, &name, &v)?;
+            if out.data_vars().contains_key(name.as_str()) {
+                out.remove(&name).py_err()?;
+            }
+            out.set_coord_var(name.as_str(), var).py_err()?;
         }
         new_ds(py, out)
     }

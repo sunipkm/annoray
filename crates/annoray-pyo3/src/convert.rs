@@ -2,7 +2,11 @@
 //! the exchange format ([`parts`](crate::parts)) is built from. They need no `annoray` package
 //! at run time.
 
-use annoray::{AttrValue, Attrs, Duration, Instant, Name, Owned, TypedArray};
+use std::sync::Arc;
+
+use annoray::{
+    AttrValue, Attrs, Duration, Element, ExternalBuffer, Instant, Name, Owned, TypedArray, View,
+};
 use ndarray::{ArrayD, IxDyn};
 use numpy::{Complex32, Complex64, PyArrayDyn, PyArrayMethods};
 use pyo3::exceptions::{PyTypeError, PyValueError};
@@ -62,6 +66,11 @@ pub fn attr_to_py<'py>(py: Python<'py>, a: &AttrValue) -> PyResult<Bound<'py, Py
 /// # Errors
 /// `ValueError` for other values.
 pub fn attr_from_py(v: &Bound<'_, PyAny>) -> PyResult<AttrValue> {
+    if v.is_none() {
+        return Err(value_error(
+            "None cannot be stored (netCDF has no such attribute): leave the key out",
+        ));
+    }
     if let Ok(s) = v.extract::<String>() {
         return Ok(AttrValue::Str(s));
     }
@@ -115,6 +124,17 @@ pub fn attr_from_py(v: &Bound<'_, PyAny>) -> PyResult<AttrValue> {
     })
 }
 
+/// Attribute `key`'s value from Python: as [`attr_from_py`], naming the attribute in an error.
+///
+/// # Errors
+/// `ValueError` for values [`attr_from_py`] refuses.
+pub fn named_attr_from_py(key: &str, v: &Bound<'_, PyAny>) -> PyResult<AttrValue> {
+    attr_from_py(v).map_err(|e| {
+        let py = v.py();
+        value_error(format!("attribute {key:?}: {}", e.value(py)))
+    })
+}
+
 /// Attributes as a Python dict.
 ///
 /// # Errors
@@ -137,10 +157,9 @@ pub fn attrs_from_py(d: &Bound<'_, PyAny>) -> PyResult<Attrs> {
         .map_err(|_| PyTypeError::new_err("attrs must be a dict"))?;
     let mut out = Attrs::new();
     for (k, v) in d.iter() {
-        out.insert(
-            Name::from(k.extract::<String>()?.as_str()),
-            attr_from_py(&v)?,
-        );
+        let k = k.extract::<String>()?;
+        let value = named_attr_from_py(&k, &v)?;
+        out.insert(Name::from(k.as_str()), value);
     }
     Ok(out)
 }
@@ -248,4 +267,87 @@ pub fn nanos_from_numpy(arr: &Bound<'_, PyAny>, unit: &str) -> PyResult<ArrayD<i
         .readonly()
         .as_array()
         .to_owned())
+}
+
+// ----- numpy memory read in place -----
+
+/// A numpy array's memory read in place: the array stays alive with this.
+struct NumpyBuffer<T> {
+    view: ndarray::RawArrayView<T, IxDyn>,
+    _owner: Py<PyAny>,
+}
+
+// SAFETY: `view` is only a pointer into the memory `_owner` keeps alive, which is read and never
+// written through it, and `T: Element` is `Send + Sync`. Whoever gives an array here (`numpy_buffer`)
+// promises that nothing writes to its memory while this lives.
+#[allow(unsafe_code)]
+unsafe impl<T: Element> Send for NumpyBuffer<T> {}
+// SAFETY: as for `Send`.
+#[allow(unsafe_code)]
+unsafe impl<T: Element> Sync for NumpyBuffer<T> {}
+
+impl<T: Element> ExternalBuffer for NumpyBuffer<T> {
+    fn typed(&self) -> TypedArray<View<'_>> {
+        // SAFETY: the view addresses initialised `T`s of `_owner`'s array (see `numpy_buffer`),
+        // alive for as long as `self`, which the result borrows.
+        #[allow(unsafe_code)]
+        let view = unsafe { self.view.clone().deref_into_view() };
+        T::wrap::<View<'_>>(view)
+    }
+}
+
+/// `arr` as memory annoray reads in place, if it is an aligned numpy array of a type annoray
+/// stores as it is (numbers, booleans and complex numbers in native byte order,
+/// `datetime64[ns]`, `timedelta64[ns]`). Any layout is kept. `None` otherwise (to copy).
+///
+/// The caller must make sure nothing writes to the array's memory while the result lives. For
+/// an array of the user's this is their promise (`copy=False`).
+///
+/// # Errors
+/// If numpy's attributes cannot be read.
+pub fn numpy_buffer(arr: &Bound<'_, PyAny>) -> PyResult<Option<Arc<dyn ExternalBuffer>>> {
+    let np = arr.py().import("numpy")?;
+    if !arr.get_type().is(&np.getattr("ndarray")?)
+        || !arr.getattr("flags")?.getattr("aligned")?.is_truthy()?
+    {
+        return Ok(None);
+    }
+    fn raw<T: numpy::Element>(a: &Bound<'_, PyAny>) -> Option<ndarray::RawArrayView<T, IxDyn>> {
+        let a = a.cast::<PyArrayDyn<T>>().ok()?;
+        Some(a.try_readonly().ok()?.as_array().raw_view())
+    }
+    let owner = arr.clone().unbind();
+    macro_rules! adopt {
+        ($($t:ty),*) => {
+            $(if let Some(view) = raw::<$t>(arr) {
+                return Ok(Some(Arc::new(NumpyBuffer { view, _owner: owner })));
+            })*
+        };
+    }
+    adopt!(
+        f64, f32, i64, i32, i16, i8, u64, u32, u16, u8, bool, Complex64, Complex32
+    );
+    // Date-times and durations: `i64` nanoseconds, laid out as annoray's types.
+    let dtype = arr.getattr("dtype")?;
+    let kind: String = dtype.getattr("kind")?.extract()?;
+    if matches!(kind.as_str(), "M" | "m") && dtype.getattr("isnative")?.is_truthy()? {
+        let text: String = dtype.getattr("name")?.extract()?;
+        if text.ends_with("[ns]") {
+            let ints = arr.call_method1("view", ("int64",))?;
+            if let Some(view) = raw::<i64>(&ints) {
+                return Ok(Some(if kind == "M" {
+                    Arc::new(NumpyBuffer {
+                        view: view.cast::<Instant>(),
+                        _owner: ints.unbind(),
+                    })
+                } else {
+                    Arc::new(NumpyBuffer {
+                        view: view.cast::<Duration>(),
+                        _owner: ints.unbind(),
+                    })
+                }));
+            }
+        }
+    }
+    Ok(None)
 }

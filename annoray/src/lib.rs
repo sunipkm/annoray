@@ -136,7 +136,7 @@ pub use nat::NaT;
 pub use ops::{BinOp, variables_equal};
 pub use put::Positions;
 pub use reduce::{ReduceDims, ReduceOptions, Reduction, set_stream_bytes, stream_bytes};
-pub use repr::{Owned, Repr, ReprMut, View, ViewMut};
+pub use repr::{ExternalBuffer, KeepAlive, Owned, Repr, ReprMut, SharedBuffer, View, ViewMut};
 pub use rolling::{DataArrayRolling, DatasetRolling, RollingOptions};
 pub use rolling_exp::{RollingExp, WindowType};
 pub use stats::{DatasetWeighted, QuantileMethod, Weighted};

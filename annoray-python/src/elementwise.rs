@@ -111,9 +111,9 @@ fn run_dot(
 #[pymethods]
 impl PyDataArray {
     /// Limit the values to `[min, max]`: quantities (converted, °C ↔ K included) or
-    /// DataArrays (broadcast and aligned). A bare number bounds data without a unit; beside a
-    /// unit it may only be NaN, or 0 for a ratio-scale unit (`da.clip(0)` on metres), as in
-    /// comparisons. NaN stays NaN.
+    /// DataArrays (broadcast and aligned). A bare number is in the data's own unit (unlike
+    /// comparisons, which refuse one: it is unambiguous here, and is `np.clip(da.values, …)`).
+    /// NaN stays NaN.
     #[pyo3(signature = (min=None, max=None, keep_attrs=None))]
     fn clip(
         &self,
@@ -144,7 +144,7 @@ impl PyDataArray {
     /// Whether each value is one of `test_elements`: quantities (converted into the data's
     /// unit), a DataArray (its values in its own unit), strings, dates or durations. Beside
     /// data with a unit, a bare number may only be NaN, or 0 for a ratio-scale unit, as for
-    /// comparisons and `clip`.
+    /// comparisons.
     fn isin(&self, py: Python<'_>, test_elements: &Bound<'_, PyAny>) -> PyResult<Py<PyDataArray>> {
         let labels = element_labels(test_elements)?;
         new_da(py, py.detach(|| self.inner.isin(&labels)).py_err()?)

@@ -7,6 +7,7 @@ and install it beside annoray.
 
 from __future__ import annotations
 
+import gc
 import os
 import subprocess
 import sys
@@ -296,17 +297,18 @@ else:
     source = np.arange({n}, dtype="f8")
     da = annoray.DataArray(source, dims="x", units="m")
     base = peak()
-    back = ext.dataarray_roundtrip(da)  # lent to Rust (no copy), copied there, back (one copy)
+    back = ext.dataarray_roundtrip(da)  # lent to Rust (no copy), back (one copy)
 print((peak() - base) / mb)
 """
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="resource.getrusage is POSIX")
 @pytest.mark.parametrize("direction", ["to_python", "round_trip"])
-def test_large_arrays_are_copied_once_per_side(direction):
-    """The peak memory a conversion adds, in units of the array's size, is 2: from Rust, the
-    values made there and annoray's one copy of them; for a round trip, one copy into Rust
-    (annoray lends its values) and one back into annoray. A third copy would make it 3."""
+def test_large_arrays_do_not_copy_as_they_cross(direction):
+    """The peak memory a conversion adds, in units of the array's size, is 1: from Rust, the
+    values made there, which annoray then reads in place; for a round trip, none into Rust
+    (annoray lends its values) and one back, as Rust gives up values it only reads. Another copy
+    would make it 2."""
     out = subprocess.run(
         [sys.executable, "-c", COPIES.format(n=N, direction=direction)],
         capture_output=True,
@@ -314,4 +316,20 @@ def test_large_arrays_are_copied_once_per_side(direction):
         check=True,
     )
     copies = float(out.stdout.strip())
-    assert 1.6 < copies < 2.5, copies
+    assert 0.6 < copies < 1.5, copies
+
+
+def test_rust_values_keep_living_after_the_call():
+    da = ext.make_big(1000)
+    values = da.values
+    del da
+    gc.collect()
+    np.testing.assert_array_equal(values, np.arange(1000.0))
+
+
+def test_a_custom_unit_needs_defining_in_each_extension():
+    """Each extension links its own unit registry."""
+    ar.define_unit("InteropOnly", "2 m")
+    da = ar.DataArray([1.0], dims="x", units="InteropOnly")
+    with pytest.raises(ValueError, match="InteropOnly"):
+        ext.dataarray_roundtrip(da)

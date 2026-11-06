@@ -10,6 +10,7 @@ use annoray_units::{TimeZone, Unit};
 
 use crate::indexer::{SliceIndices, normalize_index};
 use crate::lazy::{LazyArray, LazyOp};
+use crate::repr::{ExternalBuffer, KeepAlive, SharedBuffer};
 use crate::{
     AttrValue, Attrs, CoreError, DType, Dims, Element, Encoding, IndexError, Indexer, IntoIndexer,
     Name, Owned, Repr, ReprMut, Result, TypedArray, View, ViewMut,
@@ -39,7 +40,7 @@ pub type VariableViewMut<'a> = VariableBase<ViewMut<'a>>;
 
 /// A variable's values: in memory (in representation `S`) or read lazily from a file.
 pub(crate) enum Data<S: Repr> {
-    Loaded(TypedArray<S>),
+    Loaded(S::Held),
     Lazy(LazyArray),
 }
 
@@ -160,7 +161,7 @@ impl Variable {
         let dims: Dims = dims.into_iter().map(Into::into).collect();
         check_dims(&dims, data.ndim())?;
         Ok(Self {
-            data: Data::Loaded(data),
+            data: Data::Loaded(SharedBuffer::new(data)),
             dims,
             unit: None,
             time_zone: None,
@@ -238,6 +239,29 @@ impl Variable {
         self
     }
 
+    /// A variable that reads its values in place from `buffer`, memory annoray does not own.
+    /// Writing to it copies them first.
+    ///
+    /// # Errors
+    /// As for [`Variable::new`].
+    pub fn from_external<D>(dims: D, buffer: Arc<dyn ExternalBuffer>) -> Result<Self>
+    where
+        D: IntoIterator,
+        D::Item: Into<Name>,
+    {
+        let dims: Dims = dims.into_iter().map(Into::into).collect();
+        let data = SharedBuffer::external(buffer);
+        check_dims(&dims, Owned::held_shape(&data).len())?;
+        Ok(Self {
+            data: Data::Loaded(data),
+            dims,
+            unit: None,
+            time_zone: None,
+            encoding: Arc::default(),
+            attrs: Attrs::new(),
+        })
+    }
+
     /// A variable whose data is read lazily from `data` (only the selected part, on first
     /// access).
     ///
@@ -266,7 +290,7 @@ impl Variable {
     /// [`CoreError::Read`] if the source cannot be read.
     pub fn load(&mut self) -> Result<()> {
         if let Data::Lazy(l) = &self.data {
-            self.data = Data::Loaded(l.clone().into_loaded()?);
+            self.data = Data::Loaded(SharedBuffer::new(l.clone().into_loaded()?));
         }
         Ok(())
     }
@@ -277,8 +301,31 @@ impl Variable {
     /// [`CoreError::Read`] if lazily loaded data cannot be read.
     pub fn into_typed(self) -> Result<TypedArray<Owned>> {
         match self.data {
-            Data::Loaded(a) => Ok(a),
+            Data::Loaded(a) => Ok(a.into_typed()),
             Data::Lazy(l) => l.into_loaded(),
+        }
+    }
+
+    /// An independent copy of the variable: its values get memory of their own, where a
+    /// [`clone`](Clone::clone) shares them until one of the two is written to. Values not yet
+    /// read stay lazy.
+    #[must_use]
+    pub fn deep_copy(&self) -> Self {
+        let mut out = self.clone();
+        if let Data::Loaded(a) = &self.data {
+            out.data = Data::Loaded(a.deep_copy());
+        }
+        out
+    }
+
+    /// An owner of the memory [`typed`](VariableBase::typed) shows: while it lives, that memory
+    /// stays valid and unmoved, and writing to this variable (or any other sharing it) copies
+    /// the values rather than touching it. For lending values to other languages.
+    #[must_use]
+    pub fn keep_alive(&self) -> KeepAlive {
+        match &self.data {
+            Data::Loaded(a) => a.keep_alive(),
+            Data::Lazy(l) => Arc::new(l.clone()),
         }
     }
 }
@@ -306,7 +353,7 @@ impl<S: Repr> VariableBase<S> {
     #[must_use]
     pub fn shape(&self) -> &[usize] {
         match &self.data {
-            Data::Loaded(a) => a.shape(),
+            Data::Loaded(a) => S::held_shape(a),
             Data::Lazy(l) => l.shape(),
         }
     }
@@ -332,7 +379,7 @@ impl<S: Repr> VariableBase<S> {
     #[must_use]
     pub fn dtype(&self) -> DType {
         match &self.data {
-            Data::Loaded(a) => a.dtype(),
+            Data::Loaded(a) => S::held_dtype(a),
             Data::Lazy(l) => l.dtype(),
         }
     }
@@ -388,7 +435,7 @@ impl<S: Repr> VariableBase<S> {
     /// [`CoreError::Read`] if lazily loaded data cannot be read.
     pub fn typed(&self) -> Result<TypedArray<View<'_>>> {
         match &self.data {
-            Data::Loaded(a) => Ok(a.view()),
+            Data::Loaded(a) => Ok(S::held_typed(a)),
             Data::Lazy(l) => Ok(l.load()?.view()),
         }
     }
@@ -426,7 +473,7 @@ impl<S: Repr> VariableBase<S> {
             found: self.dtype(),
         };
         match &self.data {
-            Data::Loaded(a) => T::peek(a).map(|a| a.view()).ok_or(mismatch),
+            Data::Loaded(a) => T::take(S::held_typed(a)).ok_or(mismatch),
             Data::Lazy(l) => T::peek(l.load()?).map(|a| a.view()).ok_or(mismatch),
         }
     }
@@ -463,7 +510,7 @@ impl<S: Repr> VariableBase<S> {
     pub fn view(&self) -> VariableView<'_> {
         VariableBase {
             data: match &self.data {
-                Data::Loaded(a) => Data::Loaded(a.view()),
+                Data::Loaded(a) => Data::Loaded(S::held_view(a)),
                 Data::Lazy(l) => Data::Lazy(l.clone()),
             },
             dims: self.dims.clone(),
@@ -474,12 +521,13 @@ impl<S: Repr> VariableBase<S> {
         }
     }
 
-    /// Copy into an owned variable.
+    /// As an owned variable. Values shown whole share their buffer, copied only if written
+    /// to; a selection of them is copied now.
     #[must_use]
     pub fn to_owned(&self) -> Variable {
         VariableBase {
             data: match &self.data {
-                Data::Loaded(a) => Data::Loaded(a.to_owned()),
+                Data::Loaded(a) => Data::Loaded(S::held_to_buffer(a)),
                 Data::Lazy(l) => Data::Lazy(l.clone()),
             },
             dims: self.dims.clone(),
@@ -589,7 +637,10 @@ impl<S: Repr> VariableBase<S> {
             attrs,
         } = self;
         let data = match data {
-            Data::Loaded(mut data) => {
+            // Nothing selected: the same values, whatever they are held in.
+            Data::Loaded(held) if ops.iter().all(Option::is_none) => Data::Loaded(held),
+            Data::Loaded(held) => {
+                let mut data = S::held_into_typed(held);
                 // Slices first: they keep axis numbering intact.
                 for (axis, op) in ops.iter().enumerate() {
                     if let Some(AxisOp::Slice(s, _)) = op {
@@ -602,7 +653,7 @@ impl<S: Repr> VariableBase<S> {
                         data = data.index_axis_move(axis, *i);
                     }
                 }
-                Data::Loaded(data)
+                Data::Loaded(S::held_from_typed(data))
             }
             Data::Lazy(l) => {
                 let lops: Vec<Option<LazyOp>> = ops
@@ -664,7 +715,7 @@ impl<S: Repr> VariableBase<S> {
             });
         }
         Ok(VariableBase {
-            data: Data::Loaded(self.typed()?.select_axis(axis, &idx)),
+            data: Data::Loaded(SharedBuffer::new(self.typed()?.select_axis(axis, &idx))),
             dims: self.dims.clone(),
             unit: self.unit.clone(),
             time_zone: self.time_zone.clone(),
@@ -680,7 +731,7 @@ impl<S: ReprMut> VariableBase<S> {
     pub fn view_mut(&mut self) -> VariableViewMut<'_> {
         VariableBase {
             data: match &mut self.data {
-                Data::Loaded(a) => Data::Loaded(a.view_mut()),
+                Data::Loaded(a) => Data::Loaded(S::held_mut(a).view_mut()),
                 Data::Lazy(l) => Data::Lazy(l.clone()),
             },
             dims: self.dims.clone(),
@@ -700,7 +751,7 @@ impl<S: ReprMut> VariableBase<S> {
         let Data::Loaded(data) = &mut self.data else {
             return Err(CoreError::NotLoaded);
         };
-        T::peek_mut(data)
+        T::peek_mut(S::held_mut(data))
             .map(S::view_mut)
             .ok_or(CoreError::DTypeMismatch {
                 expected: T::DTYPE,
@@ -890,7 +941,7 @@ impl<S: Repr> VariableBase<S> {
         let data = crate::array::typed_dispatch!(&typed, x => permuted_as(&typed, &perm, crate::array::marker(x)))
             .ok_or_else(|| CoreError::Read("transpose".into()))?;
         Ok(VariableBase {
-            data: Data::Loaded(data),
+            data: Data::Loaded(SharedBuffer::new(data)),
             dims: dims.into(),
             unit: self.unit.clone(),
             time_zone: self.time_zone.clone(),

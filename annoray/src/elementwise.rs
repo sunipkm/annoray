@@ -3,15 +3,15 @@
 //! - `clip(min, max)` is numpy's `minimum(maximum(x, min), max)` (NaN data or bounds give
 //!   NaN; `min > max` gives `max`). Bounds are quantities in any unit of the same kind
 //!   (converted, absolute temperatures included) or data arrays (broadcast and aligned like
-//!   arithmetic, converted likewise). A bare number is a bound only for data without a unit,
-//!   or as NaN, or as 0 beside a ratio-scale or logarithmic unit: the rule of comparisons and
-//!   `where`, so a bound cannot silently be in the wrong unit. Scalar bounds keep the data's
-//!   type (`f32`, integers when the bound is whole); attributes and unit are kept.
+//!   arithmetic, converted likewise). A bare number is a bound in the data's own unit: unlike
+//!   beside a comparison it is unambiguous, as it can only limit the values as they stand.
+//!   Scalar bounds keep the data's type (`f32`, integers when the bound is whole); attributes
+//!   and unit are kept.
 //! - `round(decimals)` is numpy's: half to even, `decimals < 0` rounding to tens, hundreds…
 //!   (integers too, exactly); units and attributes kept.
 //! - `isin(labels)` is a boolean array. Beside data with a unit, numbers are quantities
 //!   (converted into the data's unit first); a bare number only as NaN or a ratio-scale 0, as
-//!   for `clip`. A quantity against data without a unit is an error. Strings, dates and
+//!   for comparisons. A quantity against data without a unit is an error. Strings, dates and
 //!   durations compare exactly; labels of another kind match nothing. The result has no unit;
 //!   attributes are kept, as xarray.
 //! - `dot` multiplies (units multiply) and sums over the dimensions shared by more than one
@@ -30,8 +30,7 @@ use annoray_units::{Unit, UnitKind, UnitPolicy};
 #[derive(Debug, Clone)]
 #[non_exhaustive]
 pub enum ClipBound {
-    /// A bare number: for data without a unit, or NaN, or 0 beside a ratio-scale or
-    /// logarithmic unit.
+    /// A bare number, in the data's own unit.
     Value(f64),
     /// A number in another unit of the same kind (converted).
     Quantity(f64, Unit),
@@ -85,18 +84,7 @@ fn bound_array<S: Repr>(da: &DataArrayBase<S>, b: &ClipBound) -> Result<DataArra
         Ok(DataArray::new(var))
     };
     match b {
-        ClipBound::Value(v) => match da.unit() {
-            Some(u)
-                if !(v.is_nan()
-                    || (*v == 0.0 && matches!(u.kind(), UnitKind::Linear | UnitKind::Log(_)))) =>
-            {
-                Err(CoreError::Unit(annoray_units::UnitError::Incompatible {
-                    lhs: u.to_string(),
-                    rhs: Unit::one().to_string(),
-                }))
-            }
-            u => scalar(*v, u.cloned()),
-        },
+        ClipBound::Value(v) => scalar(*v, da.unit().cloned()),
         ClipBound::Quantity(v, u) => {
             // Converted here so that the bound can keep the data's type.
             match da.unit() {

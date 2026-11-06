@@ -23,6 +23,8 @@
 //! - **Physical constants** are the 2019 SI's exact values (UDUNITS predates them: its
 //!   electronvolt is CODATA 1986's) or, where not exact, CODATA 2022's; the parsec and light
 //!   year follow from the exact astronomical unit and the Julian year (IAU).
+//! - **Photons** count, as `count` does: `photons cm-2 s-1` is a flux. `ph` stays UDUNITS' phot
+//!   (10⁴ lx), so it does not mean a photon here, as it does in astropy.
 //! - **Kept as UDUNITS has them**, because CF data use them: `gal`/`Gal` is the galileo
 //!   (gravity anomalies in `mGal`/`mgal`), not the gallon (`gallon`, `US_gallon`,
 //!   `UK_gallon`); `pt` is the US liquid pint.
@@ -181,6 +183,12 @@ pub(crate) static AMENDMENTS: &[Amend] = &[
 
 /// Units UDUNITS does not have.
 pub(crate) static EXTRA_UNITS: &[UnitEntry] = &[
+    // A count, as UDUNITS' `count` is. Not the symbol `ph`, which is the phot (10⁴ lx).
+    UnitEntry {
+        def: Def::Expr("1"),
+        names: &["photon", "photons"],
+        symbols: &[],
+    },
     UnitEntry {
         def: Def::Expr("10 C"),
         names: &["abcoulomb", "abcoulombs"],

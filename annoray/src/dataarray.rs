@@ -67,6 +67,18 @@ impl DataArray {
         )?))
     }
 
+    /// An independent copy: every loaded value gets memory of its own, where a
+    /// [`clone`](Clone::clone) shares it until one of the two is written to.
+    #[must_use]
+    pub fn deep_copy(&self) -> Self {
+        let mut out = self.clone();
+        out.variable = out.variable.deep_copy();
+        for c in out.coords.values_mut() {
+            *c = c.deep_copy();
+        }
+        out
+    }
+
     /// Set the name.
     #[must_use]
     pub fn with_name(mut self, name: impl Into<Name>) -> Self {

@@ -37,10 +37,10 @@ fn travel_time(
 - **Everything carries:** dimensions, coordinates with their units, attributes, names, time
   zones and every element type (floats, complex numbers, integers, booleans, text,
   date-times, durations, CF dates in any calendar to the nanosecond).
-- **Copies:** values cross as numpy arrays, copied once into the side that keeps them (each
-  extension has its own allocator); `ArDataArrayRef` reads an `annoray.DataArray`'s numbers,
-  date-times and durations in place, without a copy. The crate documentation lists each
-  direction's copies.
+- **Copies:** values cross as numpy arrays, whose numbers, date-times and durations the side
+  that receives them reads in place, keeping the array alive (each extension has its own
+  allocator, so memory never changes owner); writing to such a value in Rust copies it first.
+  The crate documentation lists each direction's copies.
 - **Checked:** the first conversion checks that the installed `annoray` package is
   compatible with this crate (release and exchange protocol), raising `ImportError` if not.
 - **Linking:** use the PyO3 and numpy versions annoray's package is built with (re-exported

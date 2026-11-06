@@ -27,8 +27,8 @@ An extension module written with PyO3 exchanges annoray values with the `annoray
 package through `annoray-pyo3`: its function arguments and results are `ArUnit`,
 `ArQuantity`, `ArDataArray`, `ArDataset` and `ArDataTree`, which convert to and from the
 package's own `Unit`, `Quantity`, `DataArray`, `Dataset` and `DataTree` objects. Values cross
-as numpy arrays, copied once into the side that keeps them; `ArDataArrayRef` reads an array's
-numbers in place. The first conversion checks that the installed `annoray` is compatible.
+as numpy arrays, whose numbers the side that receives them reads in place; `ArDataArrayRef`
+reads an array's numbers in place without building a Rust value. The first conversion checks that the installed `annoray` is compatible.
 
 ```rust
 use annoray_pyo3::{ArDataArray, ArUnit, unit_error};

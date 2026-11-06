@@ -34,7 +34,7 @@ print({ar.Unit(s) == ar.Unit("m/s") for s in same})
 | Names, singular or plural, with prefixes | `meter`, `metres`, `kilogram`, `millibar` |
 | Products: space, `.` or `*` | `kg m2 s-2`, `kg.m2.s-2`, `N*m` |
 | Quotients | `W/m2`, `W m-2`, `mol/(m2 s)` |
-| Powers: bare digits, `^` or `**` | `m2`, `m^2`, `m**2`, `s-1` |
+| Powers: bare digits, `^`, `**` or LaTeX braces | `m2`, `m^2`, `m**2`, `s-1`, `cm^{-3}` |
 | Numeric factors | `100 Pa`, `1e-3`, `0.01 m` |
 | Offsets and epochs | `degC`, `°F`, `K @ 273.15`, `days since 2000-01-01` |
 | Logarithmic | `dB`, `B` |
@@ -62,8 +62,16 @@ involve π, such as degrees to radians, are as exact as a double allows. `float3
 `float32`.
 
 A file's CF `units` attribute becomes the unit of the variable it belongs to, and
-`to_netcdf` writes the unit back as the attribute. Units are therefore never stale: there is
-no attribute that can disagree with the data after a conversion.
+`to_netcdf` writes the unit back as the attribute. `da.attrs["units"]` is a view of the same
+unit, so the two cannot disagree: it reads the unit as written, and writing it sets the unit
+without touching the values (use `to` to convert them), as `del` clears it.
+
+```{code-cell} python
+relabelled = ar.DataArray([1.0, 2.0], dims="x", units="km")
+print(relabelled.attrs)
+relabelled.attrs["units"] = "m"
+print(relabelled.units, relabelled.values, relabelled.to("m").values)
+```
 
 A `units` attribute that does not parse (a typo, or a spelling outside UDUNITS-2 and CF, such
 as `"counts per detector pixel"`), in a file or given to a constructor, is kept as a plain
@@ -191,7 +199,28 @@ except ar.UnitError as e:
     print("UnitError:", e)
 ```
 
-The same rule applies to `where`, `fillna`, `clip`, `isin`, `put` and `query`.
+The same rule applies to `where`, `fillna`, `isin`, `put` and `query`. `clip` is the exception:
+a bare bound is in the data's own unit, as `np.clip(da.values, ...)` is, since it can only limit
+the values as they stand.
+
+A numpy array beside labelled data is positional and dimensionless: `km_array * ndarray` is in
+`km`, and `km_array + ndarray` is a `UnitError`.
+
+## Defining units
+
+`define_unit` adds a unit for this process. It converts exactly, takes SI prefix symbols, and
+is read from and written to files as spelled. A name that already means another unit is an
+error; defining one again as what it already is does nothing.
+
+```{code-cell} python
+ar.define_unit("TECU", "1e16 m^-2")
+print(ar.Quantity(2.5, "TECU").to("m-2"))
+print(ar.DataArray([1.0], dims="x", units="kTECU").units)
+```
+
+Files naming the unit have to be opened after it is defined. An extension module linking
+`annoray-pyo3` has its own registry: to exchange such a unit it defines it there as well, with
+`annoray::units::define_unit`.
 
 ## Unit systems
 
@@ -339,6 +368,7 @@ UDUNITS' (and so CF's) or the established ones:
 | `pt` | US liquid pint | imperial pint: `UK_pint` |
 | `nmi` | nautical mile | nano-mile |
 | `mph`, `kph` | miles, kilometres per hour | milli-, kilo-phot |
+| `ph` | phot (10⁴ lx) | photon: `photon`, `photons` (a count) |
 | `t` | tonne (1000 kg) | short ton: `short_ton` |
 | `G` | gauss | giga- (a prefix, as in `GHz`) |
 | `P` | poise | peta- (a prefix, as in `PW`) |

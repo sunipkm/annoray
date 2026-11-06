@@ -71,10 +71,13 @@ impl PyDataArray {
         e: &Bound<'_, PyAny>,
         _modulo: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<Py<PyAny>> {
-        let Ok(e) = e.extract::<f64>() else {
-            return Ok(py.NotImplemented());
+        let Ok(x) = e.extract::<f64>() else {
+            return Ok(match crate::native::array_pow(py, &self.inner, e)? {
+                Some(out) => new_da(py, out)?.into_any(),
+                None => py.NotImplemented(),
+            });
         };
-        Ok(new_da(py, py.detach(|| self.inner.pow(e)).py_err()?)?.into_any())
+        Ok(new_da(py, py.detach(|| self.inner.pow(x)).py_err()?)?.into_any())
     }
 
     /// numpy ufuncs: the unit-aware ones (`np.sqrt`, `np.sin`, `np.add`, `np.maximum`, …)

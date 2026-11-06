@@ -54,18 +54,15 @@ def test_clip_types_units_arrays():
     got = t.clip(max=ar.Quantity(293.15, "K"))
     np.testing.assert_allclose(got.values, 20.0)
     assert got.unit == ar.Unit("degC")
-    assert t.clip(ar.Quantity(0.0, "degC"), keep_attrs=False).attrs == {}
+    assert t.clip(ar.Quantity(0.0, "degC"), keep_attrs=False).attrs == {"units": "degC"}
     with pytest.raises(ar.UnitError):
         t.clip(ar.Quantity(1.0, "m"))
-    # Bare numbers beside a unit: refused, except NaN and a ratio-scale 0.
-    with pytest.raises(ar.UnitError):
-        t.clip(5.0)
-    with pytest.raises(ar.UnitError):
-        t.clip(0.0)  # °C is an offset scale: 0 °C is not "zero"
+    # Bare numbers are in the data's own unit.
+    np.testing.assert_allclose(t.clip(25.0).values, np.maximum(t.values, 25.0))
+    np.testing.assert_allclose(t.clip(0.0).values, np.maximum(t.values, 0.0))  # 0 °C
     k = ar.DataArray([-1.0, 2.0, 400.0], dims="x", units="m")
     np.testing.assert_allclose(k.clip(0).values, [0.0, 2.0, 400.0])
-    with pytest.raises(ar.UnitError):
-        k.clip(None, 300)
+    np.testing.assert_allclose(k.clip(None, 300).values, [-1.0, 2.0, 300.0])
     np.testing.assert_allclose(k.clip(None, ar.Quantity(0.3, "km")).values, [-1.0, 2.0, 300.0])
 
 

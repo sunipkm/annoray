@@ -3,7 +3,8 @@
 //! ```text
 //! unit     := product [ SHIFT ( date | number ) ]          SHIFT: @ since after from ref
 //! product  := power { ( '*' | '.' | '·' | '/' | "per" | juxtaposition ) power }
-//! power    := basic [ INT | ( '^' | '**' ) INT ]           `m2`, `s-1`, `m^2`, `(m-1)-1`
+//! power    := basic [ INT | ( '^' | '**' ) ( INT | '{' INT '}' ) ]
+//!                                               `m2`, `s-1`, `m^2`, `(m-1)-1`, `cm^{-3}`
 //! basic    := NUMBER | ID | '(' product ')' | (lg|ln|lb) '(' "re" product ')'
 //! ```
 
@@ -30,6 +31,9 @@ enum Tok {
     Pow,
     LParen,
     RParen,
+    /// Around an exponent, as LaTeX spells it: `cm^{-3}`.
+    LBrace,
+    RBrace,
 }
 
 struct Lexed {
@@ -178,6 +182,8 @@ fn lex(input: &str) -> Result<Vec<Lexed>, UnitError> {
                 '^' => Tok::Pow,
                 '(' => Tok::LParen,
                 ')' => Tok::RParen,
+                '{' => Tok::LBrace,
+                '}' => Tok::RBrace,
                 _ => return Err(err(input, pos, format!("unexpected character {c:?}"))),
             }
         };
@@ -277,10 +283,17 @@ impl Parser<'_, '_> {
             }
             Some(Tok::Pow) => {
                 self.bump();
-                match self.bump() {
-                    Some(Tok::Num { int: Some(n), .. }) => base.powi_lenient(n),
-                    _ => Err(self.err("expected an integer exponent")),
+                let braced = self.peek() == Some(&Tok::LBrace);
+                if braced {
+                    self.bump();
                 }
+                let Some(Tok::Num { int: Some(n), .. }) = self.bump() else {
+                    return Err(self.err("expected an integer exponent"));
+                };
+                if braced && self.bump() != Some(Tok::RBrace) {
+                    return Err(self.err("expected '}'"));
+                }
+                base.powi_lenient(n)
             }
             _ => Ok(base),
         }
@@ -410,6 +423,11 @@ pub(crate) fn parse_with(
         base.scale(),
         Rational::from_decimal(m, e)?,
     ))
+}
+
+/// Whether `name` reads back as one unit name (not `m2`, which is `m` squared).
+pub(crate) fn is_unit_name(name: &str) -> bool {
+    matches!(lex(name).as_deref(), Ok([Lexed { tok: Tok::Id(id), .. }]) if id == name)
 }
 
 #[cfg(test)]

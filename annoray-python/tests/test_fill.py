@@ -80,7 +80,7 @@ def test_limit_and_use_coordinate():
         a2.interpolate_na("x", use_coordinate="pos"), x2.interpolate_na("x", use_coordinate="pos")
     )
     assert a.interpolate_na("x").unit == ar.Unit("m")
-    assert a.interpolate_na("x", keep_attrs=False).attrs == {}
+    assert a.interpolate_na("x", keep_attrs=False).attrs == {"units": "m"}
     with pytest.raises(ValueError):
         a.interpolate_na("x", method="krogh")
     with pytest.raises(ValueError):

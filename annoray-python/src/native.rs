@@ -20,11 +20,11 @@ use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyString, PyTuple};
 
 use crate::convert::{
-    LabelSel, OrPy, PosSel, attr_from_py, attrs_to_py, label_from_py, label_sel_from_py,
-    method_from_py, numpy_dtype_name, parse_unit, pos_from_py, quantity_parts, typed_from_py,
-    typed_to_py, typed_zone_from_py, value_error,
+    LabelSel, OrPy, PosSel, attrs_to_py, label_from_py, label_sel_from_py, method_from_py,
+    named_attr_from_py, numpy_dtype_name, parse_unit, pos_from_py, quantity_parts, typed_to_py,
+    typed_zone_from_py, value_error,
 };
-use crate::mutate::{Lending, Source, live_dict};
+use crate::mutate::{Generations, Source, live_dict};
 
 /// A facade error as a Python exception.
 pub(crate) fn xr_error(e: annoray::Error) -> PyErr {
@@ -51,6 +51,24 @@ fn dims_from_py(dims: Option<&Bound<'_, PyAny>>, ndim: usize) -> PyResult<Vec<St
     }
 }
 
+/// The unit a `"units"` attribute names. One that does not parse stays an attribute, with a
+/// warning, as when reading files: `None`.
+pub(crate) fn units_attr(py: Python<'_>, text: &str) -> PyResult<Option<Unit>> {
+    match text.parse::<Unit>() {
+        Ok(u) => Ok(Some(u)),
+        Err(e) => {
+            let msg = format!("units {text:?} kept as an attribute: {e}");
+            pyo3::PyErr::warn(
+                py,
+                &py.get_type::<pyo3::exceptions::PyUserWarning>(),
+                &std::ffi::CString::new(msg).map_err(value_error)?,
+                1,
+            )?;
+            Ok(None)
+        }
+    }
+}
+
 /// Values, attributes and unit as a variable. The unit comes from `units`, a pint-like
 /// quantity, or a `"units"` attribute; an attribute that does not parse stays an attribute
 /// (with a warning), as when reading files.
@@ -61,16 +79,43 @@ pub(crate) fn variable_from_py(
     attrs: Option<&Bound<'_, PyDict>>,
     units: Option<&str>,
 ) -> PyResult<Variable> {
+    variable_with(py, dims, data, attrs, units, true)
+}
+
+/// [`variable_from_py`]; without `copy`, a numpy array annoray can read in place is kept instead
+/// of copied, in its own layout (the caller promises not to write to it).
+fn variable_with(
+    py: Python<'_>,
+    dims: Option<&Bound<'_, PyAny>>,
+    data: &Bound<'_, PyAny>,
+    attrs: Option<&Bound<'_, PyDict>>,
+    units: Option<&str>,
+    copy: bool,
+) -> PyResult<Variable> {
     let (data, q_units) = match quantity_parts(data)? {
         Some((m, u)) => (m, Some(u)),
         None => (data.clone(), None),
     };
-    let (typed, zone) = typed_zone_from_py(&data)?;
-    let dims = dims_from_py(dims, typed.ndim())?;
-    let mut var = Variable::from_typed(dims, typed).py_err()?;
-    if zone.is_some() {
-        var.set_time_zone(zone).py_err()?;
-    }
+    let buffer = if copy {
+        None
+    } else {
+        annoray_pyo3::convert::numpy_buffer(&data)?
+    };
+    let mut var = match buffer {
+        Some(buffer) => {
+            let dims = dims_from_py(dims, data.getattr("ndim")?.extract()?)?;
+            Variable::from_external(dims, buffer).py_err()?
+        }
+        None => {
+            let (typed, zone) = typed_zone_from_py(&data)?;
+            let dims = dims_from_py(dims, typed.ndim())?;
+            let mut var = Variable::from_typed(dims, typed).py_err()?;
+            if zone.is_some() {
+                var.set_time_zone(zone).py_err()?;
+            }
+            var
+        }
+    };
     let mut unit = match units.map(str::to_owned).or(q_units) {
         Some(u) => Some(parse_unit(&u)?),
         None => None,
@@ -91,28 +136,16 @@ pub(crate) fn variable_from_py(
                 continue;
             }
             if key == "units" && v.is_instance_of::<PyString>() {
-                let text: String = v.extract()?;
-                if unit.is_none() {
-                    match text.parse::<Unit>() {
-                        Ok(u) => {
-                            unit = Some(u);
-                            continue;
-                        }
-                        Err(e) => {
-                            let msg = format!("units {text:?} kept as an attribute: {e}");
-                            pyo3::PyErr::warn(
-                                py,
-                                &py.get_type::<pyo3::exceptions::PyUserWarning>(),
-                                &std::ffi::CString::new(msg).map_err(value_error)?,
-                                1,
-                            )?;
-                        }
-                    }
-                } else {
+                if unit.is_some() {
+                    continue;
+                }
+                unit = units_attr(py, &v.extract::<String>()?)?;
+                if unit.is_some() {
                     continue;
                 }
             }
-            var.attrs_mut().insert(key.into(), attr_from_py(&v)?);
+            let value = named_attr_from_py(&key, &v)?;
+            var.attrs_mut().insert(key.into(), value);
         }
     }
     var.set_unit(unit);
@@ -122,6 +155,11 @@ pub(crate) fn variable_from_py(
 /// A variable given as `(dims, data[, attrs])`, a `DataArray`, or bare data (for a coordinate
 /// named like its dimension).
 pub(crate) fn spec_from_py(py: Python<'_>, name: &str, v: &Bound<'_, PyAny>) -> PyResult<Variable> {
+    spec_with(py, name, v, true)
+}
+
+/// [`spec_from_py`], with `copy` as for [`variable_with`].
+fn spec_with(py: Python<'_>, name: &str, v: &Bound<'_, PyAny>, copy: bool) -> PyResult<Variable> {
     if let Ok(da) = v.cast::<PyDataArray>() {
         return Ok(da.borrow().inner.variable().to_owned());
     }
@@ -134,11 +172,11 @@ pub(crate) fn spec_from_py(py: Python<'_>, name: &str, v: &Bound<'_, PyAny>) -> 
             None
         };
         let attrs = attrs.as_ref().map(|a| a.cast::<PyDict>()).transpose()?;
-        return variable_from_py(py, Some(&dims), &data, attrs, None);
+        return variable_with(py, Some(&dims), &data, attrs, None, copy);
     }
     let name_dims = PyTuple::new(py, [name])?.into_any();
-    let probe = typed_from_py(v)?;
-    let dims = match probe.ndim() {
+    let ndim: usize = py.import("numpy")?.call_method1("ndim", (v,))?.extract()?;
+    let dims = match ndim {
         0 => PyTuple::empty(py).into_any(),
         1 => name_dims,
         _ => {
@@ -147,7 +185,7 @@ pub(crate) fn spec_from_py(py: Python<'_>, name: &str, v: &Bound<'_, PyAny>) -> 
             )));
         }
     };
-    variable_from_py(py, Some(&dims), v, None, None)
+    variable_with(py, Some(&dims), v, None, None, copy)
 }
 
 pub(crate) fn dict_iter<'py>(
@@ -166,34 +204,47 @@ pub(crate) fn dict_iter<'py>(
 
 pub(crate) fn set_attrs(attrs: &mut annoray::Attrs, d: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
     for (k, v) in dict_iter(d)? {
-        attrs.insert(k.into(), attr_from_py(&v)?);
+        let value = named_attr_from_py(&k, &v)?;
+        attrs.insert(k.into(), value);
     }
     Ok(())
 }
 
 // ----- values to Python -----
 
+/// What a numpy view of a variable's values has as its base: a reference to the buffer, so the
+/// view outlives whatever the variable's owner does next.
+#[pyclass(frozen, module = "annoray._annoray")]
+pub(crate) struct LentBuffer {
+    #[expect(
+        dead_code,
+        reason = "held for its destructor: it keeps the buffer alive"
+    )]
+    keep: annoray::KeepAlive,
+}
+
 /// A variable's values as numpy: a read-only view of the data when it is in memory and
 /// numeric or a date-time or duration (no copy), otherwise converted (CF dates, strings) or
 /// read (lazy data).
-pub(crate) fn values_of<'py>(
-    owner: Bound<'py, PyAny>,
-    var: &Variable,
-) -> PyResult<Bound<'py, PyAny>> {
-    let py = owner.py();
+pub(crate) fn values_of<'py>(py: Python<'py>, var: &Variable) -> PyResult<Bound<'py, PyAny>> {
     if var.is_lazy() {
         let t = py.detach(|| var.to_owned().into_typed()).py_err()?;
         return typed_to_py(py, t);
     }
     let typed = var.typed().py_err()?;
-    crate::mutate::mark_lent(&owner);
+    let owner = Bound::new(
+        py,
+        LentBuffer {
+            keep: var.keep_alive(),
+        },
+    )?
+    .into_any();
     macro_rules! view {
         ($a:expr) => {{
-            // SAFETY: the data belongs to `owner`, a Python object that the array keeps alive
-            // as its base. Data buffers are never written in place, and `owner` is marked as
-            // having lent (`mark_lent` above), so a variable it later replaces or removes is
-            // retired, not freed, while it lives (see `mutate`). The array is made read-only
-            // below so Python cannot write through it.
+            // SAFETY: the array keeps `owner` alive as its base, and `owner` holds a reference
+            // to the buffer `$a` shows (`keep_alive`): the memory stays valid and unmoved, and
+            // anything writing to a variable that shares it copies first. The array is made
+            // read-only below so Python cannot write through it.
             #[allow(unsafe_code)]
             let arr = unsafe { PyArrayDyn::borrow_from_array(&$a, owner) };
             arr.call_method("setflags", (), Some(&[("write", false)].into_py_dict(py)?))?;
@@ -212,6 +263,8 @@ pub(crate) fn values_of<'py>(
         TypedArray::U32(a) => view!(a),
         TypedArray::U64(a) => view!(a),
         TypedArray::Bool(a) => view!(a),
+        TypedArray::C64(a) => view!(a),
+        TypedArray::C128(a) => view!(a),
         TypedArray::DateTime(a) => {
             let ns = nanos_view(a);
             let arr: PyResult<Bound<'_, PyAny>> = view!(ns);
@@ -265,14 +318,14 @@ pub(crate) fn new_da(py: Python<'_>, inner: DataArray) -> PyResult<Py<PyDataArra
         py,
         PyDataArray {
             inner,
-            lending: Lending::default(),
+            generations: Generations::default(),
             parent: None,
         },
     )
 }
 
-/// A data array copied from variable `name` of `owner` (a Dataset, or a DataArray for a
-/// coordinate); writes to its attributes reach the source (see `mutate`).
+/// A data array sharing the buffers of variable `name` of `owner` (a Dataset, or a DataArray
+/// for a coordinate); writes to its attributes reach the source (see `mutate`).
 pub(crate) fn new_child_da(
     owner: &Bound<'_, PyAny>,
     name: &str,
@@ -282,7 +335,7 @@ pub(crate) fn new_child_da(
         owner.py(),
         PyDataArray {
             inner,
-            lending: Lending::default(),
+            generations: Generations::default(),
             parent: Source::of(owner, name),
         },
     )
@@ -293,7 +346,7 @@ pub(crate) fn new_ds(py: Python<'_>, inner: Dataset) -> PyResult<Py<PyDataset>> 
         py,
         PyDataset {
             inner,
-            lending: Lending::default(),
+            generations: Generations::default(),
         },
     )
 }
@@ -321,6 +374,7 @@ pub(crate) fn merge_kwargs<'py>(
 
 /// Something selectable: data arrays and datasets.
 trait Select: Sized + Send + Sync {
+    fn mask_positions_(&self, dim: &str, mask: &DataArray) -> annoray::Result<Vec<isize>>;
     fn take_(&self, dim: &str, idx: &[isize]) -> annoray::Result<Self>;
     fn isel_(&self, ix: Vec<(String, annoray::Indexer)>) -> annoray::Result<Self>;
     fn sel_(&self, ix: Vec<(String, LabelIndexer)>) -> annoray::Result<Self>;
@@ -335,6 +389,9 @@ trait Select: Sized + Send + Sync {
 }
 
 impl Select for DataArray {
+    fn mask_positions_(&self, dim: &str, mask: &DataArray) -> annoray::Result<Vec<isize>> {
+        self.mask_positions(dim, mask)
+    }
     fn take_(&self, dim: &str, idx: &[isize]) -> annoray::Result<Self> {
         self.take(dim, idx)
     }
@@ -361,6 +418,9 @@ impl Select for DataArray {
 }
 
 impl Select for Dataset {
+    fn mask_positions_(&self, dim: &str, mask: &DataArray) -> annoray::Result<Vec<isize>> {
+        self.mask_positions(dim, mask)
+    }
     fn take_(&self, dim: &str, idx: &[isize]) -> annoray::Result<Self> {
         self.take(dim, idx)
     }
@@ -407,6 +467,19 @@ fn vector_indexer(v: &Bound<'_, PyAny>) -> PyResult<Option<DataArray>> {
     Ok(None)
 }
 
+/// A plain boolean array as a mask along `dim` (one of another shape is refused with it).
+fn plain_mask(py: Python<'_>, dim: &str, v: &Bound<'_, PyAny>) -> PyResult<Option<DataArray>> {
+    if !v.is_instance(&py.import("numpy")?.getattr("ndarray")?)?
+        || v.getattr("dtype")?.getattr("kind")?.extract::<String>()? != "b"
+        || v.getattr("ndim")?.extract::<usize>()? != 1
+    {
+        return Ok(None);
+    }
+    let dims = PyTuple::new(py, [dim])?;
+    let var = variable_from_py(py, Some(dims.as_any()), v, None, None)?;
+    Ok(Some(DataArray::new(var)))
+}
+
 /// Positional selection: integer lists and masks first (copying those rows), then indices
 /// and slices.
 fn do_isel<T: Select + Clone>(py: Python<'_>, obj: &T, args: IselArgs<'_>) -> PyResult<T> {
@@ -415,7 +488,17 @@ fn do_isel<T: Select + Clone>(py: Python<'_>, obj: &T, args: IselArgs<'_>) -> Py
     let mut vectors: Vec<(String, DataArray)> = Vec::new();
     for (dim, v) in args {
         if let Some(da) = vector_indexer(&v)? {
-            vectors.push((dim, da));
+            if da.dtype() == annoray::DType::Bool {
+                let idx = obj.mask_positions_(&dim, &da).py_err()?;
+                takes.push((dim, idx));
+            } else {
+                vectors.push((dim, da));
+            }
+            continue;
+        }
+        if let Some(mask) = plain_mask(py, &dim, &v)? {
+            let idx = obj.mask_positions_(&dim, &mask).py_err()?;
+            takes.push((dim, idx));
             continue;
         }
         match pos_from_py(&v)? {
@@ -451,9 +534,21 @@ fn do_sel<T: Select + Clone>(
     let mut many = Vec::new();
     let mut one = Vec::new();
     let mut vectors: Vec<(String, DataArray)> = Vec::new();
+    let mut masks: Vec<(String, Vec<isize>)> = Vec::new();
     for (dim, v) in args {
         if let Some(da) = vector_indexer(&v)? {
-            vectors.push((dim, da));
+            if da.dtype() == annoray::DType::Bool {
+                let idx = obj.mask_positions_(&dim, &da).py_err()?;
+                masks.push((dim, idx));
+            } else {
+                vectors.push((dim, da));
+            }
+            continue;
+        }
+        // A boolean array selects positions, as a mask does in `isel`.
+        if let Some(mask) = plain_mask(py, &dim, &v)? {
+            let idx = obj.mask_positions_(&dim, &mask).py_err()?;
+            masks.push((dim, idx));
             continue;
         }
         match label_sel_from_py(&v, method, tolerance.as_ref())? {
@@ -463,6 +558,10 @@ fn do_sel<T: Select + Clone>(
     }
     py.detach(|| {
         let mut taken: Option<T> = None;
+        for (dim, idx) in &masks {
+            let next = taken.as_ref().unwrap_or(obj).take_(dim, idx)?;
+            taken = Some(next);
+        }
         for (dim, labels) in many {
             let next = taken.as_ref().unwrap_or(obj).sel_take_(&dim, labels)?;
             taken = Some(next);
@@ -762,6 +861,87 @@ pub(crate) fn operand_like<'py>(
     }
 }
 
+/// A non-scalar array operand beside data of `dims` and `shape`: positional, broadcast by numpy's
+/// rules onto those dimensions (as xarray does), without coordinates. Its own unit if it is a
+/// quantity, otherwise it is dimensionless. `None` for what is not an array of values, or a scalar.
+pub(crate) fn positional_operand(
+    py: Python<'_>,
+    o: &Bound<'_, PyAny>,
+    dims: &[Name],
+    shape: &[usize],
+) -> PyResult<Option<DataArray>> {
+    let (mag, unit) = match quantity_parts(o)? {
+        Some((m, u)) => (m, Some(u)),
+        None => (o.clone(), None),
+    };
+    let np = py.import("numpy")?;
+    if !(mag.is_instance(&np.getattr("ndarray")?)? || mag.is_instance_of::<PyList>()) {
+        return Ok(None);
+    }
+    let arr = np.call_method1("asarray", (&mag,))?;
+    if arr.getattr("ndim")?.extract::<usize>()? == 0
+        || arr.getattr("dtype")?.getattr("kind")?.extract::<String>()? == "O"
+    {
+        return Ok(None);
+    }
+    let given: Vec<usize> = arr.getattr("shape")?.extract()?;
+    let broadcast = np
+        .call_method1("broadcast_to", (&arr, PyTuple::new(py, shape)?))
+        .map_err(|_| {
+            PyValueError::new_err(format!(
+                "an array of shape {given:?} does not broadcast onto dimensions {dims:?} of \
+                 shape {shape:?}"
+            ))
+        })?;
+    let names = PyTuple::new(py, dims.iter().map(Name::as_str))?;
+    let var = variable_from_py(py, Some(names.as_any()), &broadcast, None, unit.as_deref())?;
+    Ok(Some(DataArray::new(var)))
+}
+
+/// `da ** e` for an array of exponents `e`, positional as [`positional_operand`]: elementwise
+/// without a unit; beside one, all the exponents must be the same, or the result has no unit.
+pub(crate) fn array_pow(
+    py: Python<'_>,
+    da: &DataArray,
+    e: &Bound<'_, PyAny>,
+) -> PyResult<Option<DataArray>> {
+    let Some(exponents) = positional_operand(py, e, da.dims(), da.shape())? else {
+        return Ok(None);
+    };
+    if exponents.unit().is_some() {
+        return Err(crate::convert::UnitError::new_err(
+            "an exponent must be a plain number, not a quantity",
+        ));
+    }
+    let np = py.import("numpy")?;
+    let values = values_of(py, exponents.variable())?;
+    if da.unit().is_some() {
+        let distinct = np.call_method1("unique", (&values,))?;
+        if distinct.len()? > 1 {
+            return Err(crate::convert::UnitError::new_err(format!(
+                "values in {} raised to different powers have no single unit; use plain numbers",
+                da.unit().map(ToString::to_string).unwrap_or_default()
+            )));
+        }
+        return Ok(Some(match distinct.get_item(0) {
+            Ok(x) => da.pow(x.extract()?).py_err()?,
+            Err(_) => da.clone(),
+        }));
+    }
+    let powered = np.call_method1("power", (values_of(py, da.variable())?, &values))?;
+    let names = PyTuple::new(py, da.dims().iter().map(Name::as_str))?;
+    let mut var = variable_from_py(py, Some(names.as_any()), &powered, None, None)?;
+    var.attrs_mut().clone_from(da.attrs());
+    let mut out = DataArray::new(var);
+    for (k, c) in da.coords() {
+        out = out.with_coord(k.clone(), c.clone()).py_err()?;
+    }
+    if let Some(n) = da.name() {
+        out = out.with_name(n.clone());
+    }
+    Ok(Some(out))
+}
+
 fn operand_strong<'py>(py: Python<'py>, o: &Bound<'py, PyAny>) -> PyResult<Option<Operand<'py>>> {
     if let Ok(da) = o.cast::<PyDataArray>() {
         return Ok(Some(Operand::Array(da.borrow())));
@@ -786,7 +966,7 @@ fn operand_strong<'py>(py: Python<'py>, o: &Bound<'py, PyAny>) -> PyResult<Optio
 #[pyclass(name = "DataArray", module = "annoray", weakref)]
 pub(crate) struct PyDataArray {
     pub(crate) inner: DataArray,
-    pub(crate) lending: Lending,
+    pub(crate) generations: Generations,
     pub(crate) parent: Option<Source>,
 }
 
@@ -818,9 +998,14 @@ impl PyDataArray {
         o: &Bound<'_, PyAny>,
         reflected: bool,
     ) -> PyResult<Py<PyAny>> {
-        let Some(other) = operand_like(py, o, Some(self.inner.dtype()))? else {
-            return Ok(py.NotImplemented());
+        let other = match operand_like(py, o, Some(self.inner.dtype()))? {
+            Some(other) => other,
+            None => match positional_operand(py, o, self.inner.dims(), self.inner.shape())? {
+                Some(a) => Operand::Owned(Box::new(a)),
+                None => return Ok(py.NotImplemented()),
+            },
         };
+        let plain = matches!(other, Operand::Owned(_)) && other.get().ndim() > 0;
         let other = other.get();
         let out = py
             .detach(|| {
@@ -831,8 +1016,8 @@ impl PyDataArray {
                 }
             })
             .py_err()?;
-        // A scalar operand keeps the array's name and dimension order.
-        let out = if reflected && other.ndim() == 0 {
+        // A scalar or plain array operand keeps the array's name and dimension order.
+        let out = if plain || (reflected && other.ndim() == 0) {
             match self.inner.name() {
                 Some(n) => out.with_name(n.clone()),
                 None => out,
@@ -878,7 +1063,8 @@ impl PyDataArray {
     /// cftime dtype), anything numpy accepts, or a pint-like quantity. The unit comes from
     /// `units`, the quantity, or `attrs["units"]`.
     #[new]
-    #[pyo3(signature = (data, dims=None, coords=None, name=None, attrs=None, units=None))]
+    #[pyo3(signature = (data, dims=None, coords=None, name=None, attrs=None, units=None, *, copy=true))]
+    #[allow(clippy::too_many_arguments)]
     fn py_new(
         py: Python<'_>,
         data: &Bound<'_, PyAny>,
@@ -887,22 +1073,23 @@ impl PyDataArray {
         name: Option<String>,
         attrs: Option<&Bound<'_, PyDict>>,
         units: Option<&Bound<'_, PyAny>>,
+        copy: bool,
     ) -> PyResult<Self> {
         let units = units
             .map(|u| crate::units::unit_from_py(u).map(|u| u.to_string()))
             .transpose()?;
-        let var = variable_from_py(py, dims, data, attrs, units.as_deref())?;
+        let var = variable_with(py, dims, data, attrs, units.as_deref(), copy)?;
         let mut inner = DataArray::new(var);
         if let Some(n) = name {
             inner = inner.with_name(n);
         }
         for (k, v) in dict_iter(coords)? {
-            let c = spec_from_py(py, &k, &v)?;
+            let c = spec_with(py, &k, &v, copy)?;
             inner = inner.with_coord(k, c).py_err()?;
         }
         Ok(Self {
             inner,
-            lending: Lending::default(),
+            generations: Generations::default(),
             parent: None,
         })
     }
@@ -998,18 +1185,19 @@ impl PyDataArray {
     }
 
     /// The attributes, as a dict whose changes are applied to this array (and, for an
-    /// array taken from a dataset, to that dataset's variable).
+    /// array taken from a dataset, to that dataset's variable). `"units"` shows the unit, and
+    /// writing it sets the unit (the values are unchanged; see `to` to convert them).
     #[getter]
     fn attrs<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
-        let d = attrs_to_py(slf.py(), slf.borrow().inner.attrs())?;
+        let d = slf.borrow().attrs_with_units(slf.py())?;
         live_dict(slf.as_any(), "AttrsDict", d.into_any())
     }
 
     #[setter(attrs)]
     fn set_attrs_py(slf: &Bound<'_, Self>, attrs: &Bound<'_, PyAny>) -> PyResult<()> {
-        let mut a = annoray::Attrs::new();
-        set_attrs(&mut a, Some(attrs))?;
-        Self::replace_attrs(slf, a)
+        let (a, unit) =
+            crate::mutate::edited_with_unit(&annoray::Attrs::new(), None, attrs, Vec::new())?;
+        Self::replace_attrs(slf, a, unit)
     }
 
     /// Coordinates, as data arrays, in a dict whose assignments (`da.coords["x"] = …`) and
@@ -1026,7 +1214,7 @@ impl PyDataArray {
     /// The values as numpy: a read-only view (no copy) for numbers in memory.
     #[getter]
     fn values<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
-        values_of(slf.clone().into_any(), slf.borrow().inner.variable())
+        values_of(slf.py(), slf.borrow().inner.variable())
     }
 
     /// Same as `.values`.
@@ -1333,13 +1521,20 @@ impl PyDataArray {
     /// Keep values where `cond` (booleans, or a callable taking this array) is true;
     /// elsewhere NaN, or `other`: a data array, a quantity (converted into this array's
     /// unit), or a number (only NaN, or 0 in a ratio-scale unit, beside data with a unit).
-    #[pyo3(signature = (cond, other=None))]
+    ///
+    /// `cond` may also be a boolean numpy array, broadcast onto this array's dimensions by
+    /// position. `drop=True` also removes positions where `cond` holds nowhere.
+    #[pyo3(signature = (cond, other=None, drop=false))]
     fn r#where(
         slf: &Bound<'_, Self>,
         cond: &Bound<'_, PyAny>,
         other: Option<&Bound<'_, PyAny>>,
-    ) -> PyResult<Py<PyDataArray>> {
-        crate::utility::where_method(slf, cond, other)
+        drop: bool,
+    ) -> PyResult<Py<PyAny>> {
+        if drop {
+            return crate::utility::where_drop(slf.as_any(), cond, other);
+        }
+        Ok(crate::utility::where_method(slf, cond, other)?.into_any())
     }
 
     /// Drop positions along `dim` with missing values (`how="any"` or `"all"`).
@@ -1398,7 +1593,7 @@ impl PyDataArray {
         let m = interp_options(method, extrapolate)?;
         let mut out = self.inner.clone();
         for (dim, v) in merge_kwargs(coords, kwargs)? {
-            let at = labels_var(py, &dim, &v)?;
+            let at = interp_target(py, &dim, &v)?;
             out = py.detach(|| out.interp(&dim, &at, m)).py_err()?;
         }
         new_da(py, out)
@@ -1519,12 +1714,12 @@ impl PyDataArray {
         let xr = py.import("xarray")?;
         let coords = PyDict::new(py);
         for (k, c) in this.inner.coords() {
-            coords.set_item(k.as_str(), xr_variable(py, &xr, slf.clone().into_any(), c)?)?;
+            coords.set_item(k.as_str(), xr_variable(py, &xr, c)?)?;
         }
         let kw = PyDict::new(py);
         kw.set_item("coords", coords)?;
         kw.set_item("name", this.name())?;
-        let var = xr_variable(py, &xr, slf.clone().into_any(), this.inner.variable())?;
+        let var = xr_variable(py, &xr, this.inner.variable())?;
         xr.getattr("DataArray")?.call((var,), Some(&kw))
     }
 
@@ -1539,7 +1734,7 @@ impl PyDataArray {
 #[pyclass(name = "Dataset", module = "annoray", weakref)]
 pub(crate) struct PyDataset {
     pub(crate) inner: Dataset,
-    pub(crate) lending: Lending,
+    pub(crate) generations: Generations,
 }
 
 impl PyDataset {
@@ -1580,19 +1775,23 @@ reductions!(PyDataset);
 #[pymethods]
 impl PyDataset {
     /// `Dataset(data_vars=None, coords=None, attrs=None)`; variables as `(dims, data[,
-    /// attrs])` tuples or `DataArray`s.
+    /// attrs])` tuples or `DataArray`s. Values are copied unless `copy=False`, which keeps numpy
+    /// arrays as they are (in their own layout, alive for as long as the dataset needs them):
+    /// you then promise not to write to them. Values numpy holds in another form are still
+    /// copied.
     #[new]
-    #[pyo3(signature = (data_vars=None, coords=None, attrs=None))]
+    #[pyo3(signature = (data_vars=None, coords=None, attrs=None, *, copy=true))]
     fn py_new(
         py: Python<'_>,
         data_vars: Option<&Bound<'_, PyAny>>,
         coords: Option<&Bound<'_, PyAny>>,
         attrs: Option<&Bound<'_, PyAny>>,
+        copy: bool,
     ) -> PyResult<Self> {
         let mut inner = Dataset::new();
         for (k, v) in dict_iter(coords)? {
             inner
-                .add_coord(k.as_str(), spec_from_py(py, &k, &v)?)
+                .add_coord(k.as_str(), spec_with(py, &k, &v, copy)?)
                 .py_err()?;
         }
         for (k, v) in dict_iter(data_vars)? {
@@ -1605,14 +1804,14 @@ impl PyDataset {
                     inner.add_array(k.as_str(), a).py_err()?;
                 }
                 Err(_) => inner
-                    .add_var(k.as_str(), spec_from_py(py, &k, &v)?)
+                    .add_var(k.as_str(), spec_with(py, &k, &v, copy)?)
                     .py_err()?,
             }
         }
         set_attrs(inner.attrs_mut(), attrs)?;
         Ok(Self {
             inner,
-            lending: Lending::default(),
+            generations: Generations::default(),
         })
     }
 
@@ -1934,7 +2133,7 @@ impl PyDataset {
         let m = interp_options(method, extrapolate)?;
         let mut out = self.inner.clone();
         for (dim, v) in merge_kwargs(coords, kwargs)? {
-            let at = labels_var(py, &dim, &v)?;
+            let at = interp_target(py, &dim, &v)?;
             out = py.detach(|| out.interp(&dim, &at, m)).py_err()?;
         }
         new_ds(py, out)
@@ -2130,14 +2329,13 @@ impl PyDataset {
         let py = slf.py();
         let this = &slf.borrow().inner;
         let xr = py.import("xarray")?;
-        let owner = slf.clone().into_any();
         let vars = PyDict::new(py);
         for (k, v) in this.data_vars() {
-            vars.set_item(k.as_str(), xr_variable(py, &xr, owner.clone(), v)?)?;
+            vars.set_item(k.as_str(), xr_variable(py, &xr, v)?)?;
         }
         let coords = PyDict::new(py);
         for (k, v) in this.coords() {
-            coords.set_item(k.as_str(), xr_variable(py, &xr, owner.clone(), v)?)?;
+            coords.set_item(k.as_str(), xr_variable(py, &xr, v)?)?;
         }
         let ds = xr
             .getattr("Dataset")?
@@ -2164,7 +2362,6 @@ impl PyDataset {
 fn xr_variable<'py>(
     py: Python<'py>,
     xr: &Bound<'py, PyModule>,
-    owner: Bound<'py, PyAny>,
     v: &Variable,
 ) -> PyResult<Bound<'py, PyAny>> {
     let attrs = attrs_to_py(py, v.attrs())?;
@@ -2177,7 +2374,7 @@ fn xr_variable<'py>(
     }
     let dims = PyTuple::new(py, v.dims().iter().map(Name::as_str))?;
     xr.getattr("Variable")?
-        .call1((dims, values_of(owner, v)?, attrs))
+        .call1((dims, values_of(py, v)?, attrs))
 }
 
 // ----- helpers shared by the classes -----
@@ -2298,6 +2495,26 @@ fn one_pair(args: IselArgs<'_>) -> PyResult<(String, Bound<'_, PyAny>)> {
             "give exactly one dimension, e.g. time=...",
         )),
     }
+}
+
+/// Interpolation points along `dim`: a scalar stays 0-d (the result loses `dim`, keeping it as
+/// a scalar coordinate).
+fn interp_target(py: Python<'_>, dim: &str, v: &Bound<'_, PyAny>) -> PyResult<Variable> {
+    if !v.is_instance_of::<PyDataArray>() {
+        let mag = match quantity_parts(v)? {
+            Some((m, _)) => m,
+            None => v.clone(),
+        };
+        if py
+            .import("numpy")?
+            .call_method1("ndim", (&mag,))?
+            .extract::<usize>()?
+            == 0
+        {
+            return variable_from_py(py, Some(PyTuple::empty(py).as_any()), v, None, None);
+        }
+    }
+    labels_var(py, dim, v)
 }
 
 /// New labels (or interpolation points) along `dim`, as a 1-D variable.

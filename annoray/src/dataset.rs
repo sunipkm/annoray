@@ -57,7 +57,8 @@ impl Dataset {
         merge_sizes(&mut sizes, var)
     }
 
-    /// Add a data variable.
+    /// Add a data variable. One named after its only dimension is that dimension's
+    /// coordinate, and is added as one (as in xarray).
     ///
     /// # Errors
     /// [`CoreError::NameConflict`] if the name is taken; [`CoreError::DimLengthMismatch`] if a
@@ -65,7 +66,11 @@ impl Dataset {
     pub fn add_var(&mut self, name: impl Into<Name>, var: Variable) -> Result<()> {
         let name = name.into();
         self.check_new(&name, &var)?;
-        self.data_vars.insert(name, var);
+        if var.dims() == std::slice::from_ref(&name) {
+            self.coords.insert(name, var);
+        } else {
+            self.data_vars.insert(name, var);
+        }
         Ok(())
     }
 
@@ -135,6 +140,17 @@ impl Dataset {
         self.attrs
             .extend(attrs.into_iter().map(|(k, v)| (k.into(), v.into())));
         self
+    }
+
+    /// An independent copy: every loaded value gets memory of its own, where a
+    /// [`clone`](Clone::clone) shares it until one of the two is written to.
+    #[must_use]
+    pub fn deep_copy(&self) -> Self {
+        let mut out = self.clone();
+        for v in out.data_vars.values_mut().chain(out.coords.values_mut()) {
+            *v = v.deep_copy();
+        }
+        out
     }
 
     /// The data variables and coordinates, mutably (for setters that keep them consistent).

@@ -8,19 +8,37 @@ use pyo3::pyclass::CompareOp;
 use pyo3::types::{PyDict, PyTuple};
 
 use crate::convert::OrPy;
-use crate::native::{PyDataArray, PyDataset, new_da, new_ds, operand};
+use crate::native::{PyDataArray, PyDataset, new_da, new_ds, operand, positional_operand};
 
 /// The other operand of a dataset operation.
 enum Other<'py> {
     Dataset(PyRef<'py, PyDataset>),
+    /// A plain array, broadcast by position onto each variable.
+    PerVariable(Box<Dataset>),
     Array(Box<DataArray>),
 }
 
-fn other<'py>(py: Python<'py>, o: &Bound<'py, PyAny>) -> PyResult<Option<Other<'py>>> {
+fn other<'py>(
+    py: Python<'py>,
+    o: &Bound<'py, PyAny>,
+    me: &Dataset,
+) -> PyResult<Option<Other<'py>>> {
     if let Ok(ds) = o.cast::<PyDataset>() {
         return Ok(Some(Other::Dataset(ds.borrow())));
     }
-    Ok(operand(py, o)?.map(|a| Other::Array(Box::new(a.get().clone()))))
+    if let Some(a) = operand(py, o)? {
+        return Ok(Some(Other::Array(Box::new(a.get().clone()))));
+    }
+    let mut per_variable = Dataset::new();
+    for (k, v) in me.data_vars() {
+        let Some(a) = positional_operand(py, o, v.dims(), v.shape())? else {
+            return Ok(None);
+        };
+        per_variable
+            .add_var(k.clone(), a.variable().clone())
+            .py_err()?;
+    }
+    Ok(Some(Other::PerVariable(Box::new(per_variable))))
 }
 
 impl PyDataset {
@@ -33,12 +51,13 @@ impl PyDataset {
         reflected: bool,
         f: impl Fn(&DataArray, &DataArray) -> annoray::Result<DataArray> + Send + Sync,
     ) -> PyResult<Py<PyAny>> {
-        let Some(o) = other(py, o)? else {
+        let Some(o) = other(py, o, &self.inner)? else {
             return Ok(py.NotImplemented());
         };
         let pair = |a: &DataArray, b: &DataArray| if reflected { f(b, a) } else { f(a, b) };
         let target: Result<&Dataset, &DataArray> = match &o {
             Other::Dataset(ds) => Ok(&ds.inner),
+            Other::PerVariable(ds) => Ok(ds),
             Other::Array(da) => Err(da),
         };
         let out = py
@@ -233,10 +252,19 @@ impl PyDataset {
         e: &Bound<'_, PyAny>,
         _modulo: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<Py<PyAny>> {
-        let Ok(e) = e.extract::<f64>() else {
-            return Ok(py.NotImplemented());
+        let Ok(x) = e.extract::<f64>() else {
+            let mut out = self.inner.clone();
+            for k in self.keys() {
+                let v = self.inner.get(&k).py_err()?.to_owned();
+                let Some(powered) = crate::native::array_pow(py, &v, e)? else {
+                    return Ok(py.NotImplemented());
+                };
+                let (_, var, _) = powered.into_parts();
+                out.set_array(k.as_str(), DataArray::new(var)).py_err()?;
+            }
+            return Ok(new_ds(py, out)?.into_any());
         };
-        Ok(new_ds(py, py.detach(|| self.inner.pow(e)).py_err()?)?.into_any())
+        Ok(new_ds(py, py.detach(|| self.inner.pow(x)).py_err()?)?.into_any())
     }
 
     /// numpy ufuncs, variable by variable (the unit-aware set of `DataArray`).
@@ -293,15 +321,29 @@ impl PyDataset {
     /// variables, or a callable taking this dataset) holds; NaN (NaT) or `other` elsewhere.
     /// `other` is a number or a quantity, converted into each variable's unit (a bare number
     /// beside a unit only when NaN, or 0 in a ratio-scale unit).
-    #[pyo3(signature = (cond, other=None))]
+    ///
+    /// `cond` may also be a boolean numpy array, broadcast onto each variable by position.
+    /// `drop=True` also removes positions where `cond` holds nowhere.
+    #[pyo3(signature = (cond, other=None, drop=false))]
     fn r#where(
         slf: &Bound<'_, Self>,
         cond: &Bound<'_, PyAny>,
         other: Option<&Bound<'_, PyAny>>,
-    ) -> PyResult<Py<PyDataset>> {
+        drop: bool,
+    ) -> PyResult<Py<PyAny>> {
+        if drop {
+            return crate::utility::where_drop(slf.as_any(), cond, other);
+        }
         let py = slf.py();
         let this = &slf.borrow().inner;
         let cond = &crate::utility::dataset_condition(slf, cond)?;
+        if !cond.is_instance_of::<PyDataset>() && !cond.is_instance_of::<PyDataArray>() {
+            return Ok(py
+                .import("annoray._methods")?
+                .getattr("where_array")?
+                .call1((slf, cond, other))?
+                .unbind());
+        }
         let other = match other {
             Some(o) if !o.is_none() => Some(crate::utility::WhereOther::from_py(o)?),
             _ => None,
@@ -321,7 +363,7 @@ impl PyDataset {
                 "cond must be a DataArray or Dataset of booleans",
             ));
         };
-        new_ds(py, out.py_err()?)
+        Ok(new_ds(py, out.py_err()?)?.into_any())
     }
 
     /// Where each data variable is missing (NaN/NaT).

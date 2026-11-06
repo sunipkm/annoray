@@ -67,6 +67,7 @@ pub use error::UnitError;
 pub use instant::{Duration, Instant};
 pub use intern::{DEFAULT_INTERN_CAP, UnitId, intern_cap, interned, set_intern_cap};
 pub use quantity::{Dyn, IntoUnit, Kind, Quantity, SameDimension, Scalar};
+pub use registry::define_unit;
 pub use scale::{Rational, Scale};
 pub use static_unit::{StaticUnit, StaticValue, converter_from, converter_into};
 pub use time::{Calendar, CfDate, EpochCodec, RefDate};

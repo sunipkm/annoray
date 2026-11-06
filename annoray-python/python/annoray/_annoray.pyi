@@ -375,6 +375,8 @@ class DataArray(_Reductions, Generic[_D]):
         name: str | None = None,
         attrs: Mapping[str, Any] | None = None,
         units: str | Unit | Any | None = None,
+        *,
+        copy: bool = True,
     ) -> None: ...
     @property
     def name(self) -> str | None: ...
@@ -626,8 +628,9 @@ class DataArray(_Reductions, Generic[_D]):
     ) -> DataArray[_D]: ...
     def where(
         self,
-        cond: DataArray[Any] | Callable[[DataArray[_D]], DataArray[Any]],
+        cond: DataArray[Any] | Any | Callable[[DataArray[_D]], DataArray[Any]],
         other: DataArray[Any] | Quantity[Any] | float | None = None,
+        drop: bool = False,
     ) -> DataArray[_D]: ...
     def dropna(self, dim: str, how: Literal["any", "all"] = "any") -> DataArray[_D]: ...
     def reindex(
@@ -780,6 +783,8 @@ class Dataset(_Reductions):
         data_vars: Mapping[str, Any] | None = None,
         coords: Mapping[str, Any] | None = None,
         attrs: Mapping[str, Any] | None = None,
+        *,
+        copy: bool = True,
     ) -> None: ...
     @property
     def data_vars(self) -> dict[str, DataArray[Any]]: ...
@@ -1129,8 +1134,9 @@ class Dataset(_Reductions):
     def __array_ufunc__(self, ufunc: Any, method: str, *inputs: Any, **kwargs: Any) -> Any: ...
     def where(
         self,
-        cond: DataArray[Any] | Dataset | Callable[[Dataset], DataArray[Any] | Dataset],
+        cond: DataArray[Any] | Dataset | Any | Callable[[Dataset], DataArray[Any] | Dataset],
         other: Quantity[Any] | float | None = None,
+        drop: bool = False,
     ) -> Dataset: ...
     def isnull(self) -> Dataset: ...
     def notnull(self) -> Dataset: ...
@@ -1584,3 +1590,4 @@ def write(
     unlimited_dims: Iterable[Hashable],
     compress: _Compress = None,
 ) -> None: ...
+def define_unit(name: str, definition: str | Unit) -> Unit: ...
