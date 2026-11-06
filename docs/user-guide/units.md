@@ -213,14 +213,14 @@ is read from and written to files as spelled. A name that already means another 
 error; defining one again as what it already is does nothing.
 
 ```{code-cell} python
-ar.define_unit("TECU", "1e16 m^-2")
-print(ar.Quantity(2.5, "TECU").to("m-2"))
-print(ar.DataArray([1.0], dims="x", units="kTECU").units)
+ar.define_unit("SFU", "1e-22 W m-2 Hz-1")
+print(ar.Quantity(2.5, "SFU").to("W m-2 Hz-1"))
+print(ar.DataArray([1.0], dims="x", units="kSFU").units)
 ```
 
 Files naming the unit have to be opened after it is defined. An extension module linking
 `annoray-pyo3` has its own registry: to exchange such a unit it defines it there as well, with
-`annoray::units::define_unit`.
+`annoray::units::define_unit`. Built-in units, such as `TECU` (10¹⁶ m⁻²), need neither.
 
 ## Unit systems
 
@@ -341,6 +341,8 @@ astronomical unit and the Julian year.
 | torr | `Torr` | `atm/760` |
 | millimetre of mercury | `mmHg` | `133.322387415 Pa` |
 | hectare | `hectare` | `1e4 m2` |
+| total electron content unit | `TECU` | `1e16 m-2` |
+| total electron content unit | `TECU` | `1e16 m-2` |
 | ångström | `angstrom`, `Å`, `AA` | `1e-10 m` |
 | degree (of arc) | `deg`, `degree`, `°` | `pi/180 rad` |
 | arcminute | `arcmin` | `deg/60` |

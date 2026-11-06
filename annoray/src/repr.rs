@@ -43,11 +43,9 @@ pub trait Repr: sealed::Sealed + Sized {
     /// The values, as owned data: a new reference to the buffer if there is one to share.
     #[doc(hidden)]
     fn held_to_buffer(h: &Self::Held) -> SharedBuffer;
-    /// The array itself, to reshape in place (owned data still shared is copied first).
+    /// The values after `steps`, without copying them.
     #[doc(hidden)]
-    fn held_into_typed(h: Self::Held) -> TypedArray<Self>;
-    #[doc(hidden)]
-    fn held_from_typed(a: TypedArray<Self>) -> Self::Held;
+    fn held_select(h: Self::Held, steps: &[Step]) -> Self::Held;
 }
 
 /// A representation that allows mutating element data.
@@ -73,8 +71,34 @@ pub trait ExternalBuffer: Send + Sync + 'static {
     fn typed(&self) -> TypedArray<View<'_>>;
 }
 
+/// What a selection does to an array's axes. Callers have validated axes and positions.
+#[doc(hidden)]
+#[derive(Debug, Clone)]
+pub enum Step {
+    /// Slice an axis, keeping it.
+    Slice(usize, ndarray::Slice),
+    /// Take one position of an axis, removing it.
+    At(usize, usize),
+    /// Reorder the axes.
+    Permute(Vec<usize>),
+}
+
+fn apply_steps<S: Repr>(mut t: TypedArray<S>, steps: &[Step]) -> TypedArray<S> {
+    for step in steps {
+        t = match step {
+            Step::Slice(axis, slice) => {
+                t.slice_axis_inplace(*axis, *slice);
+                t
+            }
+            Step::At(axis, index) => t.index_axis_move(*axis, *index),
+            Step::Permute(order) => t.permuted(order),
+        };
+    }
+    t
+}
+
 #[derive(Clone)]
-enum Stored {
+enum Base {
     Mem(Arc<TypedArray<Owned>>),
     External {
         buffer: Arc<dyn ExternalBuffer>,
@@ -85,14 +109,27 @@ enum Stored {
     },
 }
 
-/// Loaded values of an owned variable, reference counted: cloning a variable shares them, and
-/// writing through it copies them first if anything else still holds them (copy on write).
+/// A selection of a buffer: the steps from the whole, and the shape they give.
+struct Window {
+    steps: Vec<Step>,
+    shape: Box<[usize]>,
+}
+
+/// Loaded values of an owned variable, reference counted: cloning a variable or selecting from
+/// it shares them (a selection keeps the whole buffer alive), and writing through it copies them
+/// first if anything else still holds them (copy on write).
 #[derive(Clone)]
-pub struct SharedBuffer(Stored);
+pub struct SharedBuffer {
+    base: Base,
+    window: Option<Arc<Window>>,
+}
 
 impl SharedBuffer {
     pub(crate) fn new(a: TypedArray<Owned>) -> Self {
-        Self(Stored::Mem(Arc::new(a)))
+        Self {
+            base: Base::Mem(Arc::new(a)),
+            window: None,
+        }
     }
 
     pub(crate) fn external(buffer: Arc<dyn ExternalBuffer>) -> Self {
@@ -100,59 +137,105 @@ impl SharedBuffer {
             let t = buffer.typed();
             (Arc::from(t.shape()), t.dtype())
         };
-        Self(Stored::External {
-            buffer,
-            shape,
-            dtype,
-            written: None,
-        })
+        Self {
+            base: Base::External {
+                buffer,
+                shape,
+                dtype,
+                written: None,
+            },
+            window: None,
+        }
+    }
+
+    /// The whole buffer, as a view.
+    fn base_view(&self) -> TypedArray<View<'_>> {
+        match &self.base {
+            Base::Mem(a)
+            | Base::External {
+                written: Some(a), ..
+            } => a.view(),
+            Base::External { buffer, .. } => buffer.typed(),
+        }
     }
 
     /// The values, as a view.
     pub(crate) fn typed(&self) -> TypedArray<View<'_>> {
-        match &self.0 {
-            Stored::Mem(a)
-            | Stored::External {
-                written: Some(a), ..
-            } => a.view(),
-            Stored::External { buffer, .. } => buffer.typed(),
+        match &self.window {
+            Some(w) => apply_steps(self.base_view(), &w.steps),
+            None => self.base_view(),
         }
     }
 
-    /// The array, moved out if nothing else holds it and copied otherwise.
+    fn shape(&self) -> &[usize] {
+        match (&self.window, &self.base) {
+            (Some(w), _) => &w.shape,
+            (None, Base::Mem(a)) => a.shape(),
+            (None, Base::External { shape, .. }) => shape,
+        }
+    }
+
+    fn dtype(&self) -> DType {
+        match &self.base {
+            Base::Mem(a) => a.dtype(),
+            Base::External { dtype, .. } => *dtype,
+        }
+    }
+
+    /// The same memory after `steps`.
+    pub(crate) fn select(&self, steps: &[Step]) -> Self {
+        let mut all = self
+            .window
+            .as_ref()
+            .map_or_else(Vec::new, |w| w.steps.clone());
+        all.extend_from_slice(steps);
+        let shape = apply_steps(self.base_view(), &all).shape().into();
+        Self {
+            base: self.base.clone(),
+            window: Some(Arc::new(Window { steps: all, shape })),
+        }
+    }
+
+    /// The array, moved out if nothing else holds all of it and copied otherwise.
     pub(crate) fn into_typed(self) -> TypedArray<Owned> {
-        match self.0 {
-            Stored::Mem(a)
-            | Stored::External {
+        if self.window.is_some() {
+            return self.typed().to_owned();
+        }
+        match self.base {
+            Base::Mem(a)
+            | Base::External {
                 written: Some(a), ..
             } => Arc::try_unwrap(a).unwrap_or_else(|a| (*a).clone()),
-            Stored::External { buffer, .. } => buffer.typed().to_owned(),
+            Base::External { buffer, .. } => buffer.typed().to_owned(),
         }
     }
 
-    /// The array to write: annoray's own, and not shared with anything else.
+    /// The array to write: annoray's own, holding these values alone and shared with nothing.
     pub(crate) fn make_mut(&mut self) -> &mut TypedArray<Owned> {
-        Arc::make_mut(match &mut self.0 {
-            Stored::Mem(a) => a,
-            Stored::External {
+        if self.window.is_some() {
+            *self = Self::new(self.typed().to_owned());
+        }
+        Arc::make_mut(match &mut self.base {
+            Base::Mem(a) => a,
+            Base::External {
                 buffer, written, ..
             } => written.get_or_insert_with(|| Arc::new(buffer.typed().to_owned())),
         })
     }
 
-    /// An independent copy in annoray's own memory.
+    /// An independent copy in annoray's own memory, of these values alone.
     pub(crate) fn deep_copy(&self) -> Self {
         Self::new(self.typed().to_owned())
     }
 
     /// An owner of the memory [`typed`](Self::typed) shows.
     pub(crate) fn keep_alive(&self) -> KeepAlive {
-        match &self.0 {
-            Stored::Mem(a)
-            | Stored::External {
+        match &self.base {
+            Base::Mem(a)
+            | Base::External {
                 written: Some(a), ..
             } => a.clone(),
-            Stored::External { buffer, .. } => Arc::new(buffer.clone()),
+            Base::External { buffer, .. } => Arc::new(buffer.clone()),
         }
     }
 }
@@ -167,8 +250,8 @@ impl Debug for SharedBuffer {
     }
 }
 
-/// Loaded values of a shared view: the view, and the buffer it shows all of, if it does. An
-/// unsliced view made owned ([`to_owned`](crate::VariableBase::to_owned)) shares that buffer.
+/// Loaded values of a shared view: the view, and the buffer it shows, if it knows it. A view
+/// made owned ([`to_owned`](crate::VariableBase::to_owned)) then shares that buffer.
 #[doc(hidden)]
 #[derive(Clone, Debug)]
 pub struct HeldView<'a> {
@@ -200,16 +283,10 @@ impl Repr for Owned {
     type Coord = Self;
     type Held = SharedBuffer;
     fn held_shape(h: &Self::Held) -> &[usize] {
-        match &h.0 {
-            Stored::Mem(a) => a.shape(),
-            Stored::External { shape, .. } => shape,
-        }
+        h.shape()
     }
     fn held_dtype(h: &Self::Held) -> DType {
-        match &h.0 {
-            Stored::Mem(a) => a.dtype(),
-            Stored::External { dtype, .. } => *dtype,
-        }
+        h.dtype()
     }
     fn held_typed(h: &Self::Held) -> TypedArray<View<'_>> {
         h.typed()
@@ -223,11 +300,8 @@ impl Repr for Owned {
     fn held_to_buffer(h: &Self::Held) -> SharedBuffer {
         h.clone()
     }
-    fn held_into_typed(h: Self::Held) -> TypedArray<Self> {
-        h.into_typed()
-    }
-    fn held_from_typed(a: TypedArray<Self>) -> Self::Held {
-        SharedBuffer::new(a)
+    fn held_select(h: Self::Held, steps: &[Step]) -> Self::Held {
+        h.select(steps)
     }
 }
 
@@ -257,13 +331,10 @@ impl<'a> Repr for View<'a> {
             None => SharedBuffer::new(h.typed.to_owned()),
         }
     }
-    fn held_into_typed(h: Self::Held) -> TypedArray<Self> {
-        h.typed
-    }
-    fn held_from_typed(a: TypedArray<Self>) -> Self::Held {
+    fn held_select(h: Self::Held, steps: &[Step]) -> Self::Held {
         HeldView {
-            typed: a,
-            whole: None,
+            whole: h.whole.map(|w| w.select(steps)),
+            typed: apply_steps(h.typed, steps),
         }
     }
 }
@@ -291,11 +362,8 @@ impl<'a> Repr for ViewMut<'a> {
     fn held_to_buffer(h: &Self::Held) -> SharedBuffer {
         SharedBuffer::new(h.to_owned())
     }
-    fn held_into_typed(h: Self::Held) -> TypedArray<Self> {
-        h
-    }
-    fn held_from_typed(a: TypedArray<Self>) -> Self::Held {
-        a
+    fn held_select(h: Self::Held, steps: &[Step]) -> Self::Held {
+        apply_steps(h, steps)
     }
 }
 

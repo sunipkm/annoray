@@ -247,7 +247,7 @@ impl RawData<'_> {
     pub fn values(&self) -> Result<Cow<'_, TypedArray<Owned>>> {
         match self {
             Self::Loaded(a) => Ok(Cow::Borrowed(a)),
-            Self::Borrowed(a) => Ok(Cow::Owned(a.to_owned())),
+            Self::Borrowed(a) => Ok(Cow::Owned(a.to_c_order())),
             Self::Lazy(s) => {
                 let start = vec![0; s.shape().len()];
                 Ok(Cow::Owned(s.read_slice(&start, s.shape())?))
@@ -277,7 +277,10 @@ pub(crate) fn slice_of(
         let s = start.get(i).copied().unwrap_or(0);
         ndarray::Slice::from(s..s.saturating_add(count.get(i).copied().unwrap_or(0)))
     };
-    crate::array::typed_map!(a, x => x.slice_each_axis(|ax| range(ax.axis.index())).to_owned())
+    crate::array::typed_map!(
+        a,
+        x => crate::array::c_order(x.slice_each_axis(|ax| range(ax.axis.index())))
+    )
 }
 
 #[cfg(feature = "netcdf4")]

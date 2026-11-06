@@ -244,8 +244,8 @@ pub(crate) fn registry() -> &'static Registry {
     REG.get_or_init(Registry::build)
 }
 
-/// Add a unit to this process's registry: `define_unit("TECU", "1e16 m^-2")`. It parses from
-/// then on, by that exact spelling and with SI prefix symbols (`kTECU`), and files that name it
+/// Add a unit to this process's registry: `define_unit("SFU", "1e-22 W m-2 Hz-1")`. It parses from
+/// then on, by that exact spelling and with SI prefix symbols (`kSFU`), and files that name it
 /// read and write it as written. Returns the unit.
 ///
 /// Definitions are never removed, so a unit once parsed keeps its meaning; defining a name
@@ -255,10 +255,10 @@ pub(crate) fn registry() -> &'static Registry {
 /// ```
 /// use annoray_units::{Unit, define_unit};
 ///
-/// define_unit("TECU", "1e16 m^-2")?;
-/// let tecu: Unit = "TECU".parse()?;
-/// assert_eq!(tecu.converter_to(&"m^-2".parse()?)?.factor(), 1e16);
-/// assert_eq!(tecu.to_string(), "TECU");
+/// define_unit("SFU", "1e-22 W m-2 Hz-1")?;
+/// let sfu: Unit = "SFU".parse()?;
+/// assert_eq!(sfu.converter_to(&"W m-2 Hz-1".parse()?)?.factor(), 1e-22);
+/// assert_eq!(sfu.to_string(), "SFU");
 /// # Ok::<(), annoray_units::UnitError>(())
 /// ```
 ///

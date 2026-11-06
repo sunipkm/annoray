@@ -118,6 +118,12 @@ fn typed(a: Array) -> Result<TypedArray<Owned>> {
 
 /// A typed array as HDF5 values (no copy).
 pub(crate) fn hdf5_array(a: TypedArray<Owned>) -> Result<Array> {
+    // Row-major, as the writer takes it without going value by value.
+    let a = if crate::array::typed_dispatch!(&a, x => x.is_standard_layout()) {
+        a
+    } else {
+        a.to_c_order()
+    };
     Ok(match a {
         TypedArray::I8(x) => Array::I8(x),
         TypedArray::U8(x) => Array::U8(x),

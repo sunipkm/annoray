@@ -383,3 +383,95 @@ fn rows_and_lanes_agree_for(shape: [usize; 3]) {
         }
     }
 }
+
+/// Long enough for threads, with a value of interest at every kind of place.
+fn kernel_lengths() -> [usize; 11] {
+    [1, 15, 16, 17, 63, 64, 65, 80, 65_535, 65_537, 131_073]
+}
+
+#[test]
+fn whole_array_kernels_match_a_plain_loop() {
+    for n in kernel_lengths() {
+        let values: Vec<f64> = (0..n).map(|i| ((i * 37) % 1009) as f64 - 500.0).collect();
+        let mut with_nan = values.clone();
+        if n > 2 {
+            with_nan[n / 2] = f64::NAN;
+            with_nan[n - 1] = f64::NAN;
+        }
+        for xs in [values, with_nan] {
+            let a = DataArray::from_array(
+                ["x"],
+                ArrayD::from_shape_vec(IxDyn(&[n]), xs.clone()).unwrap(),
+            )
+            .unwrap();
+            let valid: Vec<f64> = xs.iter().copied().filter(|x| !x.is_nan()).collect();
+            let opts = ReduceOptions::default();
+            let one = |op| {
+                a.reduce(op, .., &opts)
+                    .unwrap()
+                    .variable()
+                    .data::<f64>()
+                    .unwrap()
+                    .first()
+                    .copied()
+                    .unwrap()
+            };
+            let sum: f64 = valid.iter().sum();
+            let min = valid.iter().copied().fold(f64::INFINITY, f64::min);
+            let max = valid.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+            assert_eq!(one(Reduction::Sum), sum, "sum of {n}");
+            assert_eq!(one(Reduction::Min), min, "min of {n}");
+            assert_eq!(one(Reduction::Max), max, "max of {n}");
+            assert_eq!(
+                one(Reduction::Mean),
+                sum / valid.len() as f64,
+                "mean of {n}"
+            );
+        }
+    }
+}
+
+#[test]
+fn extremes_of_integers_and_zeros() {
+    for n in kernel_lengths() {
+        let mut xs: Vec<i16> = (0..n).map(|i| (i % 100) as i16).collect();
+        xs[n - 1] = -7;
+        xs[n / 2] = 12_345;
+        let a = DataArray::from_array(
+            ["x"],
+            ArrayD::from_shape_vec(IxDyn(&[n]), xs.clone()).unwrap(),
+        )
+        .unwrap();
+        let opts = ReduceOptions::default();
+        let of = |op| {
+            *a.reduce(op, .., &opts)
+                .unwrap()
+                .variable()
+                .data::<i16>()
+                .unwrap()
+                .first()
+                .unwrap()
+        };
+        assert_eq!(of(Reduction::Min), *xs.iter().min().unwrap());
+        assert_eq!(of(Reduction::Max), *xs.iter().max().unwrap());
+    }
+    let mut zeros = vec![0.0f64; 1000];
+    zeros[500] = -0.0;
+    let a = DataArray::from_array(
+        ["x"],
+        ArrayD::from_shape_vec(IxDyn(&[1000]), zeros).unwrap(),
+    )
+    .unwrap();
+    let opts = ReduceOptions::default();
+    let of = |op| {
+        *a.reduce(op, .., &opts)
+            .unwrap()
+            .variable()
+            .data::<f64>()
+            .unwrap()
+            .first()
+            .unwrap()
+    };
+    assert!(of(Reduction::Min).is_sign_negative());
+    assert!(of(Reduction::Max).is_sign_positive());
+}

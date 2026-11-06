@@ -668,3 +668,16 @@ fn defining_a_unit_again() {
     assert!(crate::define_unit("TestBadDef", "no such thing").is_err());
     assert!("TestBadDef".parse::<Unit>().is_err());
 }
+
+#[test]
+fn tecu_is_built_in() {
+    assert_eq!(u("TECU"), u("1e16 m-2"));
+    assert_eq!(u("TECU").converter_to(&u("m-2")).unwrap().factor(), 1e16);
+    assert_eq!(u("TECU").to_string(), "TECU");
+    assert_eq!(u("mTECU").converter_to(&u("TECU")).unwrap().factor(), 1e-3);
+    assert!(crate::define_unit("TECU", "1e16 m^-2").is_ok());
+    assert!(matches!(
+        crate::define_unit("TECU", "1e15 m^-2"),
+        Err(UnitError::Redefined { .. })
+    ));
+}

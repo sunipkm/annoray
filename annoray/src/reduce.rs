@@ -6,6 +6,10 @@
 //!   Floats can be missing (NaN), and so can times (NaT, see [`NaT`](crate::NaT)), which are
 //!   skipped the same way. (Unlike xarray, whose `min`/`max` of dates do not skip NaT by
 //!   default while its `mean` does.)
+//! - **Rounding**: floating-point sums, means and spreads add values in whatever order is quickest
+//!   (memory order, in fixed blocks), as numpy does, so the last bits can depend on the layout
+//!   and on whether the data was streamed from a file. The same values in the same layout give
+//!   the same bits, whatever the number of threads.
 //! - **Element types**: integer and boolean sums and products are exact (checked) and give
 //!   `i64` (`u64` for unsigned input); means, medians and spreads of integers are `f64`;
 //!   `f32` stays `f32`. `count`, `argmin` and `argmax` give `i64`; `any` and `all` give `bool`.
@@ -237,6 +241,51 @@ trait RedElem: Element {
     fn as_i128(&self) -> Option<i128> {
         None
     }
+    /// The extreme of a non-empty contiguous run, as [`extreme`] would pick it, if this type has
+    /// a faster way than comparing one value at a time.
+    fn slice_extreme(_xs: &[Self], _want: Ordering, _skipna: bool) -> Option<Self> {
+        None
+    }
+}
+
+/// Values given to a thread at a time by the slice kernels.
+const SLICE_BLOCK: usize = 1 << 16;
+/// Values a slice kernel handles at once: running one accumulator per value makes the loops
+/// vectorize, where a single floating-point accumulator would have to keep its order.
+const SLICE_LANES: usize = 16;
+/// Values below which comparing them one at a time is as quick.
+const SLICE_MIN: usize = 64;
+
+/// `f` of `xs` in blocks, across threads when large, joined by `join` in block order: rounding
+/// then depends on neither the number of threads nor how they share the work. `None` for no
+/// values.
+fn in_blocks<T: Sync, R: Send>(
+    xs: &[T],
+    f: impl Fn(&[T]) -> R + Sync + Send,
+    join: impl Fn(R, R) -> R + Sync + Send,
+) -> Option<R> {
+    #[cfg(feature = "rayon")]
+    {
+        use rayon::prelude::*;
+        if xs.len() > SLICE_BLOCK {
+            let blocks: Vec<R> = xs.par_chunks(SLICE_BLOCK).map(f).collect();
+            return blocks.into_iter().reduce(join);
+        }
+    }
+    xs.chunks(SLICE_BLOCK).map(f).reduce(join)
+}
+
+/// The value `pick` prefers over all of `xs`, starting from `start`.
+fn picked<T: Copy>(xs: &[T], start: T, pick: impl Fn(T, T) -> T + Copy) -> T {
+    let mut acc = [start; SLICE_LANES];
+    let (chunks, rest) = xs.as_chunks::<SLICE_LANES>();
+    for chunk in chunks {
+        for (a, x) in acc.iter_mut().zip(chunk) {
+            *a = pick(*x, *a);
+        }
+    }
+    let lanes = acc.into_iter().fold(start, pick);
+    rest.iter().fold(lanes, |a, x| pick(*x, a))
 }
 
 macro_rules! red_int {
@@ -252,14 +301,66 @@ macro_rules! red_int {
             fn as_i128(&self) -> Option<i128> {
                 Some(i128::from(*self))
             }
+            fn slice_extreme(xs: &[Self], want: Ordering, _skipna: bool) -> Option<Self> {
+                let first = *xs.first()?;
+                if want == Ordering::Less {
+                    let pick = |x: $t, a: $t| if x < a { x } else { a };
+                    in_blocks(xs, |b| picked(b, first, pick), pick)
+                } else {
+                    let pick = |x: $t, a: $t| if x > a { x } else { a };
+                    in_blocks(xs, |b| picked(b, first, pick), pick)
+                }
+            }
         }
     )*};
 }
 red_int!(i8, i16, i32, i64, u8, u16, u32, u64);
 
 macro_rules! red_float {
-    ($($t:ty),*) => {$(
+    ($($t:ty => $count:ty),*) => {$(
         impl RedElem for $t {
+            #[allow(clippy::cast_possible_truncation)] // counted within one block
+            fn slice_extreme(xs: &[Self], want: Ordering, skipna: bool) -> Option<Self> {
+                if xs.is_empty() {
+                    return None;
+                }
+                let less = want == Ordering::Less;
+                let start = if less { <$t>::INFINITY } else { <$t>::NEG_INFINITY };
+                // Comparisons with NaN are false, so NaN never wins.
+                let best = if less {
+                    let pick = |x: $t, a: $t| if x < a { x } else { a };
+                    in_blocks(xs, |b| picked(b, start, pick), pick)
+                } else {
+                    let pick = |x: $t, a: $t| if x > a { x } else { a };
+                    in_blocks(xs, |b| picked(b, start, pick), pick)
+                }?;
+                let nans = in_blocks(
+                    xs,
+                    |b| {
+                        let mut acc: [$count; SLICE_LANES] = [0; SLICE_LANES];
+                        let (chunks, rest) = b.as_chunks::<SLICE_LANES>();
+                        for chunk in chunks {
+                            for (a, x) in acc.iter_mut().zip(chunk) {
+                                *a = a.wrapping_add(<$count>::from(x.is_nan()));
+                            }
+                        }
+                        let lanes = acc.iter().map(|a| *a as usize).fold(0, usize::wrapping_add);
+                        rest.iter().filter(|x| x.is_nan()).count().wrapping_add(lanes)
+                    },
+                    usize::wrapping_add,
+                )?;
+                if nans == xs.len() || (nans > 0 && !skipna) {
+                    return Some(<$t>::NAN);
+                }
+                if best != 0.0 {
+                    return Some(best);
+                }
+                // `order` tells zeros apart, where `<` does not: -0 is below +0.
+                let zero = if less { -0.0 } else { 0.0 };
+                let found = xs.iter().any(|x| x.to_bits() == <$t>::to_bits(zero));
+                Some(if found { zero } else { -zero })
+            }
+
             fn missing(&self) -> bool {
                 self.is_nan()
             }
@@ -272,7 +373,7 @@ macro_rules! red_float {
         }
     )*};
 }
-red_float!(f32, f64);
+red_float!(f32 => u32, f64 => u64);
 
 impl RedElem for bool {
     fn order(&self, other: &Self) -> Ordering {
@@ -461,6 +562,13 @@ fn min_max<T: RedElem>(
         Ordering::Greater
     };
     let out = map_lanes(a, axes, |lane| {
+        if let Some(best) = lane
+            .as_slice()
+            .filter(|xs| xs.len() >= SLICE_MIN)
+            .and_then(|xs| T::slice_extreme(xs, want, skipna))
+        {
+            return Ok(best);
+        }
         extreme(&lane, want, skipna)
             .and_then(|i| lane.get(i))
             // All missing: the result is missing too.
@@ -618,34 +726,71 @@ fn float_stats<T: RedElem>(
     })
 }
 
+/// The sum of `term` of a lane's values and how many were summed, NaNs left out with `skipna`.
+/// A long contiguous lane runs in blocks across threads, a few values at a time. `None` for
+/// non-numeric values.
+fn lane_sum<T: RedElem>(
+    lane: &ArrayView1<'_, T>,
+    skipna: bool,
+    term: impl Fn(f64) -> f64 + Sync + Send + Copy,
+) -> Option<(f64, usize)> {
+    let one = move |x: &T| {
+        let v = x.as_f64().unwrap_or(f64::NAN);
+        let kept = !(skipna && v.is_nan());
+        // -0.0 leaves a sum as it is.
+        (if kept { term(v) } else { -0.0 }, usize::from(kept))
+    };
+    lane.first()?.as_f64()?;
+    if let Some(xs) = lane.as_slice().filter(|xs| xs.len() >= SLICE_MIN) {
+        return in_blocks(
+            xs,
+            |block| {
+                let (mut sums, mut counts) = ([-0.0f64; SLICE_LANES], [0usize; SLICE_LANES]);
+                let (chunks, rest) = block.as_chunks::<SLICE_LANES>();
+                for chunk in chunks {
+                    for ((s, c), x) in sums.iter_mut().zip(counts.iter_mut()).zip(chunk) {
+                        let (t, k) = one(x);
+                        *s += t;
+                        *c = c.wrapping_add(k);
+                    }
+                }
+                let lanes = (
+                    sums.iter().fold(-0.0, |a, b| a + b),
+                    counts.iter().fold(0usize, |a, b| a.wrapping_add(*b)),
+                );
+                rest.iter().fold(lanes, |(s, c), x| {
+                    let (t, k) = one(x);
+                    (s + t, c.wrapping_add(k))
+                })
+            },
+            |a, b| (a.0 + b.0, a.1.wrapping_add(b.1)),
+        );
+    }
+    Some(lane.iter().fold((-0.0, 0usize), |(s, c), x| {
+        let (t, k) = one(x);
+        (s + t, c.wrapping_add(k))
+    }))
+}
+
 /// [`float_stat`] for sums, means, variances and standard deviations, streamed over a lane
-/// (twice for variances) instead of copied: the same values added in the same order, so the
-/// same results. `None` for non-numeric values.
+/// (twice for variances) instead of copied. `None` for non-numeric values.
 fn lane_stat<T: RedElem>(
     op: Reduction,
     lane: &ArrayView1<'_, T>,
     skipna: bool,
     opts: &ReduceOptions,
 ) -> Option<f64> {
-    let mut n = 0usize;
-    // `float_stat` folds sums from +0.0 and means through `Iterator::sum` (from -0.0).
-    let mut sum = if op == Reduction::Sum { 0.0 } else { -0.0 };
-    for v in lane {
-        let x = v.as_f64()?;
-        if x.is_nan() {
-            if !skipna {
-                return Some(f64::NAN);
-            }
-            continue;
-        }
-        sum += x;
-        n = n.saturating_add(1);
-    }
+    let (sum, n) = if lane.is_empty() {
+        (-0.0, 0)
+    } else {
+        lane_sum(lane, skipna, |x| x)?
+    };
     if op == Reduction::Sum {
         return Some(if opts.min_count.is_some_and(|m| n < m) {
             f64::NAN
         } else {
-            sum
+            // An empty sum is 0, not -0.
+            sum + 0.0
         });
     }
     if n == 0 {
@@ -658,13 +803,7 @@ fn lane_stat<T: RedElem>(
     let Some(dof) = n.checked_sub(opts.ddof).filter(|d| *d > 0) else {
         return Some(f64::NAN);
     };
-    let mut dev = -0.0;
-    for v in lane {
-        let x = v.as_f64()?;
-        if !x.is_nan() {
-            dev += (x - mean) * (x - mean);
-        }
-    }
+    let (dev, _) = lane_sum(lane, skipna, move |x| (x - mean) * (x - mean))?;
     let var = dev / as_count(dof);
     Some(if op == Reduction::Std {
         var.sqrt()
@@ -709,9 +848,9 @@ fn kept_first<'a, T>(a: &ArrayViewD<'a, T>, axes: &[usize]) -> (ArrayViewD<'a, T
 
 /// Reductions over leading or middle dimensions, by accumulating whole rows (sub-arrays of
 /// the kept shape) into the result, as numpy does: no transposed copy, simple loops over
-/// memory, large results split across threads. Values are added in the same order as along
-/// a lane, so results equal those of [`float_stat`] exactly. `None` where lanes suit better
-/// (reducing trailing dimensions, few values left) or for other operations.
+/// memory, large results split across threads. Everything reduced from values
+/// that are not contiguous takes this path too, as lanes would copy them. `None` where lanes
+/// suit better (reducing trailing dimensions, few values left) or for other operations.
 fn row_stats<T: RedElem + Sync>(
     a: &ArrayViewD<'_, T>,
     axes: &[usize],
@@ -724,7 +863,11 @@ fn row_stats<T: RedElem + Sync>(
     let trailing = keep.iter().enumerate().all(|(i, k)| i == *k);
     let kept: usize = keep.iter().filter_map(|k| shape.get(*k)).product();
     let reduced: usize = axes.iter().filter_map(|k| shape.get(*k)).product();
-    if !row_op(op) || keep.is_empty() || trailing || kept < ROW_MIN_KEPT || reduced == 0 {
+    let strided_whole = keep.is_empty() && !a.is_standard_layout();
+    if !row_op(op) || reduced == 0 {
+        return None;
+    }
+    if !strided_whole && (keep.is_empty() || trailing || kept < ROW_MIN_KEPT) {
         return None;
     }
     let (p, kshape) = kept_first(a, axes);
@@ -744,8 +887,9 @@ struct RowState {
     skipna: bool,
     ddof: usize,
     min_count: Option<usize>,
-    /// (sum, count) for sums, means and the first pass of variances.
-    sums: ArrayD<(f64, usize)>,
+    /// Sum and count for sums, means and the first pass of variances.
+    sums: ArrayD<f64>,
+    counts: ArrayD<usize>,
     /// (best so far, NaN until a value is seen; whether a NaN was seen) for min and max.
     best: ArrayD<(f64, bool)>,
     /// (sum of squared deviations, mean) for the second pass of variances.
@@ -770,11 +914,8 @@ impl RowState {
             skipna,
             ddof: opts.ddof,
             min_count: opts.min_count,
-            sums: if minmax {
-                ArrayD::from_elem(empty.clone(), (0.0, 0))
-            } else {
-                ArrayD::from_elem(sh.clone(), (zero, 0))
-            },
+            sums: ArrayD::from_elem(if minmax { empty.clone() } else { sh.clone() }, zero),
+            counts: ArrayD::from_elem(if minmax { empty.clone() } else { sh.clone() }, 0),
             best: if minmax {
                 ArrayD::from_elem(sh, (f64::NAN, false))
             } else {
@@ -789,7 +930,7 @@ impl RowState {
     }
 
     /// Feed one slab of a larger array (kept axes first). Sums, means, minima and maxima
-    /// accumulate exactly as [`feed`](Self::feed) does. Variances get the slab's exact
+    /// accumulate as [`feed`](Self::feed) does. Variances get the slab's exact
     /// two-pass moments, merged into the running ones with the pairwise update of Chan,
     /// Golub and LeVeque: one read of the data instead of two, at the cost of rounding a
     /// little differently from the in-memory (two-pass) result.
@@ -808,9 +949,9 @@ impl RowState {
             self.merged = true;
         }
         ndarray::Zip::from(&mut self.moments)
-            .and(&local.sums)
+            .and(&local.counts)
             .and(&local.dev)
-            .for_each(|(n, m, m2), (_, nb), (d, mb)| {
+            .for_each(|(n, m, m2), nb, (d, mb)| {
                 if *nb == 0 {
                     return;
                 }
@@ -832,7 +973,9 @@ impl RowState {
     }
 
     fn start_second_pass(&mut self) {
-        self.dev = self.sums.mapv(|(s, c)| (-0.0, mean_of(s, c)));
+        self.dev = ndarray::Zip::from(&self.sums)
+            .and(&self.counts)
+            .map_collect(|s, c| (-0.0, mean_of(*s, *c)));
         self.second = true;
     }
 
@@ -863,13 +1006,7 @@ impl RowState {
                 }
             });
         } else {
-            accumulate(p, &mut self.sums, |(s, c): &mut (f64, usize), x| {
-                let x = val(x);
-                if !(skipna && x.is_nan()) {
-                    *s += x;
-                    *c = c.saturating_add(1);
-                }
-            });
+            add_rows(p, &mut self.sums, &mut self.counts, skipna);
         }
     }
 
@@ -893,23 +1030,25 @@ impl RowState {
                 .mapv(|(b, m)| if m && !skipna { f64::NAN } else { b }),
             Reduction::Sum => {
                 let min = self.min_count.unwrap_or(0);
-                self.sums.mapv(|(s, c)| if c < min { f64::NAN } else { s })
+                ndarray::Zip::from(&self.sums)
+                    .and(&self.counts)
+                    .map_collect(|s, c| if *c < min { f64::NAN } else { *s })
             }
-            Reduction::Mean => self.sums.mapv(|(s, c)| mean_of(s, c)),
+            Reduction::Mean => ndarray::Zip::from(&self.sums)
+                .and(&self.counts)
+                .map_collect(|s, c| mean_of(*s, *c)),
             op => {
                 let std = op == Reduction::Std;
                 let ddof = self.ddof;
                 ndarray::Zip::from(&self.dev)
-                    .and(&self.sums)
-                    .map_collect(
-                        |(v, _), (_, c)| match c.checked_sub(ddof).filter(|x| *x > 0) {
-                            Some(dof) => {
-                                let var = v / as_count(dof);
-                                if std { var.sqrt() } else { var }
-                            }
-                            None => f64::NAN,
-                        },
-                    )
+                    .and(&self.counts)
+                    .map_collect(|(v, _), c| match c.checked_sub(ddof).filter(|x| *x > 0) {
+                        Some(dof) => {
+                            let var = v / as_count(dof);
+                            if std { var.sqrt() } else { var }
+                        }
+                        None => f64::NAN,
+                    })
             }
         }
     }
@@ -919,8 +1058,30 @@ fn mean_of(s: f64, c: usize) -> f64 {
     if c > 0 { s / as_count(c) } else { f64::NAN }
 }
 
-/// `f(acc, value)` for every row of `p` and every kept position, rows in row-major order of
-/// the reduced positions; split across threads along a kept axis for large results.
+/// How to split rows across threads: along which kept axis, how many positions per task.
+/// `None` when the rows are too short to be worth it.
+#[cfg(feature = "rayon")]
+fn row_tasks(kshape: &[usize]) -> Option<(usize, usize)> {
+    let kept: usize = kshape.iter().product();
+    let tasks = (kept / ROW_PER_TASK).clamp(1, rayon::current_num_threads().max(1));
+    if tasks <= 1 {
+        return None;
+    }
+    // Split the first kept axis if it is long enough, else the longest one.
+    let first = kshape.first().copied().unwrap_or(0);
+    let ax = if first >= tasks {
+        0
+    } else {
+        (0..kshape.len())
+            .max_by_key(|i| (kshape.get(*i).copied().unwrap_or(0), std::cmp::Reverse(*i)))
+            .unwrap_or(0)
+    };
+    let per = kshape.get(ax).copied().unwrap_or(1).div_ceil(tasks).max(1);
+    Some((ax, per))
+}
+
+/// `f(acc, value)` for every row of `p` and every kept position, rows in the order of the
+/// reduced axes; split across threads along a kept axis for large results.
 fn accumulate<T: RedElem + Sync, A: Send + Sync>(
     p: &ArrayViewD<'_, T>,
     acc: &mut ArrayD<A>,
@@ -928,30 +1089,123 @@ fn accumulate<T: RedElem + Sync, A: Send + Sync>(
 ) {
     let nk = acc.ndim();
     #[cfg(feature = "rayon")]
-    {
-        let kept = acc.len();
-        let tasks = (kept / ROW_PER_TASK).clamp(1, rayon::current_num_threads().max(1));
-        if tasks > 1 {
-            use rayon::prelude::*;
-            // Split the first kept axis if it is long enough, else the longest one.
-            let kshape = acc.shape().to_vec();
-            let first = kshape.first().copied().unwrap_or(0);
-            let ax = if first >= tasks {
-                0
-            } else {
-                (0..nk)
-                    .max_by_key(|i| (kshape.get(*i).copied().unwrap_or(0), std::cmp::Reverse(*i)))
-                    .unwrap_or(0)
-            };
-            let per = kshape.get(ax).copied().unwrap_or(1).div_ceil(tasks).max(1);
-            p.axis_chunks_iter(Axis(ax), per)
-                .into_par_iter()
-                .zip(acc.axis_chunks_iter_mut(Axis(ax), per).into_par_iter())
-                .for_each(|(inp, mut a)| rows_into(&inp, &mut a, nk, f));
-            return;
-        }
+    if let Some((ax, per)) = row_tasks(acc.shape()) {
+        use rayon::prelude::*;
+        p.axis_chunks_iter(Axis(ax), per)
+            .into_par_iter()
+            .zip(acc.axis_chunks_iter_mut(Axis(ax), per).into_par_iter())
+            .for_each(|(inp, mut a)| rows_into(&inp, &mut a, nk, f));
+        return;
     }
     rows_into(p, &mut acc.view_mut(), nk, f);
+}
+
+/// The sums and counts of every row of `p` into `sums` and `counts`, NaNs left out with
+/// `skipna`: [`accumulate`] with the two held apart, so that whole rows vectorize.
+fn add_rows<T: RedElem + Sync>(
+    p: &ArrayViewD<'_, T>,
+    sums: &mut ArrayD<f64>,
+    counts: &mut ArrayD<usize>,
+    skipna: bool,
+) {
+    let nk = sums.ndim();
+    #[cfg(feature = "rayon")]
+    if let Some((ax, per)) = row_tasks(sums.shape()) {
+        use rayon::prelude::*;
+        p.axis_chunks_iter(Axis(ax), per)
+            .into_par_iter()
+            .zip(sums.axis_chunks_iter_mut(Axis(ax), per).into_par_iter())
+            .zip(counts.axis_chunks_iter_mut(Axis(ax), per).into_par_iter())
+            .for_each(|((inp, mut s), mut c)| add_rows_into(&inp, &mut s, &mut c, nk, skipna));
+        return;
+    }
+    add_rows_into(p, &mut sums.view_mut(), &mut counts.view_mut(), nk, skipna);
+}
+
+/// The sequential part of [`add_rows`].
+fn add_rows_into<T: RedElem>(
+    inp: &ArrayViewD<'_, T>,
+    sums: &mut ArrayViewMutD<'_, f64>,
+    counts: &mut ArrayViewMutD<'_, usize>,
+    nk: usize,
+    skipna: bool,
+) {
+    let add = |s: &mut f64, c: &mut usize, x: &T| {
+        let v = x.as_f64().unwrap_or(f64::NAN);
+        let kept = !(skipna && v.is_nan());
+        // -0.0 leaves a sum as it is.
+        *s += if kept { v } else { -0.0 };
+        *c = c.wrapping_add(usize::from(kept));
+    };
+    if nk == 0 {
+        if let (Some(s), Some(c)) = (sums.iter_mut().next(), counts.iter_mut().next()) {
+            for_each_lane(inp, |x| add(&mut *s, &mut *c, x));
+        }
+        return;
+    }
+    // Rows with nothing to skip add one to every count at once, at the end: most rows, and it
+    // leaves the sums the only memory written row by row.
+    let mut whole_rows = 0usize;
+    for_each_row(inp, nk, |v| {
+        if let (Some(xs), Some(s), Some(c)) =
+            (v.as_slice(), sums.as_slice_mut(), counts.as_slice_mut())
+        {
+            if !skipna || !xs.iter().fold(false, |any, x| any | x.missing()) {
+                for (s, x) in s.iter_mut().zip(xs) {
+                    *s += x.as_f64().unwrap_or(f64::NAN);
+                }
+                whole_rows = whole_rows.wrapping_add(1);
+            } else {
+                for ((s, c), x) in s.iter_mut().zip(c.iter_mut()).zip(xs) {
+                    add(s, c, x);
+                }
+            }
+        } else {
+            ndarray::Zip::from(&mut *sums)
+                .and(&mut *counts)
+                .and(&v)
+                .for_each(add);
+        }
+    });
+    if whole_rows > 0 {
+        counts.mapv_inplace(|c| c.wrapping_add(whole_rows));
+    }
+}
+
+/// `f` of every value of `inp`, lane by lane along its last axis.
+fn for_each_lane<T>(inp: &ArrayViewD<'_, T>, mut f: impl FnMut(&T)) {
+    match inp.ndim().checked_sub(1) {
+        Some(last) => {
+            for lane in inp.lanes(Axis(last)) {
+                for x in lane {
+                    f(x);
+                }
+            }
+        }
+        None => {
+            for x in inp {
+                f(x);
+            }
+        }
+    }
+}
+
+/// `f` of every sub-array of `inp` over its first `nk` axes, in the order of the others.
+fn for_each_row<T>(inp: &ArrayViewD<'_, T>, nk: usize, mut f: impl FnMut(ArrayViewD<'_, T>)) {
+    let rshape: Vec<usize> = inp.shape().iter().skip(nk).copied().collect();
+    if let [_] = rshape.as_slice() {
+        for v in inp.axis_iter(Axis(nk)) {
+            f(v);
+        }
+        return;
+    }
+    for idx in ndarray::indices(IxDyn(&rshape)) {
+        let mut v = inp.view();
+        for (k, i) in idx.slice().iter().enumerate().rev() {
+            v = v.index_axis_move(Axis(nk.saturating_add(k)), *i);
+        }
+        f(v);
+    }
 }
 
 /// The sequential part of [`accumulate`]: contiguous rows and accumulators are walked as
@@ -963,16 +1217,13 @@ fn rows_into<T, A>(
     mut f: impl FnMut(&mut A, &T),
 ) {
     if nk == 0 {
-        // Everything reduced: one accumulator, fed the values in row-major order.
+        // Everything reduced: one accumulator.
         if let Some(a) = acc.iter_mut().next() {
-            for x in inp {
-                f(a, x);
-            }
+            for_each_lane(inp, |x| f(a, x));
         }
         return;
     }
-    let rshape: Vec<usize> = inp.shape().iter().skip(nk).copied().collect();
-    let mut go = |v: ArrayViewD<'_, T>| {
+    for_each_row(inp, nk, |v| {
         if let (Some(s), Some(a)) = (v.as_slice(), acc.as_slice_mut()) {
             for (a, x) in a.iter_mut().zip(s) {
                 f(a, x);
@@ -980,20 +1231,7 @@ fn rows_into<T, A>(
         } else {
             ndarray::Zip::from(&mut *acc).and(&v).for_each(&mut f);
         }
-    };
-    if let [_] = rshape.as_slice() {
-        for v in inp.axis_iter(Axis(nk)) {
-            go(v);
-        }
-        return;
-    }
-    for idx in ndarray::indices(IxDyn(&rshape)) {
-        let mut v = inp.view();
-        for (k, i) in idx.slice().iter().enumerate().rev() {
-            v = v.index_axis_move(Axis(nk.saturating_add(k)), *i);
-        }
-        go(v);
-    }
+    });
 }
 
 // ----- streaming lazy data -----
@@ -1579,8 +1817,77 @@ fn f32_of(v: f64) -> f32 {
     v as f32
 }
 
-/// Reduce raw data over `axes`.
+/// The axes of `a` from the largest stride to the smallest, if they are not already so: the
+/// order that walks memory forwards. `None` for row-major layouts. Axes of length 1 have no
+/// meaningful stride, and go first.
+fn memory_order(a: &TypedArray<View<'_>>) -> Option<Vec<usize>> {
+    let (shape, strides) = (a.shape(), a.strides());
+    let distance = |axis: &usize| match (shape.get(*axis), strides.get(*axis)) {
+        (Some(n), Some(s)) if *n > 1 => s.unsigned_abs(),
+        _ => usize::MAX,
+    };
+    let mut order: Vec<usize> = (0..a.ndim()).collect();
+    let in_order = order.windows(2).all(|w| match w {
+        [x, y] => distance(x) >= distance(y),
+        _ => true,
+    });
+    let forwards = strides.iter().zip(shape).all(|(s, n)| *s >= 0 || *n <= 1);
+    if in_order && forwards {
+        return None;
+    }
+    order.sort_by_key(|axis| std::cmp::Reverse(distance(axis)));
+    Some(order)
+}
+
+/// Reduce raw data over `axes`, walking memory forwards whatever the layout, as numpy does: a
+/// transposed or reversed view costs what contiguous values cost. Floating-point sums follow
+/// that order, so views of other layouts round a little differently from row-major values.
+/// Results come back in the order of the kept dimensions.
 fn reduce_typed(
+    a: &TypedArray<View<'_>>,
+    op: Reduction,
+    axes: &[usize],
+    opts: &ReduceOptions,
+) -> Result<TypedArray<Owned>> {
+    // `argmin` and `argmax` answer with positions, which are logical.
+    let order = if matches!(op, Reduction::ArgMin | Reduction::ArgMax) {
+        None
+    } else {
+        memory_order(a)
+    };
+    let Some(order) = order else {
+        return reduce_in_order(a, op, axes, opts);
+    };
+    let strides = a.strides();
+    let mut view = a.view();
+    for axis in axes {
+        if strides.get(*axis).is_some_and(|s| *s < 0) {
+            view.invert_axis(*axis);
+        }
+    }
+    let view = view.permuted(&order);
+    let at = |axis: &usize| order.iter().position(|o| o == axis).unwrap_or(*axis);
+    let mut moved: Vec<usize> = axes.iter().map(at).collect();
+    // Reduced in the order they lie in memory too, not the order they were asked for.
+    moved.sort_unstable();
+    let out = reduce_in_order(&view, op, &moved, opts)?;
+    // The kept dimensions come out in memory order: put them back.
+    let kept: Vec<usize> = order
+        .iter()
+        .copied()
+        .filter(|o| !axes.contains(o))
+        .collect();
+    let mut wanted = kept.clone();
+    wanted.sort_unstable();
+    let back: Vec<usize> = wanted
+        .iter()
+        .map(|axis| kept.iter().position(|k| k == axis).unwrap_or(*axis))
+        .collect();
+    Ok(out.permuted(&back))
+}
+
+/// Reduce raw data over `axes`, in the order of `a`'s axes.
+fn reduce_in_order(
     a: &TypedArray<View<'_>>,
     op: Reduction,
     axes: &[usize],

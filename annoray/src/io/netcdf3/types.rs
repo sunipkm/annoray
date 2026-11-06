@@ -191,6 +191,10 @@ pub(crate) fn decode_attr(ty: NcType, bytes: &[u8]) -> AttrValue {
 
 /// Big-endian bytes of an array (logical order).
 pub(crate) fn encode_array(a: &TypedArray<View<'_>>) -> Option<Vec<u8>> {
+    // Row-major, as the file holds it: going through strided values one by one is slow.
+    if !crate::array::typed_dispatch!(a, x => x.is_standard_layout()) {
+        return encode_array(&a.to_c_order().view());
+    }
     macro_rules! be {
         ($x:expr) => {
             $x.iter().flat_map(|v| v.to_be_bytes()).collect()

@@ -141,12 +141,12 @@ fn close(a: &DataArray, b: &DataArray, what: &str) {
     }
 }
 
-/// Bit-identical, except variances (which agree to rounding).
+/// Minima and maxima are bit-identical; sums and what follows from them agree to rounding.
 fn same_or_close(op: Reduction, a: &DataArray, b: &DataArray, what: &str) {
-    if matches!(op, Reduction::Var | Reduction::Std) {
-        close(a, b, what);
-    } else {
+    if matches!(op, Reduction::Min | Reduction::Max) {
         same(a, b, what);
+    } else {
+        close(a, b, what);
     }
 }
 

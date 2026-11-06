@@ -3,14 +3,14 @@
 use std::borrow::Borrow;
 use std::fmt;
 
-use ndarray::{ArrayD, ArrayViewD, ArrayViewMutD, IxDyn};
+use ndarray::{ArrayD, ArrayViewD, ArrayViewMutD};
 use std::sync::Arc;
 
 use annoray_units::{TimeZone, Unit};
 
 use crate::indexer::{SliceIndices, normalize_index};
 use crate::lazy::{LazyArray, LazyOp};
-use crate::repr::{ExternalBuffer, KeepAlive, SharedBuffer};
+use crate::repr::{ExternalBuffer, KeepAlive, SharedBuffer, Step};
 use crate::{
     AttrValue, Attrs, CoreError, DType, Dims, Element, Encoding, IndexError, Indexer, IntoIndexer,
     Name, Owned, Repr, ReprMut, Result, TypedArray, View, ViewMut,
@@ -501,7 +501,7 @@ impl<S: Repr> VariableBase<S> {
         let a = self.data::<T>()?;
         Ok(match a.to_slice() {
             Some(s) => std::borrow::Cow::Borrowed(s),
-            None => std::borrow::Cow::Owned(a.iter().cloned().collect()),
+            None => std::borrow::Cow::Owned(crate::array::c_order(a).into_raw_vec_and_offset().0),
         })
     }
 
@@ -640,20 +640,22 @@ impl<S: Repr> VariableBase<S> {
             // Nothing selected: the same values, whatever they are held in.
             Data::Loaded(held) if ops.iter().all(Option::is_none) => Data::Loaded(held),
             Data::Loaded(held) => {
-                let mut data = S::held_into_typed(held);
-                // Slices first: they keep axis numbering intact.
-                for (axis, op) in ops.iter().enumerate() {
-                    if let Some(AxisOp::Slice(s, _)) = op {
-                        data.slice_axis_inplace(axis, *s);
-                    }
-                }
-                // Then drop integer-indexed axes from the highest down, so lower axis numbers stay valid.
-                for (axis, op) in ops.iter().enumerate().rev() {
-                    if let Some(AxisOp::At(i)) = op {
-                        data = data.index_axis_move(axis, *i);
-                    }
-                }
-                Data::Loaded(S::held_from_typed(data))
+                // Slices first: they keep axis numbering intact. Then integer-indexed axes,
+                // from the highest down, so lower axis numbers stay valid.
+                let slices = ops.iter().enumerate().filter_map(|(axis, op)| match op {
+                    Some(AxisOp::Slice(s, _)) => Some(Step::Slice(axis, *s)),
+                    _ => None,
+                });
+                let drops = ops
+                    .iter()
+                    .enumerate()
+                    .rev()
+                    .filter_map(|(axis, op)| match op {
+                        Some(AxisOp::At(i)) => Some(Step::At(axis, *i)),
+                        _ => None,
+                    });
+                let steps: Vec<Step> = slices.chain(drops).collect();
+                Data::Loaded(S::held_select(held, &steps))
             }
             Data::Lazy(l) => {
                 let lops: Vec<Option<LazyOp>> = ops
@@ -868,20 +870,6 @@ impl<S: Repr> VariableBase<S> {
     }
 }
 
-fn permuted_as<T: crate::Element, S: Repr>(
-    a: &TypedArray<S>,
-    order: &[usize],
-    _: crate::array::Marker<T>,
-) -> Option<TypedArray<Owned>> {
-    let x = T::peek(a)?;
-    Some(T::wrap(
-        x.view()
-            .permuted_axes(IxDyn(order))
-            .as_standard_layout()
-            .into_owned(),
-    ))
-}
-
 /// Positions in `dims` of each of `order`, which must name every dimension exactly once
 /// (`"..."` stands for the dimensions not named, in their current order).
 pub(crate) fn permutation(dims: &[Name], order: &[&str]) -> Result<Vec<usize>> {
@@ -917,7 +905,8 @@ pub(crate) fn permutation(dims: &[Name], order: &[&str]) -> Result<Vec<usize>> {
 }
 
 impl<S: Repr> VariableBase<S> {
-    /// The variable with its dimensions in `order` (data copied in the new layout). `"..."`
+    /// The variable with its dimensions in `order`, sharing the data of an owned or a whole
+    /// variable (values read from a file are read and copied in the new layout). `"..."`
     /// stands for the dimensions not named; an empty `order` reverses them, as in xarray.
     ///
     /// # Errors
@@ -937,11 +926,14 @@ impl<S: Repr> VariableBase<S> {
             .iter()
             .filter_map(|i| self.dims().get(*i).cloned())
             .collect();
-        let typed = self.typed()?;
-        let data = crate::array::typed_dispatch!(&typed, x => permuted_as(&typed, &perm, crate::array::marker(x)))
-            .ok_or_else(|| CoreError::Read("transpose".into()))?;
+        let data = match &self.data {
+            // A view of the same memory, as numpy's and xarray's.
+            Data::Loaded(a) if perm.iter().copied().eq(0..perm.len()) => S::held_to_buffer(a),
+            Data::Loaded(a) => S::held_to_buffer(a).select(&[Step::Permute(perm)]),
+            Data::Lazy(l) => SharedBuffer::new(l.load()?.view().permuted(&perm).to_c_order()),
+        };
         Ok(VariableBase {
-            data: Data::Loaded(SharedBuffer::new(data)),
+            data: Data::Loaded(data),
             dims: dims.into(),
             unit: self.unit.clone(),
             time_zone: self.time_zone.clone(),

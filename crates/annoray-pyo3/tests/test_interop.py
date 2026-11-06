@@ -333,3 +333,17 @@ def test_a_custom_unit_needs_defining_in_each_extension():
     da = ar.DataArray([1.0], dims="x", units="InteropOnly")
     with pytest.raises(ValueError, match="InteropOnly"):
         ext.dataarray_roundtrip(da)
+
+
+def test_tecu_crosses_without_defining_it():
+    da = ar.DataArray([1.0, 2.0], dims="x", units="TECU")
+    back = ext.dataarray_roundtrip(da)
+    assert back.units == "TECU"
+    np.testing.assert_array_equal(ext.convert(da, "m-2").values, [1e16, 2e16])
+
+
+def test_views_cross():
+    source = np.arange(24.0).reshape(2, 3, 4)
+    da = ar.DataArray(source, dims=("a", "b", "c"), units="m", copy=False)
+    for view in (da.isel(c=1), da.transpose("c", "b", "a"), da.isel(b=slice(None, None, -1))):
+        np.testing.assert_array_equal(ext.dataarray_roundtrip(view).values, view.values)

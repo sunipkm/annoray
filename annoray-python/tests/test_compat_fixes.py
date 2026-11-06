@@ -10,10 +10,13 @@ from __future__ import annotations
 
 import copy
 import gc
+import os
 import subprocess
 import sys
 import textwrap
+import warnings
 import weakref
+from typing import Any
 
 import numpy as np
 import pytest
@@ -772,3 +775,461 @@ def test_plot_without_matplotlib_names_the_extra(access):
     assert done.returncode != 0
     assert "ImportError" in done.stderr
     assert "annoray[plot]" in done.stderr
+
+
+# ----- selections and transposes are views; strided values write correctly -----
+
+
+def cube() -> ar.Dataset:
+    values = np.arange(120.0).reshape(2, 3, 4, 5)
+    return ar.Dataset(
+        {"v": (("a", "b", "c", "d"), values, {"units": "km"})},
+        coords={"a": ("a", [10.0, 20.0]), "d": ("d", list("vwxyz"))},
+    )
+
+
+@pytest.mark.parametrize(
+    "select",
+    [
+        lambda o: o.isel(d=0),
+        lambda o: o.isel(a=1, c=slice(1, 3)),
+        lambda o: o.isel(b=slice(None, None, -1)),
+        lambda o: o.isel(c=slice(None, None, 2)).isel(d=1),
+        lambda o: o.sel(a=20.0),
+        lambda o: o.sel(d="x"),
+        lambda o: o.transpose("d", "c", "b", "a"),
+        lambda o: o.isel(d=0).transpose("c", "b", "a"),
+        lambda o: o.transpose("d", "c", "b", "a").isel(a=1),
+    ],
+)
+def test_selections_are_views(select):
+    ds = cube()
+    v = ds["v"]
+    numpy_view = v.values
+    got = select(v)
+    assert np.shares_memory(got.values, numpy_view)
+    assert not got.values.flags.writeable
+    assert got.units == "km"
+    assert np.shares_memory(select(ds)["v"].values, numpy_view)
+    # The values are what a copy would hold, and what the source still holds.
+    np.testing.assert_array_equal(numpy_view, np.arange(120.0).reshape(2, 3, 4, 5))
+    copied = ar.DataArray(numpy_view.copy(), dims=v.dims, coords=dict(v.coords), units="km")
+    np.testing.assert_array_equal(got.values, select(copied).values)
+    # Everything keeps working on the view, equal to the same on a fresh contiguous array.
+    fresh = ar.DataArray(np.array(got.values, order="C"), dims=got.dims, units="km")
+    np.testing.assert_array_equal((got * 2).values, (fresh * 2).values)
+    np.testing.assert_array_equal(got.sum().values, fresh.sum().values)
+    np.testing.assert_array_equal(got.mean(got.dims[0]).values, fresh.mean(got.dims[0]).values)
+
+
+def test_view_outlives_its_source_and_replacement():
+    ds = cube()
+    picked = ds["v"].isel(d=0)
+    held = picked.values
+    ds["v"] = (("a", "b", "c", "d"), np.zeros((2, 3, 4, 5)))
+    del ds
+    gc.collect()
+    np.testing.assert_array_equal(held, np.arange(120.0).reshape(2, 3, 4, 5)[..., 0])
+
+
+def test_deep_copy_of_a_selection_holds_only_the_selection():
+    source = np.arange(120.0).reshape(2, 3, 4, 5)
+    ref = weakref.ref(source)
+    picked = ar.DataArray(source, dims=("a", "b", "c", "d"), copy=False).isel(d=0)
+    assert ref() is not None
+    deep = picked.copy(deep=True)
+    del picked, source
+    gc.collect()
+    assert ref() is None  # nothing holds the whole array any more
+    assert deep.values.size == 24
+    np.testing.assert_array_equal(deep.values, np.arange(120.0).reshape(2, 3, 4, 5)[..., 0])
+
+
+def test_put_on_a_view_leaves_the_source():
+    v = cube()["v"]
+    before = v.values.copy()
+    out = v.isel(d=0).put(ar.Quantity(-1.0, "km"), a=0, b=0, c=0)
+    assert out.values[0, 0, 0] == -1.0
+    np.testing.assert_array_equal(v.values, before)
+
+
+def test_selections_of_copy_false_arrays_are_views_of_the_source():
+    source = np.arange(24.0).reshape(2, 3, 4)
+    da = ar.DataArray(source, dims=("a", "b", "c"), copy=False)
+    assert np.shares_memory(da.isel(c=1).values, source)
+    assert np.shares_memory(da.transpose("c", "b", "a").values, source)
+    np.testing.assert_array_equal(da.isel(c=1).values, source[..., 1])
+    np.testing.assert_array_equal(da.transpose("c", "b", "a").values, source.T)
+
+
+def strided_cases():
+    base = np.arange(2.0 * 3 * 4 * 5, dtype=np.float32).reshape(2, 3, 4, 5)
+    yield "moveaxis", np.moveaxis(base, 0, -1)
+    yield "transposed", base.T
+    yield "stepped", base[:, ::2, :, 1:4]
+    yield "reversed", base[::-1, :, ::-1, :]
+    big = np.arange(50.0 * 60 * 70).reshape(50, 60, 70)
+    yield "beyond a copy block", np.moveaxis(big, 0, -1)
+
+
+@pytest.mark.parametrize(("label", "values"), list(strided_cases()), ids=lambda x: str(x)[:20])
+@pytest.mark.parametrize(
+    ("write", "read"),
+    [
+        (lambda ds, p: ds.to_netcdf(p), ar.open_dataset),
+        (lambda ds, p: ds.to_netcdf(p, format="NETCDF3_64BIT"), ar.open_dataset),
+        (lambda ds, p: ds.to_netcdf(p, encoding={"v": {"zlib": True}}), ar.open_dataset),
+        (lambda ds, p: ds.to_zarr(p), ar.open_zarr),
+    ],
+    ids=["netcdf4", "netcdf3", "chunked", "zarr"],
+)
+def test_strided_values_write_in_logical_order(tmp_path, label, values, write, read):
+    dims = [f"d{i}" for i in range(values.ndim)]
+    ds = ar.Dataset({"v": (dims, values)}, copy=False)
+    path = tmp_path / "s"
+    write(ds, path)
+    np.testing.assert_array_equal(read(path)["v"].values, values)
+
+
+def test_transposed_views_write_in_their_order(tmp_path):
+    v = cube()["v"]
+    path = tmp_path / "t.nc"
+    t = v.transpose("d", "c", "b", "a")
+    ar.Dataset({"t": t}).to_netcdf(path)
+    back = ar.open_dataset(path)["t"]
+    assert back.dims == t.dims
+    assert back.units == "km"
+    np.testing.assert_array_equal(back.values, v.values.T)
+
+
+# ----- update(copy=False) -----
+
+
+def test_update_without_a_copy():
+    source = np.arange(3.0)
+    ds = ar.Dataset(coords={"x": ("x", np.arange(3.0))})
+    assert ds.update({"v": ("x", source, {"units": "km"})}, copy=False) is ds
+    assert np.shares_memory(ds["v"].values, source)
+    assert ds["v"].units == "km"
+    ds.update({"w": ("x", source)})
+    assert not np.shares_memory(ds["w"].values, source)
+    ds.update({"x": ("x", source)}, copy=False)
+    assert np.shares_memory(ds["x"].values, source)
+
+
+# ----- TECU is built in -----
+
+
+def test_tecu_is_built_in():
+    assert ar.Unit("TECU") == ar.Unit("1e16 m-2")
+    assert str(ar.Unit("TECU")) == "TECU"
+    assert ar.Quantity(1, "TECU").to("m-2").magnitude == 1e16
+    assert ar.Quantity(1, "mTECU").to("TECU").magnitude == 1e-3
+    ar.define_unit("TECU", "1e16 m^-2")  # still fine for code that defines it
+    with pytest.raises(ar.UnitError, match="already exists"):
+        ar.define_unit("TECU", "1e15 m^-2")
+
+
+# ----- reductions walk memory, whatever the layout -----
+
+
+def reduction_cases():
+    values = np.random.default_rng(1).random((6, 7, 8, 5))
+    values[1, 2, 3, 4] = np.nan
+    values[4, :, 2, 1] = np.nan
+    source = ar.DataArray(values, dims=("a", "b", "c", "d"), units="km")
+    yield "transposed", source.transpose("d", "c", "b", "a")
+    yield "rotated", source.transpose("c", "a", "d", "b")
+    yield "reversed", source.isel(a=slice(None, None, -1), c=slice(None, None, -1))
+    yield "stepped", source.isel(b=slice(None, None, 2), d=slice(1, 4))
+    yield "selected", source.isel(d=2)
+    yield "both", source.isel(a=slice(None, None, -1)).transpose("d", "b", "c", "a")
+    tall = np.random.default_rng(2).random((40, 50, 30))
+    # Enough kept values for the row kernels, in each order.
+    yield "large", ar.DataArray(tall, dims=("a", "b", "c")).transpose("c", "b", "a")
+    yield "large reversed", ar.DataArray(tall, dims=("a", "b", "c")).isel(a=slice(None, None, -1))
+
+
+@pytest.mark.parametrize(("label", "view"), list(reduction_cases()), ids=lambda x: str(x)[:16])
+@pytest.mark.parametrize("op", ["sum", "mean", "std", "var", "min", "max", "median", "count"])
+def test_reductions_of_views_equal_those_of_contiguous_values(label, view, op):
+    fresh = ar.DataArray(np.array(view.values, order="C"), dims=view.dims, units=view.units)
+    dims = list(view.dims)
+    choices = [None, *dims, tuple(dims[:2]), tuple(dims[-2:]), (dims[-1], dims[0]), tuple(dims)]
+    if len(dims) > 2:
+        choices.append((dims[1], dims[-1]))
+    for dim in choices:
+        got = getattr(view, op)(dim)
+        want = getattr(fresh, op)(dim)
+        assert got.dims == want.dims, dim
+        assert got.units == want.units, dim
+        np.testing.assert_allclose(got.values, want.values, rtol=1e-12, err_msg=str(dim))
+        assert got.values.shape == want.values.shape
+
+
+@pytest.mark.parametrize(("label", "view"), list(reduction_cases()), ids=lambda x: str(x)[:16])
+def test_reduction_options_on_views(label, view):
+    fresh = ar.DataArray(np.array(view.values, order="C"), dims=view.dims)
+    plain = ar.DataArray(view.values, dims=view.dims, copy=False)
+    d = view.dims[0]
+    for got, want in [
+        (plain.sum(d, skipna=False), fresh.sum(d, skipna=False)),
+        (plain.sum(d, min_count=view.sizes[d]), fresh.sum(d, min_count=view.sizes[d])),
+        (plain.std(d, ddof=1), fresh.std(d, ddof=1)),
+        (plain.prod(d), fresh.prod(d)),
+    ]:
+        np.testing.assert_allclose(got.values, want.values, rtol=1e-12)
+
+
+def test_integer_reductions_of_views_are_exact():
+    values = np.arange(120, dtype=np.int64).reshape(2, 3, 4, 5) ** 2
+    source = ar.DataArray(values, dims=("a", "b", "c", "d"))
+    t = source.transpose("d", "c", "b", "a")
+    assert int(t.sum().values) == int(values.sum())
+    np.testing.assert_array_equal(t.sum("a").values, values.T.sum(3))
+    np.testing.assert_array_equal(t.max("b").values, values.T.max(2))
+    r = source.isel(a=slice(None, None, -1))
+    np.testing.assert_array_equal(r.sum("b").values, values[::-1].sum(1))
+
+
+def test_boolean_reductions_of_views():
+    values = np.random.default_rng(3).random((5, 6, 7)) > 0.9
+    t = ar.DataArray(values, dims=("a", "b", "c")).transpose("c", "a", "b")
+    np.testing.assert_array_equal(t.any("a").values, values.transpose(2, 0, 1).any(1))
+    np.testing.assert_array_equal(t.all("c").values, values.transpose(2, 0, 1).all(0))
+
+
+@pytest.mark.parametrize("op", ["argmin", "argmax"])
+def test_arg_reductions_answer_in_logical_positions(op):
+    # Ties make the answer depend on which comes first, which is a logical question.
+    values = np.array([[1.0, 0.0, 0.0], [0.0, 1.0, 1.0]])
+    t = ar.DataArray(values, dims=("a", "b")).transpose("b", "a")
+    r = ar.DataArray(values, dims=("a", "b")).isel(b=slice(None, None, -1))
+    np.testing.assert_array_equal(getattr(t, op)("a").values, getattr(values.T, op)(1))
+    np.testing.assert_array_equal(getattr(t, op)("b").values, getattr(values.T, op)(0))
+    np.testing.assert_array_equal(getattr(r, op)("b").values, getattr(values[:, ::-1], op)(1))
+
+
+def test_reduction_results_keep_working():
+    v = ar.DataArray(np.arange(24.0).reshape(2, 3, 4), dims=("a", "b", "c"), name="n", units="m")
+    out = v.transpose("c", "b", "a").sum("b")
+    assert out.dims == ("c", "a")
+    assert out.units == "m"
+    np.testing.assert_array_equal((out * 2).values, np.arange(24.0).reshape(2, 3, 4).sum(1).T * 2)
+    np.testing.assert_array_equal(out.isel(a=0).values, np.arange(24.0).reshape(2, 3, 4).sum(1)[0])
+
+
+@pytest.mark.parametrize("dates", ["datetime64[ns]", "timedelta64[ns]"])
+def test_time_reductions_of_views(dates):
+    values = np.arange(24, dtype=np.int64).reshape(2, 3, 4).astype(dates)
+    t = ar.DataArray(values, dims=("a", "b", "c")).transpose("c", "b", "a")
+    fresh = ar.DataArray(values.T.copy(), dims=("c", "b", "a"))
+    np.testing.assert_array_equal(t.max("a").values, values.T.max(2))
+    np.testing.assert_array_equal(t.mean("c").values, fresh.mean("c").values)
+
+
+NO_COPY = """
+import resource
+import numpy as np
+import annoray as ar
+
+values = np.ones((200, 250, 500), np.float64)
+da = ar.DataArray(values, dims=("a", "b", "c"), copy=False).transpose("c", "b", "a")
+reversed_ = ar.DataArray(values, dims=("a", "b", "c"), copy=False).isel(b=slice(None, None, -1))
+stepped = ar.DataArray(values, dims=("a", "b", "c"), copy=False).isel(c=slice(None, None, 2))
+peak = lambda: resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+base = peak()
+da.sum()
+da.mean()
+da.sum("a")
+da.max("b")
+reversed_.mean()
+stepped.mean()
+print((peak() - base) * 1024 / values.nbytes)
+"""
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="ru_maxrss units differ by platform")
+def test_reductions_of_views_do_not_copy_the_values():
+    done = subprocess.run(
+        [sys.executable, "-c", NO_COPY], capture_output=True, encoding="utf-8", check=True
+    )
+    assert float(done.stdout.strip()) < 0.25
+
+
+# ----- the slice and row kernels agree with numpy, wherever the awkward values fall -----
+
+# Around a kernel's lanes, its shortest run and a thread's block.
+KERNEL_LENGTHS = [1, 2, 15, 16, 17, 63, 64, 65, 79, 80, 1000, 65535, 65536, 65537, 200_001]
+
+
+def awkward(n: int, dtype: Any, kind: str, seed: int) -> np.ndarray:
+    rng = np.random.default_rng(seed)
+    x = rng.standard_normal(n).astype(dtype)
+    spots = {"first": [0], "last": [n - 1], "middle": [n // 2]}
+    if kind in spots:
+        x[spots[kind]] = np.nan
+    elif kind == "many":
+        x[rng.random(n) < 0.3] = np.nan
+    elif kind == "all":
+        x[:] = np.nan
+    elif kind == "inf":
+        x[n // 2] = np.inf
+        x[0] = -np.inf
+    elif kind == "only inf":
+        x[:] = np.inf
+    return x
+
+
+@pytest.mark.parametrize("dtype", [np.float32, np.float64])
+@pytest.mark.parametrize("n", KERNEL_LENGTHS)
+@pytest.mark.parametrize(
+    "kind", ["none", "first", "last", "middle", "many", "all", "inf", "only inf"]
+)
+def test_whole_array_kernels_agree_with_numpy(dtype, n, kind):
+    x = awkward(n, dtype, kind, n)
+    da = ar.DataArray(x, dims="x")
+    has_valid = not np.isnan(x).all()
+    wide = x.astype(np.float64)
+    with np.errstate(invalid="ignore"), warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        cases = {
+            "min": (da.min(), np.nanmin(x) if has_valid else np.nan),
+            "max": (da.max(), np.nanmax(x) if has_valid else np.nan),
+            "sum": (da.sum(), np.nansum(wide)),
+            "mean": (da.mean(), np.nanmean(wide)),
+            "var": (da.var(), np.nanvar(wide)),
+            "std": (da.std(), np.nanstd(wide)),
+            "min keep": (da.min(skipna=False), x.min()),
+            "max keep": (da.max(skipna=False), x.max()),
+            "sum keep": (da.sum(skipna=False), wide.sum()),
+            "mean keep": (da.mean(skipna=False), wide.mean()),
+        }
+    for label, (got, want) in cases.items():
+        rtol = 1e-5 if dtype is np.float32 else 1e-9
+        if np.isinf(want) or np.isnan(want):
+            np.testing.assert_equal(float(got.values), float(want), err_msg=label)
+        else:
+            np.testing.assert_allclose(float(got.values), want, rtol=rtol, atol=1e-5, err_msg=label)
+        assert got.dtype == x.dtype, label
+
+
+@pytest.mark.parametrize("dtype", [np.float32, np.float64])
+@pytest.mark.parametrize("n", [2, 16, 64, 80, 1000, 70_000])
+def test_extremes_tell_signed_zeros_apart(dtype, n):
+    zeros = np.zeros(n, dtype)
+    assert not np.signbit(ar.DataArray(zeros, dims="x").min().values)
+    assert not np.signbit(ar.DataArray(zeros, dims="x").max().values)
+    assert np.signbit(ar.DataArray(-zeros, dims="x").min().values)
+    assert np.signbit(ar.DataArray(-zeros, dims="x").max().values)
+    mixed = zeros.copy()
+    mixed[n // 2] = -0.0
+    assert np.signbit(ar.DataArray(mixed, dims="x").min().values)
+    assert not np.signbit(ar.DataArray(mixed, dims="x").max().values)
+    mixed = -zeros
+    mixed[n - 1] = 0.0
+    assert np.signbit(ar.DataArray(mixed, dims="x").min().values)
+    assert not np.signbit(ar.DataArray(mixed, dims="x").max().values)
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [np.int8, np.int16, np.int32, np.int64, np.uint8, np.uint16, np.uint32, np.uint64],
+)
+@pytest.mark.parametrize("n", KERNEL_LENGTHS)
+def test_integer_extremes_agree_with_numpy(dtype, n):
+    info = np.iinfo(dtype)
+    x = np.random.default_rng(n).integers(info.min, info.max, n, dtype=dtype, endpoint=True)
+    da = ar.DataArray(x, dims="x")
+    assert da.min().values == x.min() and da.min().dtype == x.dtype
+    assert da.max().values == x.max() and da.max().dtype == x.dtype
+    # At each end of the range, in the last place looked at.
+    x[n - 1] = info.max
+    assert ar.DataArray(x, dims="x").max().values == info.max
+    x[n - 1] = info.min
+    assert ar.DataArray(x, dims="x").min().values == info.min
+
+
+def test_sum_of_negative_zeros_and_of_nothing():
+    n = 1000
+    assert not np.signbit(ar.DataArray(np.zeros(n) * -1.0, dims="x").sum().values)
+    assert ar.DataArray(np.full(n, np.nan), dims="x").sum().values == 0.0
+    assert np.isnan(ar.DataArray(np.full(n, np.nan), dims="x").mean().values)
+    assert np.isnan(ar.DataArray(np.full(n, np.nan), dims="x").sum(min_count=1).values)
+    assert ar.DataArray(np.zeros(0), dims="x").sum().values == 0.0
+    assert np.isnan(ar.DataArray(np.zeros(0), dims="x").mean().values)
+    with pytest.raises(ValueError):
+        ar.DataArray(np.zeros(0), dims="x").max()
+
+
+@pytest.mark.parametrize("nans", ["none", "one row", "scattered", "whole column", "all"])
+@pytest.mark.parametrize("shape", [(30, 300), (300, 30, 2), (5, 40_000)])
+def test_row_kernels_count_what_they_skip(nans, shape):
+    rng = np.random.default_rng(0)
+    x = rng.standard_normal(shape)
+    if nans == "one row":
+        x[1] = np.nan
+    elif nans == "scattered":
+        x[rng.random(shape) < 0.01] = np.nan
+    elif nans == "whole column":
+        x[(slice(None), 3)] = np.nan
+    elif nans == "all":
+        x[:] = np.nan
+    dims = tuple(f"d{i}" for i in range(len(shape)))
+    da = ar.DataArray(x, dims=dims)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        for axis, dim in enumerate(dims):
+            np.testing.assert_allclose(da.sum(dim).values, np.nansum(x, axis), rtol=1e-11)
+            np.testing.assert_allclose(da.mean(dim).values, np.nanmean(x, axis), rtol=1e-11)
+            np.testing.assert_allclose(da.std(dim).values, np.nanstd(x, axis), rtol=1e-9)
+            np.testing.assert_allclose(
+                da.var(dim, ddof=1).values, np.nanvar(x, axis, ddof=1), rtol=1e-9
+            )
+            np.testing.assert_array_equal(da.count(dim).values, (~np.isnan(x)).sum(axis))
+            np.testing.assert_allclose(da.sum(dim, skipna=False).values, x.sum(axis), rtol=1e-11)
+            np.testing.assert_allclose(da.mean(dim, skipna=False).values, x.mean(axis), rtol=1e-11)
+            enough = (~np.isnan(x)).sum(axis) >= 3
+            want = np.where(enough, np.nansum(x, axis), np.nan)
+            np.testing.assert_allclose(da.sum(dim, min_count=3).values, want, rtol=1e-11)
+
+
+def test_integer_means_and_bools_through_the_kernels():
+    x = np.arange(100_000, dtype=np.int32).reshape(100, 1000)
+    da = ar.DataArray(x, dims=("a", "b"))
+    np.testing.assert_allclose(da.mean().values, x.mean())
+    np.testing.assert_allclose(da.mean("a").values, x.mean(0))
+    np.testing.assert_allclose(da.std("b").values, x.std(1))
+    flags = ar.DataArray(x % 2 == 0, dims=("a", "b"))
+    assert flags.max().values == np.True_
+    assert flags.min().values == np.False_
+    np.testing.assert_allclose(flags.mean().values, 0.5)
+
+
+REPRODUCIBLE = """
+import numpy as np
+import annoray as ar
+
+x = np.random.default_rng(0).standard_normal(1_000_003)
+x = x * 10.0 ** (np.arange(1_000_003) % 17 - 8)
+da = ar.DataArray(x, dims="x")
+grid = ar.DataArray(x[:1_000_000].reshape(1000, 1000), dims=("a", "b"))
+out = [da.sum(), da.mean(), da.std(), grid.sum("a"), grid.mean("b"), grid.std("a")]
+print(b"".join(o.values.tobytes() for o in out).hex())
+"""
+
+
+def test_results_do_not_depend_on_the_number_of_threads():
+    def run(threads: str) -> str:
+        done = subprocess.run(
+            [sys.executable, "-W", "ignore", "-c", REPRODUCIBLE],
+            capture_output=True,
+            encoding="utf-8",
+            check=True,
+            env={**os.environ, "RAYON_NUM_THREADS": threads},
+        )
+        return done.stdout.strip()
+
+    first = run("1")
+    assert first
+    assert all(run(t) == first for t in ("2", "7", "16", "16"))

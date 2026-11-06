@@ -20,7 +20,9 @@ use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
 use crate::convert::{OrPy, attrs_to_py};
-use crate::native::{PyDataArray, PyDataset, new_child_da, new_da, spec_from_py, units_attr};
+use crate::native::{
+    PyDataArray, PyDataset, new_child_da, new_da, spec_from_py, spec_with, units_attr,
+};
 
 /// How many times each variable of an object has been replaced; see the module notes.
 #[derive(Default)]
@@ -439,11 +441,17 @@ impl PyDataset {
         Self::children(slf, names)
     }
 
-    /// `ds[key] = value`: a data array, `(dims, data[, attrs])`, or 1-D data along `key`.
-    fn set_value(slf: &Bound<'_, Self>, key: &str, value: &Bound<'_, PyAny>) -> PyResult<()> {
+    /// `ds[key] = value`: a data array, `(dims, data[, attrs])`, or 1-D data along `key`; numpy
+    /// arrays kept as they are without `copy`.
+    fn set_value(
+        slf: &Bound<'_, Self>,
+        key: &str,
+        value: &Bound<'_, PyAny>,
+        copy: bool,
+    ) -> PyResult<()> {
         let array = match value.cast::<PyDataArray>() {
             Ok(da) => da.borrow().inner.clone(),
-            Err(_) => DataArray::new(spec_from_py(slf.py(), key, value)?),
+            Err(_) => DataArray::new(spec_with(slf.py(), key, value, copy)?),
         }
         .with_name(key);
         let coords: Vec<String> = array.coords().keys().map(ToString::to_string).collect();
@@ -461,7 +469,7 @@ impl PyDataset {
     /// in; `(dims, data[, attrs])`; or 1-D data along a dimension of that name). Assigning
     /// to a coordinate's name replaces the coordinate.
     fn __setitem__(slf: &Bound<'_, Self>, key: &str, value: &Bound<'_, PyAny>) -> PyResult<()> {
-        Self::set_value(slf, key, value)
+        Self::set_value(slf, key, value, true)
     }
 
     /// `del ds["v"]` removes a data variable or coordinate.
@@ -472,10 +480,13 @@ impl PyDataset {
     }
 
     /// Add or replace variables in place from a mapping or another dataset (its data
-    /// variables, with their coordinates); returns this dataset.
+    /// variables, with their coordinates); returns this dataset. Values are copied unless
+    /// `copy=False`, as for the `Dataset` constructor.
+    #[pyo3(signature = (other, *, copy=true))]
     fn update<'py>(
         slf: &Bound<'py, Self>,
         other: &Bound<'py, PyAny>,
+        copy: bool,
     ) -> PyResult<Bound<'py, Self>> {
         if let Ok(ds) = other.cast::<PyDataset>() {
             let arrays: Vec<(String, DataArray)> = {
@@ -488,11 +499,11 @@ impl PyDataset {
             };
             for (k, a) in arrays {
                 let v = new_da(slf.py(), a)?.into_bound(slf.py()).into_any();
-                Self::set_value(slf, &k, &v)?;
+                Self::set_value(slf, &k, &v, copy)?;
             }
         } else {
             for (k, v) in crate::native::dict_iter(Some(other))? {
-                Self::set_value(slf, &k, &v)?;
+                Self::set_value(slf, &k, &v, copy)?;
             }
         }
         Ok(slf.clone())

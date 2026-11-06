@@ -159,7 +159,12 @@ pub(crate) fn spec_from_py(py: Python<'_>, name: &str, v: &Bound<'_, PyAny>) -> 
 }
 
 /// [`spec_from_py`], with `copy` as for [`variable_with`].
-fn spec_with(py: Python<'_>, name: &str, v: &Bound<'_, PyAny>, copy: bool) -> PyResult<Variable> {
+pub(crate) fn spec_with(
+    py: Python<'_>,
+    name: &str,
+    v: &Bound<'_, PyAny>,
+    copy: bool,
+) -> PyResult<Variable> {
     if let Ok(da) = v.cast::<PyDataArray>() {
         return Ok(da.borrow().inner.variable().to_owned());
     }

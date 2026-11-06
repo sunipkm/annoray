@@ -54,8 +54,9 @@ are:
 | `Dataset` | `DatasetView<'a>` | `DatasetViewMut<'a>` |
 
 Selections return views; the `_mut` variants write in place under the borrow checker.
-`data::<T>()` gives an ndarray view in any layout; `values_slice::<T>()` gives the values as
-one row-major slice, borrowed when they are stored that way and copied otherwise.
+`data::<T>()` gives an ndarray view in any layout (`transpose` and strided or reversed selections
+share memory, so ndarray's `as_slice()` on it may be `None`); `values_slice::<T>()` gives the
+values as one row-major slice, borrowed when they are stored that way and copied otherwise.
 `DataArray::put` returns a copy with values replaced, converted into the array's unit and
 element type.
 

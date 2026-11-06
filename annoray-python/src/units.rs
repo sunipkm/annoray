@@ -192,7 +192,7 @@ impl Hash for PyUnit {
     }
 }
 
-/// Add a unit to this process's registry: `define_unit("TECU", "1e16 m^-2")`. It parses from
+/// Add a unit to this process's registry: `define_unit("SFU", "1e-22 W m-2 Hz-1")`. It parses from
 /// then on, by that exact spelling and with SI prefix symbols, and is read and written as
 /// written. Defining a name again with an equal unit does nothing; a name that already means
 /// another unit is an error. The definition is a string or a `Unit`.

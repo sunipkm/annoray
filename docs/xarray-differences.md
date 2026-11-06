@@ -46,14 +46,22 @@ written into.
   to the dataset, unless the dataset has since replaced `v`. A numpy view (`.values`) holds its
   own reference: it keeps its values through any later replacement.
   - *xarray:* the array shares the whole variable with the dataset.
+- **Selections and `transpose` are views.** `isel` and `sel` by positions, slices and labels, and
+  `transpose`, share memory with the source, also for `copy=False` arrays, at the same cost
+  whatever the size. Lists of positions (fancy indexing) copy. As in numpy, a view keeps its whole
+  source in memory (`copy(deep=True)` keeps only the selection), and working through a view walks
+  the source's memory, so repeated whole-array work on a transposed view is slower than on
+  contiguous values. Selecting from values not yet read from a file stays lazy; transposing them
+  reads and copies them. In Rust, writing through a selection copies it first.
+  - *xarray:* also views, through which writes reach the source.
 - **`copy(deep=)` differs only in memory.** `deep=False` shares the buffers, `deep=True` gives
   them memory of their own. Attributes and the mapping of variables are independent in both, so
   a later `update` or attribute write on the source does not reach a copy.
   - *xarray:* `deep=False` shares attributes' values, and lets writes to the data through.
   - In Rust, `clone` shares and a write copies first (`data_mut`, copy on write); `deep_copy`
     copies at once.
-- **Constructing from numpy copies by default, into C order.** `Dataset(..., copy=False)` and
-  `DataArray(..., copy=False)` keep aligned, native numpy arrays of numbers, booleans, complex
+- **Constructing from numpy copies by default, into C order.** `Dataset(..., copy=False)`,
+  `DataArray(..., copy=False)` and `ds.update(..., copy=False)` keep aligned, native numpy arrays of numbers, booleans, complex
   numbers, `datetime64[ns]` and `timedelta64[ns]` as they are, in their own layout, with the
   array alive for as long as the values are. Writing to such an array afterwards is your
   responsibility not to: annoray's values would change under it. Other inputs (lists, text,
@@ -123,9 +131,9 @@ when a file is opened.
   unit instead of dropping the unit.
 - **Math functions.** Transcendental functions need dimensionless input. `sin`, `cos` and
   `tan` take angles. Inverse trigonometric functions of unitful input return radians.
-- **Unit strings** are UDUNITS-2 and CF, plus LaTeX's braced exponent (`cm^{-3}`) and `photon`,
-  a count like `count`. `ph` stays UDUNITS' phot (10⁴ lx), so it is not a photon as in astropy.
-  `ar.define_unit("TECU", "1e16 m^-2")` adds a unit for the process (Rust:
+- **Unit strings** are UDUNITS-2 and CF, plus LaTeX's braced exponent (`cm^{-3}`), `TECU`
+  (10¹⁶ m⁻²) and `photon`, a count like `count`. `ph` stays UDUNITS' phot (10⁴ lx), so it is not a photon as in astropy.
+  `ar.define_unit("SFU", "1e-22 W m-2 Hz-1")` adds a unit for the process (Rust:
   `annoray::units::define_unit`); a name that already means another unit is an error. Each
   compiled extension linking annoray has its own registry, so an extension exchanging such a
   unit with `annoray` defines it on both sides.

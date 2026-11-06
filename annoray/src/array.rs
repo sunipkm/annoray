@@ -235,6 +235,52 @@ impl TypedArray<Owned> {
     }
 }
 
+/// Elements at most this many are copied in one block: they fit a core's cache, whatever the
+/// strides, however far apart they lie.
+const COPY_BLOCK: usize = 1 << 13;
+
+/// `src` copied into `dst`, of the same shape. A strided array read in row-major order misses
+/// the cache on almost every element; split in halves along the longest axis until both sides
+/// fit the cache, neither array's layout matters.
+fn copy_blocked<T: Clone + Send + Sync>(
+    mut dst: ndarray::ArrayViewMutD<'_, T>,
+    src: ndarray::ArrayViewD<'_, T>,
+) {
+    let longest = src
+        .shape()
+        .iter()
+        .enumerate()
+        .max_by_key(|(_, n)| **n)
+        .map(|(axis, _)| axis);
+    let Some(axis) = longest.filter(|_| src.len() > COPY_BLOCK) else {
+        dst.assign(&src);
+        return;
+    };
+    let mid = src.len_of(Axis(axis)) / 2;
+    let (d0, d1) = dst.split_at(Axis(axis), mid);
+    let (s0, s1) = src.split_at(Axis(axis), mid);
+    #[cfg(feature = "rayon")]
+    rayon::join(|| copy_blocked(d0, s0), || copy_blocked(d1, s1));
+    #[cfg(not(feature = "rayon"))]
+    {
+        copy_blocked(d0, s0);
+        copy_blocked(d1, s1);
+    }
+}
+
+/// `a` copied into row-major order: writers need it so, and go value by value otherwise.
+pub(crate) fn c_order<T: Element>(a: ndarray::ArrayViewD<'_, T>) -> ndarray::ArrayD<T> {
+    if a.is_standard_layout() || a.is_empty() || std::mem::needs_drop::<T>() {
+        return a.as_standard_layout().into_owned();
+    }
+    let Some(first) = a.first().cloned() else {
+        return a.to_owned();
+    };
+    let mut out = ndarray::ArrayD::from_elem(a.raw_dim(), first);
+    copy_blocked(out.view_mut(), a);
+    out
+}
+
 impl<S: Repr> TypedArray<S> {
     /// The runtime element type.
     #[must_use]
@@ -314,6 +360,29 @@ impl<S: Repr> TypedArray<S> {
     /// Callers must have validated every index against the axis length; ndarray panics otherwise.
     pub(crate) fn select_axis(&self, axis: usize, indices: &[usize]) -> TypedArray<Owned> {
         typed_map!(self, a => a.select(Axis(axis), indices))
+    }
+
+    /// The axes in `order`, the same values in the same memory.
+    ///
+    /// Callers must have validated `order` as a permutation of the axes.
+    pub(crate) fn permuted(self, order: &[usize]) -> Self {
+        typed_map!(self, a => a.permuted_axes(IxDyn(order)))
+    }
+
+    /// Reverse `axis`, in the same memory.
+    pub(crate) fn invert_axis(&mut self, axis: usize) {
+        typed_dispatch!(self, a => a.invert_axis(Axis(axis)));
+    }
+
+    /// The distance between neighbouring values along each axis, in elements.
+    pub(crate) fn strides(&self) -> Vec<isize> {
+        typed_dispatch!(self, a => a.strides().to_vec())
+    }
+
+    /// A copy in row-major order, however the values are laid out; see [`c_order`].
+    #[must_use]
+    pub fn to_c_order(&self) -> TypedArray<Owned> {
+        typed_map!(self, a => c_order(a.view()))
     }
 
     /// Slice `axis` in place.
