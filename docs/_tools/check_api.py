@@ -15,7 +15,7 @@ import annoray
 
 API = Path(__file__).resolve().parent.parent / "api"
 # Names documented elsewhere, or not API: options context manager internals and modules.
-SKIP = {"__version__", "dims", "testing", "UnitError"}
+SKIP = {"__version__", "dims", "testing", "units", "UnitError"}
 
 
 def listed() -> set[str]:
